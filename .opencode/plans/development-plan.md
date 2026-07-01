@@ -7,7 +7,7 @@
 
 - **執行單位**：朝陽科技大學
 - **計畫主持人**：李玲玉教授
-- **技術路線**：A 方案（ESP32-C3 + MPU6050 IMU + Edge AI + Gemini）
+- **技術路線**：A 方案（ESP32-C3 + MPU6500 IMU + Edge AI + Gemini）
 - **執行期間**：2026/08/01 ～ 2027/07/31
 
 ---
@@ -62,7 +62,7 @@
 ```mermaid
 graph TB
     subgraph Wearable["穿戴式感測器 (ESP32-C3)"]
-        IMU[MPU6050<br/>Accel + Gyro]
+        IMU[MPU6500<br/>Accel + Gyro]
         MCU[ESP32-C3<br/>WiFi + WebSocket]
         BAT[雙電池供電<br/>LiPo 402030 + 14500]
         IMU -->|I2C 400kHz| MCU
@@ -200,7 +200,7 @@ HMEAYC/
 │   └── main/
 │       ├── CMakeLists.txt
 │       ├── main.c               # app_main
-│       ├── imu_driver.c / .h    # MPU6050 I2C
+│       ├── imu_driver.c / .h    # MPU6500 I2C
 │       ├── wifi_manager.c / .h  # WiFi + 重連
 │       └── websocket_client.c / .h  # WS 上傳
 │
@@ -238,7 +238,7 @@ graph LR
     end
 
     subgraph Sensors["感測器"]
-        MPU[MPU6050<br/>I2C addr 0x68]
+        MPU[MPU6500<br/>I2C addr 0x68]
         WS2812[WS2812B<br/>GPIO8]
         BAT_ADC[電壓分壓<br/>GPIO0<br/>100kΩ/47kΩ]
     end
@@ -280,8 +280,8 @@ graph LR
 
 | GPIO | 功能 | 備註 |
 |------|------|------|
-| GPIO6 | I2C SDA | MPU6050 data line |
-| GPIO7 | I2C SCL | MPU6050 clock line (400kHz) |
+| GPIO6 | I2C SDA | MPU6500 data line |
+| GPIO7 | I2C SCL | MPU6500 clock line (400kHz) |
 | GPIO0 | ADC | 電池電壓分壓（100kΩ/47kΩ） |
 | GPIO8 | WS2812B | NeoPixel 狀態指示燈 |
 | GPIO9 | BOOT Button | 啟動模式選擇 + 使用者輸入 |
@@ -306,7 +306,7 @@ graph LR
 | 零件 | 單價 (NTD) | 數量 | 小計 |
 |------|-----------|------|------|
 | ESP32-C3-MINI-1 模組 | 150 | 1 | 150 |
-| MPU6050 | 35 | 1 | 35 |
+| MPU6500 | 35 | 1 | 35 |
 | IP2362A + 被動元件 | 25 | 1 | 25 |
 | ME6211C33M5G | 8 | 1 | 8 |
 | SS12 Schottky | 3 | 2 | 6 |
@@ -340,12 +340,12 @@ firmware/
 └── main/
     ├── CMakeLists.txt       # 元件 CMake
     ├── main.c               # app_main：初始化 + 主迴圈
-    ├── imu_driver.c /.h     # MPU6050 I2C 驅動
+    ├── imu_driver.c /.h     # MPU6500 I2C 驅動
     ├── wifi_manager.c /.h   # WiFi 事件處理 + 自動重連
     └── websocket_client.c /.h # WebSocket 上傳
 ```
 
-### 4.3 MPU6050 驅動
+### 4.3 MPU6500 驅動
 
 **初始化序列（`mpu6050_init`）：**
 
@@ -880,7 +880,7 @@ gantt
 
 | 項次 | 項目 | 狀態 |
 |------|------|------|
-| M1 | ESP32-C3 + MPU6050 IMU 可上傳 50Hz 資料 | ✅ 韌體完成 |
+| M1 | ESP32-C3 + MPU6500 IMU 可上傳 50Hz 資料 | ✅ 韌體完成 |
 | M2 | FastAPI WebSocket 可接收 IMU 並寫入 DB | ✅ 後端完成 |
 | M3 | 巨觀分析（隊形 + 熱區 + 參與度） | ✅ 完成 |
 | M4 | 微觀分析（節奏 + 穩定 + 流暢） | ✅ 完成 |
@@ -895,7 +895,7 @@ gantt
 |------|------|---------|
 | 李玲玉 (Liza) | 計畫主持人 | HMEAYC 指標定義、IRB 主責、場域測試協定、教師培訓、論文主筆 |
 | 陳育亮 (Ychen) | 軟體開發 | Backend（分析引擎 + API + Gemini）+ Dashboard（React 前端） |
-| 陳育冠 (Rover) | 硬體開發 | Firmware（ESP32-C3 + MPU6050）+ PCB 設計 + 採購焊接 |
+| 陳育冠 (Rover) | 硬體開發 | Firmware（ESP32-C3 + MPU6500）+ PCB 設計 + 採購焊接 |
 
 ### 10.4 關鍵介面對齊
 
@@ -1122,7 +1122,7 @@ curl http://localhost:8080/api/firmware/list
 ## 附錄 B：參考資料
 
 - HMEAYC 理論：Liza Li 教授論文（TBD）
-- MPU6050 Register Map：https://invensense.tdk.com/wp-content/uploads/2023/11/MPU-6000-Datasheet1.pdf
+- MPU6500 Register Map：https://invensense.tdk.com/wp-content/uploads/2023/11/MPU-6000-Datasheet1.pdf
 - ESP-IDF Programming Guide：https://docs.espressif.com/projects/esp-idf/
 - FastAPI：https://fastapi.tiangolo.com/
 - Ultralytics YOLOv8 Pose：https://docs.ultralytics.com/tasks/pose/

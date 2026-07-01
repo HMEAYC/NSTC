@@ -2,7 +2,7 @@
 
 > Real-time AI Music Learning Tool: Development, Implementation, and Evaluation for Promoting Early Childhood Integrated Development
 
-本專案以 **HMEAYC（幼兒音樂與動作整合性發展）** 核心理論為基礎，採用 ESP32-C3 + MPU6050 IMU + Edge AI + Gemini 技術路線，由**朝陽科技大學**執行，計畫主持人為**李玲玉教授**。
+本專案以 **HMEAYC（幼兒音樂與動作整合性發展）** 核心理論為基礎，採用 ESP32-C3 + MPU6500 IMU + Edge AI + Gemini 技術路線，由**朝陽科技大學**執行，計畫主持人為**李玲玉教授**。
 
 ---
 
@@ -55,9 +55,9 @@ HMEAYC/
 │       ├── pages/             # LiveView, History, Report
 │       ├── hooks/             # WebSocket 連線
 │       └── api/               # REST client
-├── firmware/                  # ESP32-C3 + MPU6050 韌體 (ESP-IDF)
+├── firmware/                  # ESP32-C3 + MPU6500 韌體 (ESP-IDF)
 │   └── main/
-│       ├── imu_driver.c/h     # MPU6050 I2C 驅動
+│       ├── imu_driver.c/h     # MPU6500 I2C 驅動
 │       ├── wifi_manager.c/h   # WiFi 連線管理
 │       └── websocket_client.c/h
 ├── hardware/                  # 硬體設計 (schematic, PCB layout, BOM)
@@ -97,7 +97,7 @@ make dev-dashboard  # http://localhost:5173/dashboard/
 | **執行單位** | 朝陽科技大學 (統一編號: 78951384) |
 | **執行期間** | 2026/08/01 ～ 2027/07/31 |
 | **計畫主持人** | 李玲玉教授 |
-| **技術路線** | A方案 (ESP32-C3 + MPU6050 IMU + Edge AI + Gemini) |
+| **技術路線** | A方案 (ESP32-C3 + MPU6500 IMU + Edge AI + Gemini) |
 | **核心理論** | HMEAYC (幼兒音樂與動作整合性發展理論) |
 | **重要里程碑目標** | <ul><li>**2026年10月**：完成 MVP</li><li>**2026年11月**：進入場域測試</li><li>**2027年06月**：完成正式版系統</li><li>**2027年07月**：完成國科會結案</li></ul> |
 
@@ -162,7 +162,7 @@ gantt
 | :--- | :--- | :--- |
 | **李玲玉 (Liza)** | 計畫主持人 | HMEAYC 指標定義、IRB 主責、場域測試協定、教師培訓、論文主筆、驗收報告品質 |
 | **陳育亮 (Ychen)** | 軟體開發 | `backend/`（節奏 + Freeze Dance）、`backend/app/gemini/`（Gemini 報告）、`dashboard/`（前後端） |
-| **陳育冠 (Rover)** | 硬體開發 | `firmware/`（ESP32-C3 + MPU6050）、WiFi 傳輸、硬體採購 |
+| **陳育冠 (Rover)** | 硬體開發 | `firmware/`（ESP32-C3 + MPU6500）、WiFi 傳輸、硬體採購 |
 
 **關鍵介面點：**
 - Rover ↔ Ychen：IMU 傳輸協定格式 (WebSocket JSON)，需在 **07 月底前** 對齊
@@ -183,7 +183,7 @@ gantt
 | 項目 | 數量 | 用途 |
 |------|------|------|
 | ESP32-C3-MINI-1 模組 | 10 | 穿戴式感測器主控 |
-| MPU6050 IMU 感測器 | 10 | 6 軸動作偵測 |
+| MPU6500 IMU 感測器 | 10 | 6 軸動作偵測 |
 | TP4056 充電板 | 10 | 鋰電池充電 |
 | ME6211 3.3V LDO | 10 | 穩壓 |
 | LiPo 503040 500mAh | 10 | 電池 |
@@ -196,7 +196,7 @@ gantt
 ## 💡 後續下一步
 
 1. 硬體採購下單 → 打樣 PCB + 焊接測試
-2. MPU6050 驅動整合測試（I2C scan + raw data log）
+2. MPU6500 驅動整合測試（I2C scan + raw data log）
 3. Backend analysis engine 實作（節奏分析 + Freeze Dance）
 4. Dashboard UI 開發（即時圖表 + WebSocket 串接）
 5. MVP 里程碑追蹤

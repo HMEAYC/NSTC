@@ -29,7 +29,7 @@ menu "HMEAYC Firmware Configuration"
         default 50
         range 5 200
         help
-            IMU sampling frequency. MPU6050 supports 5-200 Hz with DLPF enabled.
+            IMU sampling frequency. MPU6050/MPU6500 supports 5-200 Hz with DLPF enabled.
 
     config HMEAYC_OTA_BASE_URL
         string "OTA Server Base URL"

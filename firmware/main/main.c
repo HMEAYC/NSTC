@@ -25,7 +25,7 @@ static const char *TAG = "HMEAYC";
 #define LED_CYCLE_COUNT     (SAMPLE_RATE_HZ * 2)     // LED blink every 2 seconds
 
 void app_main(void) {
-    ESP_LOGI(TAG, "HMEAYC firmware v%s starting (ESP32-C3 + MPU6050)...",
+    ESP_LOGI(TAG, "HMEAYC firmware v%s starting (ESP32-C3 + MPU6500)...",
              FIRMWARE_VERSION);
 
     led_status_init();

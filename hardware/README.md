@@ -14,7 +14,7 @@
                     │              │                       │
                     ├──────┬───────┴──────────┬────────────┤
                     │      │                  │            │
-                    │  ESP32-C3-MINI-1    MPU6050    LED   │
+                    │  ESP32-C3-MINI-1    MPU6500    LED   │
                     │  (WiFi + USB)        (IMU)    指示燈 │
                     └─────────────────────────────────────┘
 ```
@@ -26,7 +26,7 @@
 | 元件 | 型號 | 數量 | 封裝 |
 |------|------|------|------|
 | MCU 模組 | ESP32-C3-MINI-1 (or C3-WROOM-02) | 1 | 36-pin SMD 模組 |
-| IMU 感測器 | MPU6050 | 1 | QFN-24 (4×4mm) |
+| IMU 感測器 | MPU6500 | 1 | QFN-24 (4×4mm) |
 | 充電 IC | IP2362A (or TP4056) | 1 | SOP-8 / MSOP-8 |
 | LDO 穩壓 | ME6211C33M5G (or XC6206P332MR) | 1 | SOT-23-5 |
 | Schottky 二極體 | **SS12** (1A, 20V) | **2** | SMA / SOD-123 |
@@ -43,8 +43,8 @@
                           ┌─────────────────────┐
                 ┌─────────┤    ESP32-C3-MINI-1   ├────────────┐
                 │         │                      │            │
-           ┌────┴────┐   │   GPIO6  ────────► SDA (MPU6050)  │
-           │ USB D+  │   │   GPIO7  ────────► SCL (MPU6050)  │
+           ┌────┴────┐   │   GPIO6  ────────► SDA (MPU6500)  │
+           │ USB D+  │   │   GPIO7  ────────► SCL (MPU6500)  │
            │ GPIO19  │   │   GPIO0  ◄─── 電池分壓(ADC)      │
            │         │   │   GPIO9  (BOOT, 外接按鈕)         │
            │ USB D-  │   │   GPIO8  (RGB LED)                │
@@ -64,8 +64,8 @@
 | 4 | IO3 | (保留) |
 | 5 | IO4 | (保留) |
 | 6 | IO5 | (保留) |
-| 7 | IO6 | **SDA** → MPU6050 SDA + 4.7kΩ pull-up to 3.3V |
-| 8 | IO7 | **SCL** → MPU6050 SCL + 4.7kΩ pull-up to 3.3V |
+| 7 | IO6 | **SDA** → MPU6500 SDA + 4.7kΩ pull-up to 3.3V |
+| 8 | IO7 | **SCL** → MPU6500 SCL + 4.7kΩ pull-up to 3.3V |
 | 9 | IO8 | RGB LED (WS2812) DATA |
 | 10 | IO9 | BOOT 按鈕 → GND (拉低進入下載模式) |
 | 11 | IO10 | (保留) |
@@ -83,9 +83,9 @@
 
 > 註：ESP32-C3-MINI-1 為 36-pin 封裝。若使用 ESP32-C3-WROOM-02 (38-pin)，腳位略有不同但 GPIO 編號一致。
 
-### 2b. MPU6050 連接
+### 2b. MPU6500 連接
 
-| MPU6050 腳位 | 連接 | 說明 |
+| MPU6500 腳位 | 連接 | 說明 |
 |-------------|------|------|
 | VCC | 3.3V | 供電 (2.375V~3.46V) |
 | GND | GND | 共地 |
@@ -249,7 +249,7 @@ ES32-C3 內建 USB Serial/JTAG 控制器
   └───┘   │  │  Module    │   [Slide SW] │
           │  └────────────┤              │
           │     │  │  │                  │
-          │  [MPU6050]  [RGB LED]        │
+          │  [MPU6500]  [RGB LED]        │
           │                              │
           └──────────────────────────────┘
                         25mm
@@ -297,7 +297,7 @@ ES32-C3 內建 USB Serial/JTAG 控制器
 | ME6211 IN | 1µF | 1 | 靠近 LDO VIN |
 | ME6211 OUT | 10µF + 0.1µF | 各 1 | 靠近 LDO VOUT |
 | ESP32-C3 3V3 | 10µF + 0.1µF | 各 1 | 靠近模組 3V3 pin |
-| MPU6050 VCC | 0.1µF | 1 | 靠近感測器 VCC pin |
+| MPU6500 VCC | 0.1µF | 1 | 靠近感測器 VCC pin |
 | TP4056 BAT | 10µF | 1 | 靠近 BAT pin |
 
 ### 3e. 保護電路
@@ -316,7 +316,7 @@ ES32-C3 內建 USB Serial/JTAG 控制器
 | 項目 | 料號 | 數量 | 單價 (NTD) | 合計 |
 |------|------|------|-----------|------|
 | MCU | ESP32-C3-MINI-1 (樂鑫) | 1 | 120 | 120 |
-| IMU | MPU6050 (TDK InvenSense) | 1 | 80 | 80 |
+| IMU | MPU6500 (TDK InvenSense) | 1 | 80 | 80 |
 | 充電 IC | IP2362A (or TP4056) | 1 | 15 | 15 |
 | LDO | ME6211C33M5G | 1 | 8 | 8 |
 | Schottky | **SS12** (1A, 20V) | **2** | 5 | 10 |
@@ -361,7 +361,7 @@ idf.py flash monitor    ← VSCode 或命令列燒錄
 1. **電源檢查**：接 USB 5V → 測 TP4056 BAT = 4.2V (無電池時)
 2. **LDO 輸出**：測 ME6211 VOUT = 3.3V ± 2%
 3. **模組啟動**：測 ESP32-C3 EN = 3.3V，串口出現 boot log
-4. **I2C 掃描**：`i2cdetect` → 應看到 0x68 (MPU6050)
+4. **I2C 掃描**：`i2cdetect` → 應看到 0x68 (MPU6500)
 5. **IMU 讀取**：執行 main.c → 監控 accel/gyro 數據
 6. **WiFi 連線**：設定 SSID → 看連接狀態
 7. **WebSocket**：確認數據上傳到後端

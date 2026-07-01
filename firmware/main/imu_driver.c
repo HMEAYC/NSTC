@@ -9,10 +9,10 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
-static const char *TAG = "MPU6050";
+static const char *TAG = "MPU6xxx";
 
 // ---------------------------------------------------------------------------
-// MPU6050 register map
+// MPU6050/MPU6500 register map (register-compatible)
 // ---------------------------------------------------------------------------
 #define REG_SMPLRT_DIV      0x19
 #define REG_CONFIG          0x1A
@@ -187,7 +187,7 @@ esp_err_t imu_init(const imu_config_t *config) {
     drv.gyro_scale  = GYRO_SCALE_250DPS;
     drv.initialized = true;
 
-    ESP_LOGI(TAG, "MPU6050 initialized (I2C %d @ 0x%02X)",
+    ESP_LOGI(TAG, "MPU6xxx initialized (I2C %d @ 0x%02X)",
              drv.i2c_port, drv.i2c_addr);
     return ESP_OK;
 }
