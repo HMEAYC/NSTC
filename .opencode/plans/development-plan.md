@@ -81,11 +81,26 @@ graph TB
         ANALYSIS --> GEMINI
     end
 
+    subgraph Management["裝置與學員管理"]
+        DEV[Device<br/>ESP32 腰帶註冊]
+        CHILD[Child<br/>學員資料]
+        ASSIGN[DeviceAssignment<br/>跨模態配對記錄]
+    end
+
     subgraph Frontend["前端 Dashboard (React + Vite)"]
         LV[LiveView<br/>即時 IMU 圖表]
         HIST[History<br/>歷史查詢]
         REP[Report<br/>報告預覽]
+        AI[AssessmentIndicators<br/>評估指標總覽]
+        DM[DeviceManagement<br/>裝置/學員管理]
     end
+
+    MCU -->|WebSocket JSON| WS
+    MCU -->|POST /api/devices| REST
+    REST --> DEV
+    REST --> CHILD
+    REST --> ASSIGN
+    ASSIGN --> ORM
 
     subgraph Pipeline["影片分析管線 (CLI / API)"]
         VIDEO[影片輸入<br/>.mp4]
@@ -532,20 +547,23 @@ dashboard/src/
 ├── index.css               # Tailwind 匯入
 │
 ├── pages/
-│   ├── LiveView.tsx        # 即時 IMU 曲線（Recharts）
-│   ├── History.tsx         # 歷史 Session 列表 + 查詢
-│   └── Report.tsx          # 報告 Markdown/PDF 預覽
+│   ├── Landing.tsx              # 首頁導航（6 張卡片）
+│   ├── LiveView.tsx             # 即時 IMU 曲線（Recharts）
+│   ├── History.tsx              # 歷史 Session 列表 + 查詢
+│   ├── Report.tsx               # 報告 Markdown/PDF 預覽
+│   ├── AssessmentIndicators.tsx # 評估指標總覽（IMU/CV 即時運算）
+│   └── DeviceManagement.tsx     # 裝置/學員管理與跨模態配對
 │
 ├── hooks/
-│   └── useWebSocket.ts     # WS 連線管理 + 自動重連
+│   ├── useWebSocket.ts     # WS 連線管理 + 自動重連
+│   └── useLiveMetrics.ts   # 即時 IMU 指標計算（jerk/activity/stability）
 │
 ├── api/
-│   └── client.ts           # REST API 封裝
+│   └── client.ts           # REST API 封裝（sessions + devices + children）
 │
-├── components/             #（開發中可抽離共用元件）
-│   ├── IMUChart.tsx        # IMU 六軸圖表
-│   ├── SessionCard.tsx     # Session 卡片
-│   └── ReportViewer.tsx    # 報告檢視器
+├── components/
+│   ├── ErrorBoundary.tsx   # 錯誤邊界
+│   └── LoadingSpinner.tsx  # 載入動畫
 │
 └── types/
     └── index.ts            # TypeScript 型別定義
@@ -555,10 +573,12 @@ dashboard/src/
 
 | 路徑 | 頁面 | 說明 |
 |------|------|------|
-| `/` | LiveView | 即時 IMU 儀表板 |
-| `/dashboard/` | LiveView | 同上（Vite proxy 路徑） |
-| `/history` | History | 歷史 Session 列表 |
-| `/report/:id` | Report | 單筆報告檢視 |
+| `/dashboard/` | Landing | 首頁導航 |
+| `/dashboard/live/:sessionId` | LiveView | 即時 IMU 儀表板 |
+| `/dashboard/history` | History | 歷史 Session 列表 |
+| `/dashboard/report/:sessionId` | Report | 單筆報告檢視 |
+| `/dashboard/assessment/:sessionId` | AssessmentIndicators | 評估指標總覽 |
+| `/dashboard/devices` | DeviceManagement | 裝置與學員管理 |
 
 ### 6.4 WebSocket Hook 設計
 
@@ -589,8 +609,18 @@ dashboard/src/
 | `GET` | `/api/analyze/tasks/{id}` | 查詢單一任務狀態 | `X-API-Key` |
 | `POST` | `/api/analyze/tasks/{id}/cancel` | 取消任務 | `X-API-Key` |
 | `GET` | `/api/sessions` | 列出 Session | — |
+| `POST` | `/api/sessions` | 建立新 Session | — |
 | `GET` | `/api/sessions/{id}` | 單一 Session 詳情 | — |
+| `GET` | `/api/sessions/{id}/analysis` | Session 分析結果 | — |
+| `POST` | `/api/sessions/{id}/report` | 產生報告 | — |
 | `GET` | `/api/sessions/{id}/report` | Session 報告 | — |
+| `GET` | `/api/reports/{id}` | 單一報告 | — |
+| `GET` | `/api/devices` | 列出所有裝置 | — |
+| `POST` | `/api/devices` | 註冊/更新裝置 | — |
+| `GET` | `/api/children` | 列出所有學員 | — |
+| `POST` | `/api/children` | 註冊學員 | — |
+| `GET` | `/api/sessions/{id}/assignments` | 查詢配對結果 | — |
+| `POST` | `/api/sessions/{id}/assign` | 執行裝置-學員配對 | — |
 | `DELETE` | `/api/sessions/{id}` | 刪除 Session | `X-API-Key` |
 
 ### 7.2 WebSocket 協定（`/ws`）
@@ -656,11 +686,40 @@ dashboard/src/
 erDiagram
     Session {
         uuid id PK
-        text device_id
-        timestamp started_at
-        timestamp ended_at
+        text course_type
         text status
-        jsonb metadata
+        timestamp start_time
+        timestamp end_time
+        jsonb child_info
+    }
+
+    Device {
+        uuid id PK
+        text device_id UK
+        text name
+        text firmware_version
+        float battery_level
+        text status
+        timestamp last_seen
+        timestamp created_at
+    }
+
+    Child {
+        uuid id PK
+        text name
+        text student_id UK
+        text notes
+        timestamp created_at
+    }
+
+    DeviceAssignment {
+        uuid id PK
+        uuid session_id FK
+        uuid device_id FK
+        uuid child_id FK
+        float confidence
+        text method
+        timestamp assigned_at
     }
 
     IMUData {
@@ -695,6 +754,9 @@ erDiagram
     Session ||--o{ IMUData : has
     Session ||--o{ AnalysisResult : has
     Session ||--o{ Report : has
+    Session ||--o{ DeviceAssignment : has
+    Device ||--o{ DeviceAssignment : assigned_to
+    Child ||--o{ DeviceAssignment : identified_as
 ```
 
 ### 8.2 Table 定義
@@ -703,13 +765,49 @@ erDiagram
 
 | Column | Type | Constraints | Description |
 |--------|------|------------|-------------|
-| id | UUID | PK, default gen_random_uuid() | 唯一識別 |
-| device_id | VARCHAR(64) | NOT NULL | ESP32-C3 裝置 ID |
-| started_at | TIMESTAMPTZ | NOT NULL | 開始時間 |
-| ended_at | TIMESTAMPTZ | — | 結束時間 |
-| status | VARCHAR(32) | NOT NULL, default 'active' | active / completed / failed |
-| metadata | JSONB | — | 額外資訊（BPM、session name 等） |
-| created_at | TIMESTAMPTZ | NOT NULL, default now() | 建立時間 |
+| id | VARCHAR(36) | PK | UUID |
+| course_type | ENUM | NOT NULL | march / car |
+| child_info | JSONB | — | 學員補充資訊 |
+| status | ENUM | default 'active' | active / completed |
+| start_time | TIMESTAMPTZ | default now() | 開始時間 |
+| end_time | TIMESTAMPTZ | — | 結束時間 |
+
+**Device：**
+
+| Column | Type | Constraints | Description |
+|--------|------|------------|-------------|
+| id | VARCHAR(36) | PK | UUID |
+| device_id | VARCHAR(50) | UNIQUE, NOT NULL, INDEX | ESP32-C3 實體 ID |
+| name | VARCHAR(100) | — | 顯示名稱（如「腰帶 A」） |
+| firmware_version | VARCHAR(32) | — | 目前韌體版本 |
+| battery_level | FLOAT | — | 0.0 ~ 1.0 |
+| status | ENUM | default 'offline' | online / offline |
+| last_seen | TIMESTAMPTZ | — | 最後心跳時間 |
+| created_at | TIMESTAMPTZ | default now() | 註冊時間 |
+
+**Child：**
+
+| Column | Type | Constraints | Description |
+|--------|------|------------|-------------|
+| id | VARCHAR(36) | PK | UUID |
+| name | VARCHAR(100) | NOT NULL | 幼兒姓名 |
+| student_id | VARCHAR(50) | UNIQUE | 學號 |
+| notes | TEXT | — | 備註 |
+| created_at | TIMESTAMPTZ | default now() | 建立時間 |
+
+**DeviceAssignment：**
+
+| Column | Type | Constraints | Description |
+|--------|------|------------|-------------|
+| id | VARCHAR(36) | PK | UUID |
+| session_id | VARCHAR(36) | FK → Session.id, NOT NULL | 所屬課程 |
+| device_id | VARCHAR(36) | FK → Device.id, NOT NULL | 配對裝置 |
+| child_id | VARCHAR(36) | FK → Child.id, NOT NULL | 配對學員 |
+| confidence | FLOAT | — | 配對信心度 [0, 1] |
+| method | VARCHAR(32) | default 'manual' | manual / cross_modal_fft |
+| assigned_at | TIMESTAMPTZ | default now() | 配對時間 |
+
+Unique: `(session_id, device_id)` — 同一課程中裝置不重複配對
 
 **IMUData：**
 
@@ -837,6 +935,38 @@ Index: `(session_id, ts)` composite index for time-range queries.
 | ≥ 0.85 | 🟢 極佳 |
 | ≥ 0.70 | 🟡 良好 |
 | < 0.70 | 🔴 需關注 |
+
+### 9.7 跨模態裝置配對（Cross-Modal Belt Assignment）
+
+**論文參考：** *"A Cross-Modal Child Identification Framework for AI-Assisted Music Learning Using Wearable IMU Sensors and Vision-Based Pose Estimation"* (Lee, Chen & Chen, 2026)
+
+**問題：** N 個幼兒各戴一條 ESP32-C3 IMU 腰帶，需要自動匹配腰帶 → 幼兒，不依賴臉部辨識。
+
+**核心洞察：** 對正弦律動而言，IMU 加速度與視覺髖部位移之間存在恆定 π 弧度相位差：
+- 髖部位移：`y(t) = A sin(ω(t + φ))`
+- 加速度（扣除重力）：`a(t) = −Aω² sin(ω(t + φ))`
+- FFT 相位角：`∠IMU − ∠Vision ≈ π`（物理運動學恆等式）
+
+**演算法（N²-Candidate Self-Calibrating）：**
+```
+1. 對每個 IMU 腰帶訊號做 FFT → φᵢᴵᴹᵁ (BPM 頻率 bin)
+2. 對每個幼兒 MediaPipe 髖部軌跡做 FFT → φⱼᵛᴵˢ
+3. 遍歷 N² 組候選偏移 C_{ij} = φᵢᴵᴹᵁ − φⱼᵛᴵˢ
+4. 對每個 C_{ij} 建立距離矩陣，執行 Hungarian 指派
+5. 選取總成本最小的指派 σ* 與偏移 C*
+```
+
+**信心分數：** `conf_i = 1 − (D[i, σ(i)] − minⱼ D[i,j]) / (maxⱼ D[i,j] − minⱼ D[i,j])`
+
+**效能：**
+- O(N⁵) 時間複雜度，支援 N ≤ 10 人即時運算
+- 合成實驗（σ = 0.50 m/s², N = 3/5）：100% 準確率
+- 估計偏移 C* ≈ 3.10 ± 0.04 rad（理論值 π = 3.14 rad）
+
+**資料庫對應：**
+- `DeviceAssignment` 表記錄配對結果（session_id, device_id, child_id, confidence, method）
+- `POST /api/devices` 自動註冊 ESP32 腰帶
+- `POST /api/sessions/{id}/assign` 觸發配對演算法
 
 ---
 

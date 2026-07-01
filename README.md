@@ -24,11 +24,17 @@ HMEAYC/
 │   │   ├── api/               # REST & WebSocket endpoints
 │   │   │   ├── __init__.py
 │   │   │   ├── video_analysis.py  # 影片分析任務管理 API
+│   │   │   ├── sessions.py    # Session CRUD + analysis/report
+│   │   │   ├── reports.py     # Report 查詢
+│   │   │   ├── firmware.py    # OTA 韌體管理
+│   │   │   ├── devices.py     # 裝置/學員註冊 + 跨模態配對
 │   │   │   └── ws.py          # WebSocket IMU 即時串流
 │   │   ├── analysis/          # 巨觀/微觀分析 + 姿勢精化
 │   │   │   ├── macro.py       # 群體隊形、熱區、參與度
 │   │   │   ├── metrics.py     # 指標燈號與綜合評分
 │   │   │   ├── micro.py       # 個體節奏同步/穩定度/流暢度
+│   │   │   ├── rhythm.py      # IMU 節奏同步分析 (motion energy)
+│   │   │   ├── freeze_dance.py# IMU Freeze Dance (反應時間 + 穩定度)
 │   │   │   └── pose/          # MediaPipe Pose/Holistic 精化
 │   │   │       ├── common.py
 │   │   │       ├── estimator.py
@@ -47,13 +53,13 @@ HMEAYC/
 │   │   │   ├── video.py       # OpenCV 中繼資料 + librosa 音訊
 │   │   │   └── segment.py     # ffmpeg 影片裁切
 │   │   ├── gemini/            # Gemini API 串接 & prompt 模板
-│   │   ├── models/            # SQLAlchemy ORM
+│   │   ├── models/            # SQLAlchemy ORM (Session, IMUData, Device, Child, ...)
 │   │   └── db/                # 資料庫連線
 │   └── tests/
 ├── dashboard/                 # 前端視覺化面板 (React + Vite + TypeScript)
 │   └── src/
-│       ├── pages/             # LiveView, History, Report
-│       ├── hooks/             # WebSocket 連線
+│       ├── pages/             # Landing, LiveView, History, Report, AssessmentIndicators, DeviceManagement
+│       ├── hooks/             # useWebSocket, useLiveMetrics
 │       └── api/               # REST client
 ├── firmware/                  # ESP32-C3 + MPU6500 韌體 (ESP-IDF)
 │   └── main/
@@ -193,10 +199,67 @@ gantt
 
 ---
 
+---
+
+## 👥 多人系統裝置管理（Cross-Modal Device Assignment）
+
+基於論文 *"A Cross-Modal Child Identification Framework for AI-Assisted Music Learning"* 設計，解決 N 個小孩戴 N 條腰帶時的自動配對問題。
+
+### 核心架構
+
+```
+┌─────────────────────┐     ┌──────────────────────┐
+│  ESP32-C3 腰帶 × N   │     │  天花板攝影機          │
+│  IMU 50Hz WebSocket  │     │  MediaPipe Pose 30fps │
+└────────┬────────────┘     └──────────┬───────────┘
+         │                             │
+         ▼                             ▼
+┌──────────────────────────────────────────────┐
+│              FastAPI 後端伺服器                  │
+│                                                │
+│  1. FFT 相位提取 @BPM 頻率                      │
+│  2. N² 候選自校準演算法                          │
+│  3. Hungarian 全域最優指派                       │
+│  4. 信心分數計算 + 教師手動覆寫                   │
+└──────────────────────┬───────────────────────┘
+                       ▼
+┌──────────────────────────────────────────────┐
+│    Dashboard 裝置管理頁                        │
+│   📡 裝置列表 / 👤 學員管理 / 🔗 配對機制       │
+└──────────────────────────────────────────────┘
+```
+
+### API 端點
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/devices` | 列出所有註冊裝置（ESP32 腰帶） |
+| `POST` | `/api/devices` | 註冊/更新裝置（ESP32 連線時自動呼叫） |
+| `GET` | `/api/children` | 列出所有學員 |
+| `POST` | `/api/children` | 註冊學員 |
+| `GET` | `/api/sessions/{id}/assignments` | 查詢課程配對結果 |
+| `POST` | `/api/sessions/{id}/assign` | 執行裝置-學員配對 |
+
+### Dashboard 頁面
+
+| 路徑 | 頁面 | 說明 |
+|------|------|------|
+| `/dashboard/devices` | 裝置管理 | 裝置列表（狀態/電量/韌體）、學員註冊、配對機制說明 |
+| `/dashboard/assessment/default` | 評估指標 | 即時 IMU 指標運算（活動量/平穩度/穩定指數） |
+
+### 資料庫模型
+
+- **Device** — ESP32 腰帶註冊（device_id, name, firmware_version, battery_level, status）
+- **Child** — 學員資料（name, student_id, notes）
+- **DeviceAssignment** — 配對記錄（session_id, device_id, child_id, confidence, method）
+
+---
+
 ## 💡 後續下一步
 
 1. 硬體採購下單 → 打樣 PCB + 焊接測試
 2. MPU6500 驅動整合測試（I2C scan + raw data log）
 3. Backend analysis engine 實作（節奏分析 + Freeze Dance）
 4. Dashboard UI 開發（即時圖表 + WebSocket 串接）
-5. MVP 里程碑追蹤
+5. 跨模態配對演算法真實場域驗證（IRB 核准後）
+6. MVP 里程碑追蹤
