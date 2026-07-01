@@ -45,4 +45,7 @@ export const api = {
       report_type: string;
       markdown: string;
     }>(`/api/reports/${id}`),
+
+  analyzeImu: (id: string) =>
+    fetchJSON<{ results: AnalysisResult[] }>(`/api/sessions/${id}/analysis`),
 };

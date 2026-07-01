@@ -20,6 +20,12 @@ export default function Landing() {
       to: "/dashboard/report/test",
       color: "bg-purple-500",
     },
+    {
+      title: "評估指標",
+      desc: "即時行為指標運算與評量",
+      to: "/dashboard/assessment/default",
+      color: "bg-orange-500",
+    },
   ];
 
   return (
