@@ -130,14 +130,14 @@ gantt
 
 | 期間 | 里程碑目標 | 主責 |
 | :--- | :--- | :--- |
-| **2026/06～07** | 採購下單、韌體基礎完成（IMU讀值 + 傳輸） | 冠 |
+| **2026/06～07** | 採購下單、韌體基礎完成（IMU讀值 + 傳輸） | Rover |
 | **2026/06～07** | IRB 文件起草、HMEAYC 指標確認 | Liza |
-| **2026/08** | AI 分析完成（節奏 + Freeze Dance） | 亮 |
-| **2026/09** | Dashboard 完成、IRB 正式送審 | 亮 / Liza |
+| **2026/08** | AI 分析完成（節奏 + Freeze Dance） | Ychen |
+| **2026/09** | Dashboard 完成、IRB 正式送審 | Ychen / Liza |
 | **2026/10** | MVP 完成 | 全員 |
 | **2026/11～** | 場域驗證（IRB 核准後進場） | Liza 主導 |
 | **2027/01** | 場域驗證完成 | Liza |
-| **2027/02～05** | 正式版開發（場域回饋迭代） | 亮 / 冠 |
+| **2027/02～05** | 正式版開發（場域回饋迭代） | Ychen / Rover |
 | **2027/06** | 正式版完成 | 全員 |
 | **2027/07** | 結案 | Liza |
 
@@ -161,12 +161,12 @@ gantt
 | 成員 | 角色 | 主要負責範圍 |
 | :--- | :--- | :--- |
 | **李玲玉 (Liza)** | 計畫主持人 | HMEAYC 指標定義、IRB 主責、場域測試協定、教師培訓、論文主筆、驗收報告品質 |
-| **陳亮 (亮)** | 軟體開發 | `backend/`（節奏 + Freeze Dance）、`backend/app/gemini/`（Gemini 報告）、`dashboard/`（前後端） |
-| **陳冠 (冠)** | 硬體開發 | `firmware/`（ESP32-C3 + MPU6050）、WiFi 傳輸、硬體採購 |
+| **陳育亮 (Ychen)** | 軟體開發 | `backend/`（節奏 + Freeze Dance）、`backend/app/gemini/`（Gemini 報告）、`dashboard/`（前後端） |
+| **陳育冠 (Rover)** | 硬體開發 | `firmware/`（ESP32-C3 + MPU6050）、WiFi 傳輸、硬體採購 |
 
 **關鍵介面點：**
-- 冠 ↔ 亮：IMU 傳輸協定格式 (WebSocket JSON)，需在 **07 月底前** 對齊
-- 亮 ↔ Liza：HMEAYC 分析指標定義，需在 **08 月初前** 確認
+- Rover ↔ Ychen：IMU 傳輸協定格式 (WebSocket JSON)，需在 **07 月底前** 對齊
+- Ychen ↔ Liza：HMEAYC 分析指標定義，需在 **08 月初前** 確認
 
 ---
 

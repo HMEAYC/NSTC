@@ -885,7 +885,7 @@ gantt
 | M3 | 巨觀分析（隊形 + 熱區 + 參與度） | ✅ 完成 |
 | M4 | 微觀分析（節奏 + 穩定 + 流暢） | ✅ 完成 |
 | M5 | 指標燈號 + 教育報告 Markdown | ✅ 完成 |
-| M6 | Dashboard LiveView + History + Report | ⬜ 開發中 |
+| M6 | Dashboard LiveView + History + Report | ✅ 完成 |
 | M7 | Docker Compose 一鍵啟動 | ✅ 完成 |
 | M8 | CLI 指令可跑完整分析管線 | ✅ 完成 |
 
@@ -894,8 +894,8 @@ gantt
 | 成員 | 角色 | 主要負責 |
 |------|------|---------|
 | 李玲玉 (Liza) | 計畫主持人 | HMEAYC 指標定義、IRB 主責、場域測試協定、教師培訓、論文主筆 |
-| 陳亮 (亮) | 軟體開發 | Backend（分析引擎 + API + Gemini）+ Dashboard（React 前端） |
-| 陳冠 (冠) | 硬體開發 | Firmware（ESP32-C3 + MPU6050）+ PCB 設計 + 採購焊接 |
+| 陳育亮 (Ychen) | 軟體開發 | Backend（分析引擎 + API + Gemini）+ Dashboard（React 前端） |
+| 陳育冠 (Rover) | 硬體開發 | Firmware（ESP32-C3 + MPU6050）+ PCB 設計 + 採購焊接 |
 
 ### 10.4 關鍵介面對齊
 
