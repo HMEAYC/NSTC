@@ -5,6 +5,7 @@ import LiveView from "./pages/LiveView";
 import History from "./pages/History";
 import Report from "./pages/Report";
 import AssessmentIndicators from "./pages/AssessmentIndicators";
+import DeviceManagement from "./pages/DeviceManagement";
 
 export default function App() {
   return (
@@ -16,6 +17,7 @@ export default function App() {
           <a href="/dashboard/history" className="text-blue-600 hover:underline">歷史課程</a>
           <a href="/dashboard/report/default" className="text-blue-600 hover:underline">報告管理</a>
           <a href="/dashboard/assessment/default" className="text-blue-600 hover:underline">評估指標</a>
+          <a href="/dashboard/devices" className="text-blue-600 hover:underline">裝置管理</a>
         </nav>
         <ErrorBoundary>
           <Routes>
@@ -25,6 +27,7 @@ export default function App() {
             <Route path="/dashboard/report/:sessionId" element={<Report />} />
             <Route path="/dashboard/reports" element={<Report />} />
             <Route path="/dashboard/assessment/:sessionId" element={<AssessmentIndicators />} />
+            <Route path="/dashboard/devices" element={<DeviceManagement />} />
             <Route path="*" element={<Navigate to="/dashboard/" replace />} />
           </Routes>
         </ErrorBoundary>

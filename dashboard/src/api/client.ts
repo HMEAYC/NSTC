@@ -24,6 +24,36 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
   return res.json();
 }
 
+export interface DeviceInfo {
+  id: string;
+  device_id: string;
+  name: string;
+  firmware_version: string | null;
+  battery_level: number | null;
+  status: string;
+  last_seen: string | null;
+  created_at: string | null;
+}
+
+export interface ChildInfo {
+  id: string;
+  name: string;
+  student_id: string | null;
+  notes: string | null;
+  created_at: string | null;
+}
+
+export interface AssignmentInfo {
+  id: string;
+  device_id: string;
+  device_name: string;
+  child_id: string;
+  child_name: string;
+  confidence: number | null;
+  method: string;
+  assigned_at: string | null;
+}
+
 export const api = {
   listSessions: () =>
     fetchJSON<{ sessions: SessionSummary[] }>("/api/sessions"),
@@ -48,4 +78,31 @@ export const api = {
 
   analyzeImu: (id: string) =>
     fetchJSON<{ results: AnalysisResult[] }>(`/api/sessions/${id}/analysis`),
+
+  listDevices: () =>
+    fetchJSON<{ devices: DeviceInfo[] }>("/api/devices"),
+
+  registerDevice: (device_id: string, name?: string, firmware_version?: string) =>
+    fetchJSON<{ device: DeviceInfo }>("/api/devices", {
+      method: "POST",
+      body: JSON.stringify({ device_id, name, firmware_version }),
+    }),
+
+  listChildren: () =>
+    fetchJSON<{ children: ChildInfo[] }>("/api/children"),
+
+  registerChild: (name: string, student_id?: string, notes?: string) =>
+    fetchJSON<{ child: ChildInfo }>("/api/children", {
+      method: "POST",
+      body: JSON.stringify({ name, student_id, notes }),
+    }),
+
+  getAssignments: (sessionId: string) =>
+    fetchJSON<{ assignments: AssignmentInfo[] }>(`/api/sessions/${sessionId}/assignments`),
+
+  assignDevice: (sessionId: string, device_id: string, child_id: string, confidence?: number) =>
+    fetchJSON<{ assignment: AssignmentInfo }>(`/api/sessions/${sessionId}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ device_id, child_id, confidence }),
+    }),
 };

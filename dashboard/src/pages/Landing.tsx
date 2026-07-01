@@ -26,6 +26,12 @@ export default function Landing() {
       to: "/dashboard/assessment/default",
       color: "bg-orange-500",
     },
+    {
+      title: "裝置管理",
+      desc: "多人系統裝置與學員配對管理",
+      to: "/dashboard/devices",
+      color: "bg-teal-500",
+    },
   ];
 
   return (

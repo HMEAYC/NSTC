@@ -3,3 +3,6 @@ from .imu_data import IMUData  # noqa: F401
 from .analysis_result import AnalysisResult  # noqa: F401
 from .report import Report  # noqa: F401
 from .firmware import FirmwareVersion  # noqa: F401
+from .device import Device  # noqa: F401
+from .child import Child  # noqa: F401
+from .device_assignment import DeviceAssignment  # noqa: F401
