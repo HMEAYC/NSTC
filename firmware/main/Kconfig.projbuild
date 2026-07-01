@@ -1,5 +1,17 @@
 menu "HMEAYC Firmware Configuration"
 
+    config HMEAYC_DEVICE_ID
+        string "Device ID"
+        default "hmeayc-001"
+        help
+            Unique identifier for this device, sent in every IMU frame.
+
+    config HMEAYC_FIRMWARE_VERSION
+        string "Firmware Version"
+        default "0.1.0"
+        help
+            Semver version string reported to OTA server.
+
     config HMEAYC_WIFI_SSID
         string "WiFi SSID"
         default "HMEAYC"
@@ -11,5 +23,19 @@ menu "HMEAYC Firmware Configuration"
     config HMEAYC_WS_URI
         string "WebSocket URI"
         default "ws://192.168.4.1:8080/ws/default"
+
+    config HMEAYC_SAMPLE_RATE_HZ
+        int "IMU Sample Rate (Hz)"
+        default 50
+        range 5 200
+        help
+            IMU sampling frequency. MPU6050 supports 5-200 Hz with DLPF enabled.
+
+    config HMEAYC_OTA_BASE_URL
+        string "OTA Server Base URL"
+        default "http://192.168.4.1:8080/api/firmware"
+        help
+            Base URL for OTA version check and firmware download.
+            Must NOT have a trailing slash.
 
 endmenu

@@ -11,32 +11,32 @@
        │
        ▼
 ┌──────────────────────┐
-│      pipeline        │  ← 任務調度（src/pipeline.py）
+│      pipeline        │  ← 任務調度（backend/app/pipeline.py）
 └──────────┬───────────┘
            │
            ▼
 ┌──────────────────────────┐
-│    tracking/identity     │  ← 身分管理與 ReID 歸戶（src/tracking/identity.py）
+│    tracking/identity     │  ← 身分管理與 ReID 歸戶（backend/app/tracking/identity.py）
 └──────────┬───────────────┘
            │
            ▼
 ┌──────────────────────────┐
-│    analysis/macro        │  ← 巨觀層分析（src/analysis/macro.py）
+│    analysis/macro        │  ← 巨觀層分析（backend/app/analysis/macro.py）
 └──────────┬───────────────┘
            │
            ▼
 ┌──────────────────────────┐
-│    analysis/micro        │  ← 微觀層分析（src/analysis/micro.py）
+│    analysis/micro        │  ← 微觀層分析（backend/app/analysis/micro.py）
 └──────────┬───────────────┘
            │
            ▼
 ┌──────────────────────────┐
-│    analysis/metrics      │  ← 指標核查（src/analysis/metrics.py）
+│    analysis/metrics      │  ← 指標核查（backend/app/analysis/metrics.py）
 └──────────┬───────────────┘
            │
            ▼
 ┌──────────────────────────┐
-│    report/advisor        │  ← 教育建議（src/report/advisor.py、ai_edu.py）
+│    report/advisor        │  ← 教育建議（backend/app/report/advisor.py、ai_edu.py）
 └──────────────────────────┘
            │
            ▼
@@ -49,18 +49,18 @@
 
 | Python 模組 | 定位 | 輸入 | 輸出 |
 |-----------|------|------|------|
-| `src/pipeline.py` | 任務中樞 | 影片檔案 | 完整分析流程調度 |
-| `src/ingest/video.py` | 影片讀取 | 影片檔案 | VideoMeta、音訊 |
-| `src/tracking/identity.py` | 身分管理員 | 影片 + 特徵資料庫 | 幼兒 ID 歸戶與 ReID 補償 |
-| `src/tracking/longitudinal.py` | 長期追蹤 | 多期 session | 跨影片累積指標 |
-| `src/analysis/macro.py` | 巨觀觀察員 | 影片檔案 | 隊形/熱區/空間使用報告 |
-| `src/analysis/micro.py` | 微觀觀察員 | 影片 + 歸戶 ID | 同步度/穩定度/流暢度報告 |
-| `src/analysis/metrics.py` | 品質把關者 | 多期分析數據 | 紅黃綠燈與成長趨勢核查 |
-| `src/analysis/pose/` | 姿勢精化層 | 影格 + 人框 | COCO17 關鍵點 |
-| `src/report/advisor.py`（含 `ai_edu`） | 教育翻譯官 | 歷史數據集 | 個案成長報告、家長聯絡簿 |
-| `src/report/pdf.py` | PDF 匯出 | Markdown | PDF 報告 |
-| `src/dashboard/api.py` | REST API | HTTP 請求 | 分析任務管理 |
-| `src/dashboard/viz.py` | 視覺化 | 分析結果 | 圖表輸出 |
+| `app/pipeline.py` | 任務中樞 | 影片檔案 | 完整分析流程調度 |
+| `app/ingest/video.py` | 影片讀取 | 影片檔案 | VideoMeta、音訊 |
+| `app/tracking/identity.py` | 身分管理員 | 影片 + 特徵資料庫 | 幼兒 ID 歸戶與 ReID 補償 |
+| `app/tracking/longitudinal.py` | 長期追蹤 | 多期 session | 跨影片累積指標 |
+| `app/analysis/macro.py` | 巨觀觀察員 | 影片檔案 | 隊形/熱區/空間使用報告 |
+| `app/analysis/micro.py` | 微觀觀察員 | 影片 + 歸戶 ID | 同步度/穩定度/流暢度報告 |
+| `app/analysis/metrics.py` | 品質把關者 | 多期分析數據 | 紅黃綠燈與成長趨勢核查 |
+| `app/analysis/pose/` | 姿勢精化層 | 影格 + 人框 | COCO17 關鍵點 |
+| `app/report/advisor.py`（含 `ai_edu`） | 教育翻譯官 | 歷史數據集 | 個案成長報告、家長聯絡簿 |
+| `app/report/pdf.py` | PDF 匯出 | Markdown | PDF 報告 |
+| `app/api/sessions.py` | REST API | HTTP 請求 | Session/分析管理 |
+| `app/api/ws.py` | WebSocket | IMU 即時串流 | 資料擷取與儲存 |
 
 ---
 

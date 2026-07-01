@@ -1,0 +1,15 @@
+.git/
+.github/
+.opencode/
+__pycache__/
+*.pyc
+.env
+.venv/
+venv/
+node_modules/
+dist/
+firmware/build/
+firmware/sdkconfig
+firmware/sdkconfig.old
+.DS_Store
+*.pdf

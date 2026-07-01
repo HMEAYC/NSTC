@@ -22,7 +22,7 @@
 ```
 影片輸入
    ↓
-pipeline（任務調度，`src/pipeline.py`）
+pipeline（任務調度，`backend/app/pipeline.py`）
    ↓
 ┌──────────────┐
 │ 巨觀分析     │  → 隊形、熱區、互動密度、參與度

@@ -2,17 +2,19 @@
 
 #include <stdio.h>
 #include <string.h>
+#include <time.h>
 
 #include "esp_log.h"
-#include "esp_transport.h"
-#include "esp_transport_ws.h"
+#include "esp_timer.h"
 #include "esp_websocket_client.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
 static const char *TAG = "WSClient";
 
-#define WS_URI CONFIG_HMEAYC_WS_URI
+#define WS_URI           CONFIG_HMEAYC_WS_URI
+#define DEVICE_ID        CONFIG_HMEAYC_DEVICE_ID
+#define RECONNECT_DELAY_MS  3000
 
 static esp_websocket_client_handle_t ws_client = NULL;
 static bool ws_connected = false;
@@ -23,7 +25,7 @@ static void ws_event_handler(void *arg, esp_event_base_t base,
 
     switch (id) {
         case WEBSOCKET_EVENT_CONNECTED:
-            ESP_LOGI(TAG, "WebSocket connected");
+            ESP_LOGI(TAG, "WebSocket connected to %s", WS_URI);
             ws_connected = true;
             break;
         case WEBSOCKET_EVENT_DISCONNECTED:
@@ -43,7 +45,9 @@ esp_err_t websocket_client_init(void) {
     esp_websocket_client_config_t cfg = {
         .uri = WS_URI,
         .task_stack = 4096,
-        .keep_alive_sec = 10,
+        .keep_alive_enable = true,
+        .keep_alive_idle = 10,
+        .network_timeout_ms = 5000,
     };
 
     ws_client = esp_websocket_client_init(&cfg);
@@ -63,15 +67,34 @@ esp_err_t websocket_client_init(void) {
     return ESP_OK;
 }
 
-esp_err_t websocket_send_json(const imu_data_t *data) {
-    if (!ws_connected || !ws_client || !data) return ESP_ERR_INVALID_STATE;
+esp_err_t websocket_reconnect(void) {
+    if (ws_client) {
+        esp_websocket_client_stop(ws_client);
+        esp_websocket_client_destroy(ws_client);
+    }
+    ws_connected = false;
+    vTaskDelay(pdMS_TO_TICKS(RECONNECT_DELAY_MS));
+    return websocket_client_init();
+}
 
-    char buf[192];
+bool websocket_is_connected(void) {
+    return ws_connected;
+}
+
+esp_err_t websocket_send_json(const imu_data_t *data) {
+    if (!ws_client || !data) return ESP_ERR_INVALID_STATE;
+    if (!ws_connected) return ESP_ERR_INVALID_STATE;
+
+    int64_t ts = esp_timer_get_time() / 1000;  // ms since boot
+    char buf[256];
     int len = snprintf(buf, sizeof(buf),
         "{"
-        "\"accel_x\":%.4f,\"accel_y\":%.4f,\"accel_z\":%.4f,"
-        "\"gyro_x\":%.2f,\"gyro_y\":%.2f,\"gyro_z\":%.2f"
+        "\"ts\":%lld,"
+        "\"device_id\":\"%s\","
+        "\"ax\":%.4f,\"ay\":%.4f,\"az\":%.4f,"
+        "\"gx\":%.2f,\"gy\":%.2f,\"gz\":%.2f"
         "}",
+        (long long)ts, DEVICE_ID,
         data->accel_x, data->accel_y, data->accel_z,
         data->gyro_x, data->gyro_y, data->gyro_z);
 

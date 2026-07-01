@@ -1021,12 +1021,99 @@ volumes:
 
 ---
 
+## 12. OTA 遠端韌體更新
+
+### 12.1 系統架構
+
+```
+ESP32-C3                     Backend (FastAPI)
+ ┌─────────────┐             ┌──────────────────┐
+ │ ota_client   │─ GET /version ─►│ check_version()  │
+ │ (periodic)   │◄─ json ────────│ {update,url}     │
+ ├─────────────┤             ├──────────────────┤
+ │ ota_client   │─ GET /download ─►│ download_firmware │
+ │ (on update)  │◄─ binary ───────│ (FileResponse)   │
+ ├─────────────┤             ├──────────────────┤
+ │ esp_ota_ops │─ flash ota_1 ──│ (local flash)    │
+ │ esp_restart │─ reboot ──────│                  │
+ ├─────────────┤             ├──────────────────┤
+ │ POST /ack   │─────────────►│ ack_update()      │
+ └─────────────┘             └──────────────────┘
+```
+
+### 12.2 Partition Table (4MB Flash)
+
+| 分割區 | 類型 | 子類型 | 偏移 | 大小 |
+|--------|------|--------|------|------|
+| nvs | data | nvs | 0x9000 | 16KB |
+| otadata | data | ota | 0xD000 | 8KB |
+| phy_init | data | phy | 0xF000 | 4KB |
+| ota_0 | app | ota_0 | 0x10000 | ~1.81MB |
+| ota_1 | app | ota_1 | 0x1E0000 | ~1.81MB |
+
+### 12.3 更新流程
+
+1. **啟動確認**：`ota_mark_boot_successful()` 標記本次開機為有效（`esp_ota_mark_app_valid_cancel_rollback`）
+2. **定期檢查**：main loop 每小時 `GET /api/firmware/version?current=X` 檢查新版本
+3. **下載更新**：有新版本時呼叫 `ota_perform_update(url)`：
+   - `esp_http_client_open` → 串流讀取 binary
+   - `esp_ota_begin` → `esp_ota_write`（分塊寫入 ota_1）→ `esp_ota_end`
+   - `esp_ota_set_boot_partition(ota_1)` → `esp_restart()`
+4. **回退機制**：新版本啟動後若未呼叫 `ota_mark_boot_successful()`（crash 或手動重啟兩次），bootloader 自動切回舊分割區
+
+### 12.4 後端 API
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| GET | `/api/firmware/version?current=X` | 版本檢查（回傳有無更新 + 下載 URL） |
+| POST | `/api/firmware/upload` | 上傳新韌體 binary（multipart form） |
+| GET | `/api/firmware/download/{id}` | 下載韌體 binary |
+| GET | `/api/firmware/list` | 列出所有版本 |
+| POST | `/api/firmware/ack` | 裝置確認新韌體啟動成功 |
+
+### 12.5 操作方式
+
+```bash
+# 1. 建立第一版韌體並燒錄（idf.py flash 寫入 ota_0）
+cd firmware
+idf.py set-target esp32c3
+idf.py menuconfig   # 設定 WiFi/WS/OTA URL
+idf.py build flash monitor
+
+# 2. 建置新版韌體
+idf.py build
+# output: build/hmeayc_firmware.bin
+
+# 3. 上傳到後端
+curl -X POST http://localhost:8080/api/firmware/upload \
+  -F "version=0.2.0" \
+  -F "description=fix IMU drift + add battery ADC" \
+  -F "file=@build/hmeayc_firmware.bin"
+
+# 4. ESP32 自動在一小時內檢查到更新→下載→重啟
+# 也可在 ESP console 強制檢查：
+#   esp_console 輸入: ota check
+# （需另建 console task，目前未實作）
+
+# 5. 確認 OTA 成功：查詢 firmware 版本
+curl http://localhost:8080/api/firmware/list
+```
+
+### 12.6 安全注意事項
+
+- 目前使用 HTTP（非 HTTPS）— 僅適用於 LAN 環境
+- 上傳端點目前無 API key 保護（建議後續加上 `KINDER_API_KEY` 驗證）
+- 韌體 binary 無簽章驗證 — 若需更高安全性可整合 `esp_encrypted_img`
+
+---
+
 ## 附錄 A：風險管理
 
 | 風險 | 影響 | 機率 | 緩解措施 |
 |------|------|------|---------|
 | IRB 審查延遲 | 場域測試無法進行 | 中 | 提前 9 月送審，11–12 月取得核准 |
 | 硬體採購延遲 | 韌體開發受阻 | 低 | 先以開發板測試，採購後換板 |
+| OTA 更新失敗 | 裝置變磚無法使用 | 低 | AB 分割區 + rollback 保護；先以 USB 燒錄救援 |
 | WiFi 干擾 | 即時傳輸不穩 | 中 | 支援本地 SD 卡緩存 + 事後上傳（V2） |
 | 電池續航不足 | 無法完成單堂課 | 低 | 402030 200mAh 約 1.5h；可選外部 14500 延長 |
 | IMU 雜訊 | 分析準確度下降 | 中 | 軟體濾波 + 參數校準流程 |

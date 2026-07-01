@@ -1,6 +1,6 @@
 # Skill JSON Schemas (Canonical Examples)
 
-本文件集中維護各 `docs/agents/*.md` 引用的 JSON 範例欄位，欄位命名以目前程式實作為準（`src/*.py`）。
+本文件集中維護各 `docs/agents/*.md` 引用的 JSON 範例欄位，欄位命名以目前程式實作為準（`backend/app/`）。
 
 ## Macro (`macro_analytics`)
 
