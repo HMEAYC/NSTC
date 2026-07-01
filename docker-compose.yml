@@ -1,0 +1,33 @@
+services:
+  db:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: hmeayc
+      POSTGRES_PASSWORD: hmeayc
+      POSTGRES_DB: hmeayc
+    ports:
+      - "5432:5432"
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+
+  backend:
+    build: ./backend
+    ports:
+      - "8080:8080"
+    environment:
+      DATABASE_URL: postgresql+asyncpg://hmeayc:hmeayc@db:5432/hmeayc
+      GEMINI_API_KEY: ${GEMINI_API_KEY:-}
+    depends_on:
+      - db
+    volumes:
+      - ./backend/app:/app/app
+
+  dashboard:
+    build: ./dashboard
+    ports:
+      - "5173:80"
+    depends_on:
+      - backend
+
+volumes:
+  pgdata:

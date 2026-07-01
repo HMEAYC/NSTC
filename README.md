@@ -1,7 +1,60 @@
 # 即時 AI 音樂學習工具之研發、實作與成效評估：支持幼兒整合性發展
+
 > Real-time AI Music Learning Tool: Development, Implementation, and Evaluation for Promoting Early Childhood Integrated Development
 
-本專案旨在研發並實作一套即時 AI 音樂學習工具，採用 A 方案技術路線（ESP32-S3 + IMU + Edge AI + Gemini），以 **HMEAYC（幼兒音樂與動作整合性發展）** 核心理論為基礎，旨在支持幼兒的整合性發展。本專案由**朝陽科技大學**執行，計畫主持人為**李玲玉教授**。
+本專案以 **HMEAYC（幼兒音樂與動作整合性發展）** 核心理論為基礎，採用 ESP32-C3 + MPU6050 IMU + Edge AI + Gemini 技術路線，由**朝陽科技大學**執行，計畫主持人為**李玲玉教授**。
+
+---
+
+## Monorepo 結構
+
+```
+HMEAYC/
+├── web/                       # 課程介紹靜態網站 (vanilla HTML/CSS/JS)
+├── backend/                   # 後端 AI Engine (FastAPI + PostgreSQL)
+│   ├── app/
+│   │   ├── api/               # REST & WebSocket endpoints
+│   │   ├── analysis/          # 節奏分析 & Freeze Dance 演算法
+│   │   ├── gemini/            # Gemini API 串接 & prompt 模板
+│   │   ├── models/            # SQLAlchemy ORM
+│   │   └── db/                # 資料庫連線
+│   └── tests/
+├── dashboard/                 # 前端視覺化面板 (React + Vite + TypeScript)
+│   └── src/
+│       ├── pages/             # LiveView, History, Report
+│       ├── hooks/             # WebSocket 連線
+│       └── api/               # REST client
+├── firmware/                  # ESP32-C3 + MPU6050 韌體 (ESP-IDF)
+│   └── main/
+│       ├── imu_driver.c/h     # MPU6050 I2C 驅動
+│       ├── wifi_manager.c/h   # WiFi 連線管理
+│       └── websocket_client.c/h
+├── hardware/                  # 硬體設計 (schematic, PCB layout, BOM)
+│   ├── README.md
+│   ├── schematic.md
+│   └── pcb_layout.md
+├── field-testing/             # 場域測試工具與數據記錄（預留）
+├── docker-compose.yml         # 整合開發環境 (db + backend + dashboard)
+├── Makefile                   # 常用指令快捷
+└── .github/workflows/ci.yml   # CI/CD
+```
+
+## 快速開始
+
+```bash
+# 安裝後端依賴
+make install-backend
+
+# 安裝前端依賴
+make install-dashboard
+
+# 啟動完整開發環境 (Docker)
+make dev
+
+# 或分別啟動
+make dev-backend    # http://localhost:8080
+make dev-dashboard  # http://localhost:5173/dashboard/
+```
 
 ---
 
@@ -13,7 +66,7 @@
 | **執行單位** | 朝陽科技大學 (統一編號: 78951384) |
 | **執行期間** | 2026/08/01 ～ 2027/07/31 |
 | **計畫主持人** | 李玲玉教授 |
-| **技術路線** | A方案 (ESP32-S3 + IMU + Edge AI + Gemini) |
+| **技術路線** | A方案 (ESP32-C3 + MPU6050 IMU + Edge AI + Gemini) |
 | **核心理論** | HMEAYC (幼兒音樂與動作整合性發展理論) |
 | **重要里程碑目標** | <ul><li>**2026年10月**：完成 MVP</li><li>**2026年11月**：進入場域測試</li><li>**2027年06月**：完成正式版系統</li><li>**2027年07月**：完成國科會結案</li></ul> |
 
@@ -60,7 +113,6 @@ gantt
 ---
 
 ## 🎯 MVP 範圍 (MVP Scope)
-為確保 2026 年 12 月能順利進入場域測試，MVP 範圍已凍結，僅包含以下核心功能：
 
 * **IMU 資料收集**：即時感測幼兒肢體動作數據。
 * **節奏分析**：偵測幼兒動作與音樂節奏的互動。
@@ -78,93 +130,42 @@ gantt
 | 成員 | 角色 | 主要負責範圍 |
 | :--- | :--- | :--- |
 | **李玲玉 (Liza)** | 計畫主持人 | HMEAYC 指標定義、IRB 主責、場域測試協定、教師培訓、論文主筆、驗收報告品質 |
-| **陳亮 (亮)** | 軟體開發 | `src/analysis/`（節奏 + Freeze Dance）、`src/report/`（Gemini 報告）、`src/dashboard/`（前後端）、`src/tracking/` |
-| **陳冠 (冠)** | 硬體開發 | ESP32-S3 韌體、IMU 驅動、BLE/WiFi 傳輸、硬體採購決策 |
+| **陳亮 (亮)** | 軟體開發 | `backend/`（節奏 + Freeze Dance）、`backend/app/gemini/`（Gemini 報告）、`dashboard/`（前後端） |
+| **陳冠 (冠)** | 硬體開發 | `firmware/`（ESP32-C3 + MPU6050）、WiFi 傳輸、硬體採購 |
 
 **關鍵介面點：**
-- 冠 ↔ 亮：IMU 傳輸協定格式，需在 **07 月底前** 對齊，否則 AI 分析無法串接。
-- 亮 ↔ Liza：HMEAYC 分析指標定義，需在 **08 月初前** 確認，以確保 `src/analysis/metrics.py` 實作方向正確。
+- 冠 ↔ 亮：IMU 傳輸協定格式 (WebSocket JSON)，需在 **07 月底前** 對齊
+- 亮 ↔ Liza：HMEAYC 分析指標定義，需在 **08 月初前** 確認
 
 ---
 
-## 🚀 本週即刻執行任務 (Weekly Action Items)
+## 🚀 近期執行任務
 
-### 1. 建立專案組織架構
-為使計畫順利運作，建議立即成立以下四個工作小組：
-
-```mermaid
-graph TD
-    ProjectLead[計畫主持人: 李玲玉教授] --> PMG[計畫管理組]
-    ProjectLead --> RDG[技術研發組]
-    ProjectLead --> AIG[AI平台組]
-    ProjectLead --> VTG[場域驗證組]
-    
-    PMG --> PMG_Detail["成員：共同主持人、行政助理"]
-    RDG --> RDG_Detail["核心：ESP32-S3、IMU、Edge AI"]
-    AIG --> AIG_Detail["核心：Dashboard、Gemini、Database"]
-    VTG --> VTG_Detail["對象：幼兒園、教師、家長"]
-```
-
-* **計畫管理組**：計畫主持人、共同主持人、行政助理
-* **技術研發組**：ESP32-S3、IMU、Edge AI
-* **AI 平台組**：Dashboard、Gemini、Database
-* **場域驗證組**：幼兒園、教師、家長
-
-### 2. 建立 GitHub Organization & Repositories
-建議組織名稱：`CYUT-HMEAYC-AI`
-請建立以下七個 Repositories，以進行程式碼與文件管理：
-
-* `firmware-esp32s3`：ESP32-S3 晶片韌體開發
-* `dashboard`：前端數據視覺化平台
-* `ai-engine`：Edge AI 與 Gemini 串接模組
-* `field-testing`：場域測試工具與數據記錄
-* `documents`：計畫相關行政與規格文件
-* `patents`：專利申請相關文件與紀錄
-* `papers`：學術論文撰寫與參考文獻
-
-### 3. 建立雲端協作空間 (Google Drive)
-建議目錄架構設計如下：
-```text
-Google Drive (根目錄)
-├── 01_計畫管理
-├── 02_會議紀錄
-├── 03_IRB
-├── 04_採購
-├── 05_技術文件
-├── 06_場域測試
-├── 07_論文
-├── 08_專利
-└── 09_結案
-```
-
-### 4. 8 月採購清單初稿規劃
-為確保硬體研發進度，本週需確認並啟動以下採購流程：
-
-* **開發設備**：
-  - ESP32-S3 開發板 × 10
-  - BMI270 IMU 感測器 × 10
-  - 鋰電池 × 10
-  - 充電板 × 10
-* **測試設備**：
-  - Android 平板 × 2 (場域施測與數據查看用)
-  - WiFi 路由器 (WiFi Router) × 1 (場域網段環境建立)
-* **雲端與軟體服務**：
-  - Gemini API (AI 報告生成)
-  - GitHub Team 訂閱
-
-### 5. IRB 倫理審查準備
+### IRB 倫理審查準備
 > [!WARNING]
-> **IRB (人類研究倫理審查) 準備工作必須立即啟動！**
-> 目標 9 月底送審，11～12 月取得核准，方可如期於 11 月進場。
-> 現在需開始撰寫與準備以下文件：
-> * 家長同意書
-> * 幼兒資料同意書
-> * 個資告知書
-> * 研究說明書
+> **IRB 準備工作必須立即啟動！目標 9 月底送審，11～12 月取得核准。**
+> 需準備文件：
+> - 家長同意書 / 幼兒資料同意書 / 個資告知書 / 研究說明書
+
+### 採購清單 (硬體)
+
+| 項目 | 數量 | 用途 |
+|------|------|------|
+| ESP32-C3-MINI-1 模組 | 10 | 穿戴式感測器主控 |
+| MPU6050 IMU 感測器 | 10 | 6 軸動作偵測 |
+| TP4056 充電板 | 10 | 鋰電池充電 |
+| ME6211 3.3V LDO | 10 | 穩壓 |
+| LiPo 503040 500mAh | 10 | 電池 |
+| USB-C 連接器 | 10 | 充電/資料 |
+| Android 平板 | 2 | 場域施測 |
+| WiFi 路由器 | 1 | 場域網路 |
 
 ---
 
-## 💡 後續下一步建議 (Next Step)
+## 💡 後續下一步
 
-建議本週完成上述基礎建設後，直接開始撰寫 **《文件01 年度總執行計畫書完整版（約20頁）》**。
-這份文件將作為本計畫的 **專案章程 (Project Charter)**，後續其餘四份子計畫文件都將由此母文件衍生，以確保整體計畫的邏輯與內容完全一致，避免版本與資訊衝突。
+1. 硬體採購下單 → 打樣 PCB + 焊接測試
+2. MPU6050 驅動整合測試（I2C scan + raw data log）
+3. Backend analysis engine 實作（節奏分析 + Freeze Dance）
+4. Dashboard UI 開發（即時圖表 + WebSocket 串接）
+5. MVP 里程碑追蹤

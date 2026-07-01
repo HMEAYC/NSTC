@@ -1,0 +1,15 @@
+menu "HMEAYC Firmware Configuration"
+
+    config HMEAYC_WIFI_SSID
+        string "WiFi SSID"
+        default "HMEAYC"
+
+    config HMEAYC_WIFI_PASSWORD
+        string "WiFi Password"
+        default ""
+
+    config HMEAYC_WS_URI
+        string "WebSocket URI"
+        default "ws://192.168.4.1:8080/ws/default"
+
+endmenu
