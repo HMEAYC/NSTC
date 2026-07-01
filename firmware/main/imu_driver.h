@@ -9,6 +9,7 @@ extern "C" {
 
 #define MPU6050_I2C_ADDR_DEFAULT  0x68
 #define MPU6050_WHO_AM_I_VAL      0x68
+#define MPU6500_WHO_AM_I_VAL      0x70
 
 typedef struct {
     float accel_x;  // g

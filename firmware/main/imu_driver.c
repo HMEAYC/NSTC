@@ -147,10 +147,10 @@ esp_err_t imu_init(const imu_config_t *config) {
     // ---------- verify chip ID ----------
     ESP_RETURN_ON_ERROR(reg_read8(REG_WHO_AM_I, &val),
                         TAG, "read WHO_AM_I failed");
-    if (val != MPU6050_WHO_AM_I_VAL) {
-        ESP_LOGE(TAG, "unexpected WHO_AM_I: 0x%02X (expected 0x%02X)",
-                 val, MPU6050_WHO_AM_I_VAL);
-        return ESP_ERR_INVALID_VERSION;
+    if (val != MPU6050_WHO_AM_I_VAL && val != MPU6500_WHO_AM_I_VAL) {
+        ESP_LOGE(TAG, "unexpected WHO_AM_I: 0x%02X (expected 0x%02X or 0x%02X)",
+                 val, MPU6050_WHO_AM_I_VAL, MPU6500_WHO_AM_I_VAL);
+        return ESP_ERR_NOT_FOUND;
     }
     ESP_LOGI(TAG, "WHO_AM_I verified: 0x%02X", val);
 
