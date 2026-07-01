@@ -13,8 +13,39 @@ HMEAYC/
 ├── web/                       # 課程介紹靜態網站 (vanilla HTML/CSS/JS)
 ├── backend/                   # 後端 AI Engine (FastAPI + PostgreSQL)
 │   ├── app/
+│   │   ├── __init__.py        # 套件入口 + 版本號
+│   │   ├── __main__.py        # CLI entry point (python -m app)
+│   │   ├── main.py            # FastAPI app + router 掛載
+│   │   ├── cli.py             # 命令列參數解析
+│   │   ├── paths.py           # 記憶/報告/暫存目錄路徑管理
+│   │   ├── pipeline.py        # 完整影片分析管線
+│   │   ├── timecode.py        # 時間碼解析與格式化
+│   │   ├── viz.py             # 熱區圖 + 軌跡圖繪製 (matplotlib)
 │   │   ├── api/               # REST & WebSocket endpoints
-│   │   ├── analysis/          # 節奏分析 & Freeze Dance 演算法
+│   │   │   ├── __init__.py
+│   │   │   ├── video_analysis.py  # 影片分析任務管理 API
+│   │   │   └── ws.py          # WebSocket IMU 即時串流
+│   │   ├── analysis/          # 巨觀/微觀分析 + 姿勢精化
+│   │   │   ├── macro.py       # 群體隊形、熱區、參與度
+│   │   │   ├── metrics.py     # 指標燈號與綜合評分
+│   │   │   ├── micro.py       # 個體節奏同步/穩定度/流暢度
+│   │   │   └── pose/          # MediaPipe Pose/Holistic 精化
+│   │   │       ├── common.py
+│   │   │       ├── estimator.py
+│   │   │       └── holistic.py
+│   │   ├── tracking/          # 身分辨識與跨影片累積
+│   │   │   ├── identity.py    # 外觀嵌入比對 + 身分資料庫
+│   │   │   ├── face_insight.py    # ArcFace stub
+│   │   │   ├── longitudinal.py    # 跨影片 sessions.jsonl
+│   │   │   └── importer.py    # 批次匯入既有 metrics
+│   │   ├── report/            # 教育報告生成
+│   │   │   ├── advisor.py     # 教育建議 Markdown 模板
+│   │   │   ├── ai_edu.py      # OpenAI 相容 LLM 補充段落
+│   │   │   ├── pdf.py         # Markdown→PDF (weasyprint)
+│   │   │   └── student.py     # 個人長期趨勢報告
+│   │   ├── ingest/            # 影片輸入處理
+│   │   │   ├── video.py       # OpenCV 中繼資料 + librosa 音訊
+│   │   │   └── segment.py     # ffmpeg 影片裁切
 │   │   ├── gemini/            # Gemini API 串接 & prompt 模板
 │   │   ├── models/            # SQLAlchemy ORM
 │   │   └── db/                # 資料庫連線
