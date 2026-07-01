@@ -11,9 +11,9 @@ export default function App() {
       <div className="min-h-screen bg-gray-50">
         <nav className="bg-white shadow-sm p-4 flex gap-4">
           <a href="/dashboard/" className="text-blue-600 hover:underline">首頁</a>
-          <a href="/dashboard/live/test" className="text-blue-600 hover:underline">即時監控</a>
+          <a href="/dashboard/live/default" className="text-blue-600 hover:underline">即時監控</a>
           <a href="/dashboard/history" className="text-blue-600 hover:underline">歷史課程</a>
-          <a href="/dashboard/report/test" className="text-blue-600 hover:underline">報告管理</a>
+          <a href="/dashboard/report/default" className="text-blue-600 hover:underline">報告管理</a>
         </nav>
         <ErrorBoundary>
           <Routes>
