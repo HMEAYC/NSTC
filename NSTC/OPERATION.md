@@ -1,0 +1,889 @@
+# HMEAYC 系統操作手冊
+
+> 即時 AI 音樂學習工具 — 系統部署、操作與驗證完整指南
+
+---
+
+## 目錄
+
+1. [系統概覽](#1-系統概覽)
+2. [環境需求](#2-環境需求)
+3. [快速啟動](#3-快速啟動)
+4. [韌體操作](#4-韌體操作)
+5. [Dashboard 操作指南](#5-dashboard-操作指南)
+6. [多人裝置管理](#6-多人裝置管理)
+7. [評估指標說明](#7-評估指標說明)
+8. [API 參考](#8-api-參考)
+9. [驗證方法](#9-驗證方法)
+10. [疑難排解](#10-疑難排解)
+
+---
+
+## 1. 系統概覽
+
+```
+┌────────────────────────────────────────────────────────────┐
+│                     HMEAYC 系統架構                          │
+├────────────────────────────────────────────────────────────┤
+│                                                            │
+│  ┌──────────────────┐       ┌──────────────────┐          │
+│  │  ESP32-C3 腰帶    │       │  天花板攝影機      │          │
+│  │  MPU6500 IMU     │       │  MediaPipe Pose   │          │
+│  │  50Hz WebSocket  │       │  30fps skeleton   │          │
+│  └───────┬──────────┘       └────────┬─────────┘          │
+│          │ WS JSON                   │ REST (keypoints)    │
+│          ▼                           ▼                     │
+│  ┌──────────────────────────────────────────────┐          │
+│  │           FastAPI 後端 (:8080)                 │          │
+│  │                                                │          │
+│  │  ┌─────────┐ ┌──────────┐ ┌────────────────┐ │          │
+│  │  │ Session │ │ Analysis │ │ Device/Child   │ │          │
+│  │  │ Manager │ │ Engine   │ │ Manager        │ │          │
+│  │  └────┬────┘ └────┬─────┘ └───────┬────────┘ │          │
+│  │       │           │               │          │          │
+│  │  ┌────▼───────────▼───────────────▼────────┐ │          │
+│  │  │          PostgreSQL                     │ │          │
+│  │  │  sessions / imu_data / analysis_results │ │          │
+│  │  │  reports / devices / children / assigns │ │          │
+│  │  └─────────────────────────────────────────┘ │          │
+│  └──────────────────────┬───────────────────────┘          │
+│                         │                                  │
+│                         ▼                                  │
+│  ┌──────────────────────────────────────────────┐          │
+│  │       React Dashboard (:5173)                │          │
+│  │                                                │          │
+│  │  ┌──────────┐ ┌──────────┐ ┌────────────────┐ │          │
+│  │  │ LiveView │ │ History  │ │ Assessment     │ │          │
+│  │  │ IMU 6軸  │ │ 課程列表 │ │ 指標總覽        │ │          │
+│  │  └──────────┘ └──────────┘ └────────────────┘ │          │
+│  │  ┌──────────┐ ┌──────────┐                    │          │
+│  │  │ Report   │ │ Devices  │                    │          │
+│  │  │ 報告檢視 │ │ 裝置管理  │                    │          │
+│  │  └──────────┘ └──────────┘                    │          │
+│  └──────────────────────────────────────────────┘          │
+│                                                            │
+└────────────────────────────────────────────────────────────┘
+```
+
+### 元件說明
+
+| 元件 | 技術 | 用途 |
+|------|------|------|
+| ESP32-C3 腰帶 | ESP-IDF v5.4 + MPU6500 | 穿戴式 IMU 感測（加速度 ±16g / 陀螺儀 ±2000°/s @ 50Hz） |
+| 後端伺服器 | FastAPI + PostgreSQL + SQLAlchemy | IMU 資料接收、分析運算、裝置管理、報告生成 |
+| Dashboard | React 19 + Vite 8 + TypeScript + Recharts + Tailwind v4 | 即時監控、歷史查詢、評估指標、裝置管理 |
+| 資料庫 | PostgreSQL（AB OTA partition table） | 持久化 IMU 資料、分析結果、報告、裝置與學員 |
+| 韌體 OTA | HTTP（LAN）/ HTTPS（生產） | 無線韌體更新 |
+
+---
+
+## 2. 環境需求
+
+### 軟體
+
+| 工具 | 版本 | 用途 |
+|------|------|------|
+| Python | ≥ 3.11 | 後端執行環境 |
+| Node.js | ≥ 20 | Dashboard 執行環境 |
+| Docker & Docker Compose | 最新 | PostgreSQL 資料庫 |
+| ESP-IDF | v5.4 | 韌體編譯 |
+| Git | 最新 | 版本控制 |
+
+### 硬體
+
+| 項目 | 數量 | 說明 |
+|------|------|------|
+| ESP32-C3 開發板 | ≥ 1 | 執行韌體，連接 IMU |
+| MPU6500 模組 | ≥ 1 | I2C 介面，位址 0x68 |
+| USB-C 傳輸線 | 1 | 燒錄韌體用 |
+| WiFi 路由器 | 1 | ESP32 連網，SSID: chen |
+
+### 連接埠
+
+| 連接埠 | 用途 |
+|--------|------|
+| 5432 | PostgreSQL |
+| 8080 | FastAPI 後端 |
+| 5173 | Vite Dashboard |
+
+---
+
+## 3. 快速啟動
+
+### 3.1 背景啟動（建議日常使用）
+
+```bash
+# 安裝相依套件（首次執行）
+make install-backend    # pip install -e ".[dev]"
+make install-dashboard  # npm install
+
+# 背景啟動全部服務
+make start              # 等同 bash start.sh
+# PostgreSQL + Backend(:8080) + Dashboard(:5173) 全部在背景執行
+
+# 停止全部服務
+make stop               # 等同 bash stop.sh
+```
+
+### 3.2 終端機啟動（開發用，log 即時顯示）
+
+```bash
+# 方法 A：全部一起
+make dev                # docker compose up --build
+
+# 方法 B：分三個 terminal 各開一個
+# Terminal 1 — 資料庫
+docker compose up -d db
+
+# Terminal 2 — 後端
+make dev-backend        # uvicorn app.main:app --reload --port 8080
+
+# Terminal 3 — Dashboard
+make dev-dashboard      # npm run dev
+```
+
+### 3.3 逐步啟動
+
+**Step 1 — 資料庫：**
+
+```bash
+cd /path/to/HMEAYC
+docker compose up -d db
+
+# 驗證
+psql -h localhost -U hmeayc -d hmeayc -c "\dt"
+```
+
+**Step 2 — 後端：**
+
+```bash
+cd backend
+python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+
+# 驗證
+curl http://localhost:8080/health
+# → {"status":"ok"}
+```
+
+**Step 3 — Dashboard：**
+
+```bash
+cd dashboard
+npm run dev
+
+# 驗證
+open http://localhost:5173/dashboard/
+```
+
+### 3.4 啟動方式比較
+
+| 方式 | 指令 | 優點 | 缺點 |
+|------|------|------|------|
+| 背景啟動 | `make start` | 一鍵啟動全部，不會被意外關閉 | 需 `make stop` 手動停止 |
+| 終端機分開 | `make dev-backend` + `make dev-dashboard` | log 即時顯示，方便除錯 | 需佔用 terminal |
+| Docker | `make dev` | 完整容器化，環境一致 | 需額外設定 volume |
+
+> **建議：** 日常開發使用 `make start`（背景），需要看 log 時用 `make stop` 後改開三個 terminal。
+
+### 3.5 啟動狀態檢查
+
+```bash
+# 全部服務運行檢查
+echo "DB:      $(psql -h localhost -U hmeayc -d hmeayc -c 'SELECT 1' 2>&1 | tail -1)"
+echo "Backend: $(curl -s http://localhost:8080/health)"
+echo "Dash:    $(curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/dashboard/)"
+```
+
+---
+
+## 4. 韌體操作
+
+### 4.1 建置與燒錄
+
+```bash
+cd firmware
+
+# 啟動 ESP-IDF 環境
+source /path/to/esp-idf/export.sh
+
+# 建置
+idf.py build
+
+# 燒錄（確認連接埠）
+ls /dev/cu.usbmodem*   # macOS
+idf.py -p /dev/cu.usbmodem1101 flash
+```
+
+### 4.2 監控 Serial Log
+
+```bash
+idf.py -p /dev/cu.usbmodem1101 monitor
+
+# 預期輸出
+# I (381) HMEAYC: HMEAYC firmware v0.1.0 starting (ESP32-C3 + MPU6500)...
+# I (501) MPU6xxx: WHO_AM_I verified: 0x70
+# I (511) MPU6xxx: MPU6xxx initialized (I2C 0 @ 0x68)
+# I (511) HMEAYC: connecting WiFi...
+# I (512) HMEAYC: WiFi connected, IP: 192.168.1.199
+# I (512) HMEAYC: WebSocket connecting...
+```
+
+### 4.3 WiFi 設定
+
+韌體初始值設定在 `firmware/sdkconfig.defaults`，實際場域可透過 Dashboard 的 `/dashboard/wifi` 頁面寫入後端。
+ESP32 會在連線後定期向 `/api/config/wifi?include_password=true&device_id=...` 讀取設定，並在 NVS 中保留最新值。
+
+```
+CONFIG_HMEAYC_WIFI_SSID="chen"
+CONFIG_HMEAYC_WIFI_PASSWORD="12345678"
+CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
+```
+
+> 提示：Dashboard 端讀取 `/api/config/wifi` 時不會顯示密碼；韌體端則透過 `include_password=true` 取回完整設定以便更新 NVS。
+
+### 4.4 OTA 更新（Dashboard）
+
+1. 開啟 `http://localhost:5173/dashboard/firmware`
+2. 上傳新版 firmware binary
+3. ESP32 會自動檢查更新版本
+4. 下載並寫入 inactive partition
+5. 重啟後從新 partition 啟動
+
+---
+
+## 5. Dashboard 操作指南
+
+### 5.1 頁面一覽
+
+| 路徑 | 頁面 | 功能 |
+|------|------|------|
+| `/dashboard/` | 首頁 | 6 張導航卡片 |
+| `/dashboard/live/:sessionId` | 即時監控 | IMU 6 軸即時圖表 + WS 連線狀態 |
+| `/dashboard/history` | 歷史課程 | Session 列表，點擊進報告 |
+| `/dashboard/report/:sessionId` | 報告管理 | 教育分析報告 Markdown 檢視 |
+| `/dashboard/assessment/:sessionId` | 評估指標 | 即時行為指標運算（IMU/CV） |
+| `/dashboard/devices` | 裝置管理 | 多人裝置註冊 / 學員管理 / 跨模態配對 |
+
+### 5.2 首頁（Landing）
+
+![Landing](https://via.placeholder.com/800x400?text=Landing+Page)
+
+6 張導航卡：
+- **即時監控** — 即時 IMU 6 軸圖表
+- **歷史課程** — 課程記錄列表
+- **報告管理** — 教育分析報告
+- **評估指標** — 即時行為指標運算
+- **裝置管理** — 多人裝置/學員管理
+
+### 5.3 即時監控（LiveView）
+
+**路徑：** `/dashboard/live/default`
+
+顯示：
+- WS 連線狀態指示燈（綠/黃/紅）
+- Session ID
+- 6 軸即時數值卡片（AX, AY, AZ, GX, GY, GZ）
+- 加速度（g）即時折線圖
+- 角速度（dps）即時折線圖
+
+**操作：**
+1. ESP32 開機後會自動連線到 `/ws/default`
+2. Dashboard 自動顯示即時資料
+3. 最多保留 200 筆資料點，自動滑動
+
+### 5.4 歷史課程（History）
+
+**路徑：** `/dashboard/history`
+
+顯示：
+- 所有 Session 列表（ID、開始時間、狀態）
+- 狀態標籤：completed（綠）/ active（藍）
+- 點擊進入該 Session 的報告頁面
+
+### 5.5 報告管理（Report）
+
+**路徑：** `/dashboard/report/:sessionId`
+
+顯示：
+- 自動生成的 Markdown 報告
+- 包含：課程資訊、節奏分析結果、Freeze Dance 結果、教育建議
+- 內建 Markdown 渲染（標題/表格/程式碼區塊）
+
+### 5.6 評估指標（Assessment）
+
+**路徑：** `/dashboard/assessment/default`
+
+三區段：
+
+**🟢 IMU 即時運算（無需外部資料）：**
+
+| 指標 | 計算方式 | 燈號 | 說明 |
+|------|---------|------|------|
+| 🏃 動作活躍度 | 加速度 RMS | 適中/偏高/過高 | 運動強度代理 |
+| 🎯 動作平穩度 | 加速度變異係數 (CV) | 平穩/普通/僵硬 | 動作流暢度 |
+| ⚖️ 身體穩定指數 | 1 − CV | 穩定/尚可/不穩 | 身體控制能力 |
+
+**🟡 需音樂參考（演算法就緒，等待音樂來源）：**
+
+| 指標 | 說明 | 現狀 |
+|------|------|------|
+| 🎵 節奏同步誤差 | FFT 相位匹配 vs 音樂拍點 | 🚧 需 BPM + beat tracking |
+| 🧊 凍結反應/穩定度 | 音樂停止瞬間反應時間 + 穩定度 | 🚧 需 RMS energy drop 訊號 |
+
+**🔴 需攝影機資料（需 YOLO + MediaPipe）：**
+
+| 指標 | 說明 |
+|------|------|
+| 👥 團體投入度 | 活躍比例（>0.5cm/s） |
+| 📐 隊形穩定度 | 幾何分類信心均值 |
+| 🗺️ 空間利用率 | 3×3 熱區分布離散度 |
+| 🦶 步態對稱性 | 左右腳支撐期比對 |
+| 🧘 平衡搖擺面積 | 質心投影軌跡 |
+| 🤝 上下肢協調 | PLV 相位鎖定值 |
+
+### 5.7 裝置管理（Devices）
+
+**路徑：** `/dashboard/devices`
+
+三頁籤：
+
+**📡 裝置：**
+- 列表顯示所有註冊 ESP32 腰帶
+- 項目：名稱、Device ID、韌體版本、電量、最後上線時間、狀態
+- 狀態指示燈（綠 = 連線中 / 灰 = 離線）
+- ESP32 開機會自動註冊
+
+**👤 學員：**
+- 列表顯示所有註冊學員
+- 可透過表單註冊新學員（姓名 + 學號 + 備註）
+
+**🔗 跨模態配對機制：**
+- 論文演算法說明
+- 三欄：IMU 腰帶訊號 / 攝影機視覺訊號 / 配對演算法
+- 配對流程步驟
+- 合成驗證結果表
+
+---
+
+## 6. 多人裝置管理
+
+### 6.1 概念流程
+
+```
+教師登入 → 註冊腰帶（ESP32 自動）→ 註冊學員（手動）→ 開始課程 → 配對腰帶↔學員
+                                                                       ↓
+                                                             手動配對 / 自動演算法
+                                                                       ↓
+                                                             確認配對結果 + 信心分數
+```
+
+### 6.2 裝置註冊
+
+**自動註冊：** ESP32 開機並連上 WiFi 後，韌體會主動送出 `POST /api/devices`，以 `device_id` 和 `firmware_version` 更新裝置狀態。可在 Dashboard 裝置列表看到。
+
+**手動註冊（測試）：**
+
+```bash
+curl -X POST http://localhost:8080/api/devices \
+  -H "Content-Type: application/json" \
+  -d '{"device_id":"esp32-c3-001","name":"腰帶 A","firmware_version":"v0.1.0"}'
+```
+
+### 6.3 學員註冊
+
+**Dashboard 操作：**
+1. 開啟 `/dashboard/devices`
+2. 切到「👤 學員」頁籤
+3. 點擊「+ 註冊學員」
+4. 填寫姓名（必填）、學號（選填）、備註（選填）
+
+**API：**
+
+```bash
+curl -X POST http://localhost:8080/api/children \
+  -H "Content-Type: application/json" \
+  -d '{"name":"小明","student_id":"S001","notes":"3歲"}'
+```
+
+### 6.4 課程配對
+
+**手動配對（教師操作）：**
+
+```bash
+# 1. 建立課程
+curl -X POST http://localhost:8080/api/sessions \
+  -H "Content-Type: application/json" \
+  -d '{"course_type":"march"}'
+
+# 2. 配對腰帶 → 學員
+curl -X POST http://localhost:8080/api/sessions/{SESSION_ID}/assign \
+  -H "Content-Type: application/json" \
+  -d '{"device_id":"{DEVICE_ID}","child_id":"{CHILD_ID}","confidence":0.95}'
+
+# 3. 查詢配對結果
+curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
+  | python3 -m json.tool
+```
+
+**回應範例：**
+```json
+{
+  "assignments": [
+    { "device_name": "腰帶 A", "child_name": "小明", "confidence": 0.95, "method": "manual" },
+    { "device_name": "腰帶 B", "child_name": "小華", "confidence": 0.88, "method": "manual" }
+  ]
+}
+```
+
+### 6.5 跨模態自動配對（未來功能）
+
+論文演算法（FFT 相位匹配 + Hungarian 指派）預計整合至 `POST /api/sessions/{id}/assign`，以 `method: "cross_modal_fft"` 自動執行。需攝影機 MediaPipe 資料串接。
+
+---
+
+## 7. 評估指標說明
+
+### 7.1 即時 IMU 指標（前端計算）
+
+來自 WebSocket 串流的加速度資料，在瀏覽器中即時計算：
+
+| 指標 | 公式 | 區間 | 意義 |
+|------|------|------|------|
+| 動作活躍度 | `RMS(mag(ax, ay, az))` | 0.0 ~ 2.0+ g | 低 < 0.3 / 中 0.3~0.8 / 高 > 0.8 |
+| 動作平穩度 | `CV = std(mag) / mean(mag)` | 0.0 ~ 1.0+ | 平穩 < 0.3 / 普通 0.3~0.6 / 僵硬 > 0.6 |
+| 身體穩定指數 | `1 − CV` | 0.0 ~ 1.0 | 穩定 ≥ 0.7 / 尚可 ≥ 0.4 / 不穩 < 0.4 |
+
+### 7.2 後端分析指標（需音樂參考）
+
+| 指標 | 檔案 | 演算法 |
+|------|------|--------|
+| 節奏同步率 | `analysis/rhythm.py` | 動作波峰 vs 音樂拍點時間差 |
+| 凍結反應時間 | `analysis/freeze_dance.py` | RMS 能量下降 → 動作停止時間 |
+| 凍結穩定指數 | `analysis/freeze_dance.py` | 停止後動作變異係數 |
+| 綜合評分 | `analysis/metrics.py` | 5 項加權（參與度30% + 穩定20% + 節奏20% + 隊形15% + 流暢15%） |
+
+### 7.3 燈號系統
+
+| 分數區間 | 燈號 | 意義 |
+|---------|------|------|
+| ≥ 0.85 | 🟢 極佳 | 表現優異 |
+| ≥ 0.70 | 🟡 良好 | 正常發展 |
+| < 0.70 | 🔴 需關注 | 建議教師介入 |
+
+---
+
+## 8. API 參考
+
+### 8.1 完整端點列表
+
+#### 系統
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/health` | 健康檢查 |
+
+#### Sessions
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/sessions` | 列出最近 100 筆 Session |
+| `POST` | `/api/sessions` | 建立新 Session（body: `course_type`） |
+| `GET` | `/api/sessions/{id}` | 單一 Session 詳情 |
+| `GET` | `/api/sessions/{id}/analysis` | Session 分析結果 |
+| `POST` | `/api/sessions/{id}/report` | 產生報告 |
+| `GET` | `/api/sessions/{id}/report` | 取得報告 |
+
+#### Reports
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/reports/{id}` | 單一報告 |
+
+#### 系統設定
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/config/wifi` | 讀取 WiFi 設定（預設只回傳 `ssid` 與 `updated_at`） |
+| `PUT` | `/api/config/wifi` | 更新 WiFi 設定（body: `ssid`, `password?`） |
+
+#### 裝置與學員管理
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/devices` | 列出所有裝置 |
+| `POST` | `/api/devices` | 註冊/更新裝置（body: `device_id`, `name?`, `firmware_version?`） |
+| `GET` | `/api/children` | 列出所有學員 |
+| `POST` | `/api/children` | 註冊學員（body: `name`, `student_id?`, `notes?`） |
+| `GET` | `/api/sessions/{id}/assignments` | 查詢配對結果 |
+| `POST` | `/api/sessions/{id}/assign` | 執行裝置-學員配對（body: `device_id`, `child_id`, `confidence?`） |
+
+#### 韌體 OTA
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/firmware/version` | 檢查更新（query: `current`） |
+| `POST` | `/api/firmware/upload` | 上傳新韌體（form: `version`, `description?`, `file`） |
+| `GET` | `/api/firmware/download/{id}` | 下載韌體 |
+| `GET` | `/api/firmware/list` | 列出所有版本 |
+| `POST` | `/api/firmware/ack` | OTA 確認（form: `version`, `device_id`） |
+
+#### 影片分析
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `POST` | `/api/analyze/analyze` | 提交影片分析任務（body: `video_path`, ...） |
+| `GET` | `/api/analyze/tasks` | 列出任務 |
+| `GET` | `/api/analyze/tasks/{id}` | 任務狀態 |
+| `POST` | `/api/analyze/tasks/{id}/cancel` | 取消任務 |
+
+#### WebSocket
+
+| Protocol | Path | 說明 |
+|----------|------|------|
+| `WS` | `/ws/{session_id}` | IMU 即時串流（ESP32 → Server → Dashboard broadcast） |
+
+### 8.2 WebSocket 資料格式
+
+**ESP32 → Server：**
+```json
+{
+  "ts": 1719812345678,
+  "device_id": "esp32-c3",
+  "ax": 0.12, "ay": -0.05, "az": 1.02,
+  "gx": 0.5, "gy": -1.2, "gz": 0.3
+}
+```
+
+**Server → Dashboard（broadcast）：**
+```json
+{
+  "ts": 1719812345678,
+  "device_id": "esp32-c3",
+  "ax": 0.12, "ay": -0.05, "az": 1.02,
+  "gx": 0.5, "gy": -1.2, "gz": 0.3
+}
+```
+
+---
+
+## 9. 驗證方法
+
+### 9.1 單元測試
+
+```bash
+cd backend && python3 -m pytest tests/test_basic.py -v
+# 預期：12 passed
+```
+
+測試項目：
+- 健康檢查、路由數量、DB URL（3 項）
+- 韌體路由（1 項）
+- 節奏分析（2 項）
+- Freeze Dance 分析（2 項）
+- 臉部嵌入（2 項）
+- Gemini fallback（1 項）
+- 完整路由覆蓋（1 項，含所有 17 條路由）
+
+### 9.2 API 整合測試
+
+```bash
+bash field-testing/verify-device-management.sh
+```
+
+15 項測試通過標準：
+1. ✅ 裝置列表（≥0 筆）
+2. ✅ 註冊腰帶（回傳 online）
+3. ✅ 註冊第二條腰帶
+4. ✅ 心跳更新版本
+5. ✅ 裝置列表 ≥ 2 筆
+6. ✅ 註冊小明
+7. ✅ 註冊小華
+8. ✅ 學員列表 ≥ 2 筆
+9. ✅ 建立課程（回傳 UUID）
+10. ✅ 配對腰帶→小明
+11. ✅ 配對腰帶→小華
+12. ✅ 查詢配對（2 筆，顯示名稱與信心）
+13. ✅ 覆寫配對（腰帶 A 改配小華）
+14. ✅ 不存在裝置回傳 404
+15. ✅ 不存在 Session 回傳 404
+
+### 9.3 ESP32 開機驗證
+
+```bash
+# 1. 確認 Serial log
+idf.py -p /dev/cu.usbmodem1101 monitor
+
+# 預期輸出順序：
+MPU6xxx: WHO_AM_I verified: 0x70      ← IMU 偵測成功
+MPU6xxx: MPU6xxx initialized           ← IMU 初始化完成
+HMEAYC: WiFi connected, IP: 192.168.x.x  ← WiFi 連線成功
+HMEAYC: WebSocket connected            ← WS 連線成功
+
+# 2. 確認 Dashboard 收到資料
+# 開啟 http://localhost:5173/dashboard/live/default
+# 確認圖表有即時波形
+
+# 3. 確認裝置已註冊
+open http://localhost:5173/dashboard/devices
+# 應看到該 ESP32 列在裝置列表中（status=online）
+```
+
+### 9.4 端到端資料流驗證
+
+```bash
+# 1. ESP32 開機 → WS 資料流入
+# 2. Dashboard LiveView 顯示即時圖表
+# 3. Dashboard Assessment 顯示即時指標
+# 4. 資料庫有 IMU 資料
+psql -h localhost -U hmeayc -d hmeayc -c "SELECT COUNT(*) FROM imu_data;"
+# 5. 裝置自動註冊
+curl -s http://localhost:8080/api/devices | python3 -m json.tool
+```
+
+---
+
+## 10. 疑難排解
+
+### 10.1 後端無法啟動
+
+```
+Error: That port is already in use
+```
+
+```bash
+# 釋放 8080 連接埠
+lsof -ti:8080 | xargs kill
+```
+
+### 10.2 PostgreSQL 連線失敗
+
+```
+psql: connection to server at "localhost" (::1), port 5432 failed
+```
+
+```bash
+# 確認 Docker 容器運行中
+docker compose ps
+
+# 重啟資料庫
+docker compose restart db
+
+# 確認連線資訊
+docker compose exec db psql -U hmeayc -d hmeayc -c "SELECT 1"
+```
+
+### 10.3 ESP32 無法連線 WiFi
+
+```
+E (1000) wifi: wifi firmware version: c3_73bc60a
+E (1000) wifi: wifi_task: rc=30720
+```
+
+```bash
+# 檢查 sdkconfig 中的 SSID / 密碼
+grep -E "CONFIG_HMEAYC_WIFI_SSID|CONFIG_HMEAYC_WIFI_PASSWORD" firmware/sdkconfig.defaults
+
+# 確認路由器 2.4GHz 頻段已開啟
+# ESP32-C3 不支援 5GHz
+```
+
+### 10.4 ESP32 WS 連線失敗
+
+```
+E (2000) HMEAYC: WebSocket connection failed
+```
+
+```bash
+# 確認後端正執行中
+curl http://localhost:8080/health
+
+# 確認 ESP32 設定的 WS URI 正確
+# sdkconfig.defaults 中：CONFIG_HMEAYC_WS_URI="ws://{BACKEND_IP}:8080/ws/default"
+
+# 從 ESP32 ping 後端 IP
+ping 192.168.1.105
+```
+
+### 10.5 MPU6500 偵測不到
+
+```
+I (100) MPU6xxx: MPU6500 not found (WHO_AM_I=0x00)
+```
+
+```bash
+# 檢查 I2C 接線
+# SDA → GPIO6, SCL → GPIO7, VCC → 3.3V, GND → GND
+
+# 確認 I2C 位址（預設 0x68，AD0=GND）
+# 若 AD0=3.3V，位址為 0x69
+```
+
+### 10.6 Dashboard 白畫面
+
+```bash
+# 檢查瀏覽器 console 錯誤
+# 常見原因：API 回傳非 JSON 格式
+
+# 確認後端 API 正常
+curl http://localhost:8080/api/sessions
+
+# 清除 node_modules 重新安裝
+cd dashboard && rm -rf node_modules && npm install
+```
+
+### 10.7 韌體燒錄失敗
+
+```
+A fatal error occurred: Failed to connect to ESP32-C3: No serial data received
+```
+
+```bash
+# 檢查連接埠
+ls /dev/cu.usbmodem*
+
+# 按住 BOOT 按鈕，再按一下 RESET，放開 BOOT
+# 然後執行
+idf.py -p /dev/cu.usbmodem1101 flash
+```
+
+### 10.8 裝置未顯示在 Dashboard
+
+```bash
+# 手動檢查 API
+curl -s http://localhost:8080/api/devices
+
+# 如果列表為空，手動註冊
+curl -X POST http://localhost:8080/api/devices \
+  -H "Content-Type: application/json" \
+  -d '{"device_id":"esp32-c3-001","name":"腰帶測試","firmware_version":"v0.1.0"}'
+
+# 檢查 ESP32 是否有發送 POST /api/devices（開機與定期心跳）
+```
+
+### 10.9 Dashboard 或 Backend 無故停止
+
+```bash
+# 檢查進程是否在運行
+lsof -ti:5173    # Dashboard
+lsof -ti:8080    # Backend
+
+# 重啟背景服務
+make stop && make start
+
+# 查看 log
+cat /tmp/hmeayc-backend.log | tail -30
+cat /tmp/hmeayc-dashboard.log | tail -30
+
+# 改用分開 terminal 執行（log 即時顯示，不會意外退出）
+make dev-backend   # terminal 1
+make dev-dashboard # terminal 2
+```
+
+---
+
+## 附錄 A：資料庫模型
+
+```mermaid
+erDiagram
+    Session ||--o{ IMUData : has
+    Session ||--o{ AnalysisResult : has
+    Session ||--o{ Report : has
+    Session ||--o{ DeviceAssignment : has
+    Device ||--o{ DeviceAssignment : assigned_to
+    Child ||--o{ DeviceAssignment : identified_as
+
+    Session {
+        string id PK
+        enum course_type
+        enum status
+        datetime start_time
+        datetime end_time
+        json child_info
+    }
+
+    Device {
+        string id PK
+        string device_id UK
+        string name
+        string firmware_version
+        float battery_level
+        enum status
+        datetime last_seen
+    }
+
+    Child {
+        string id PK
+        string name
+        string student_id UK
+        text notes
+        datetime created_at
+    }
+
+    DeviceAssignment {
+        string id PK
+        string session_id FK
+        string device_id FK
+        string child_id FK
+        float confidence
+        string method
+        datetime assigned_at
+    }
+
+    IMUData {
+        bigint id PK
+        string session_id FK
+        datetime timestamp
+        float accel_x, accel_y, accel_z
+        float gyro_x, gyro_y, gyro_z
+        string device_id
+    }
+
+    AnalysisResult {
+        string id PK
+        string session_id FK
+        float rhythm_sync_rate
+        float freeze_reaction_time
+        float freeze_stability_score
+    }
+
+    Report {
+        string id PK
+        string session_id FK
+        json content
+        enum status
+    }
+```
+
+## 附錄 B：常用指令速查
+
+```bash
+# === 啟動 ===
+make start            # 背景啟動全部（PostgreSQL + Backend + Dashboard）
+make stop             # 停止全部
+make dev              # docker compose 全部啟動（前景）
+make dev-backend      # 後端 (uvicorn, 前景)
+make dev-dashboard    # Dashboard (vite, 前景)
+docker compose up -d db   # 資料庫
+
+# === 韌體 ===
+cd firmware
+idf.py build                            # 編譯
+idf.py -p /dev/cu.usbmodem1101 flash     # 燒錄
+idf.py -p /dev/cu.usbmodem1101 monitor   # Serial log
+
+# === 測試 ===
+make test-backend                       # pytest
+make lint-dashboard                     # tsc
+bash field-testing/verify-device-management.sh  # API 整合測試
+
+# === API 操作 ===
+curl http://localhost:8080/health                   # 健康檢查
+curl http://localhost:8080/api/devices               # 裝置列表
+curl http://localhost:8080/api/children              # 學員列表
+curl http://localhost:8080/api/sessions              # 課程列表
+
+# === 資料庫 ===
+psql -h localhost -U hmeayc -d hmeayc -c "SELECT count(*) FROM imu_data;"
+psql -h localhost -U hmeayc -d hmeayc -c "SELECT * FROM devices;"
+psql -h localhost -U hmeayc -d hmeayc -c "SELECT * FROM device_assignments;"
+```

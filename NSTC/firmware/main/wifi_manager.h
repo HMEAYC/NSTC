@@ -1,0 +1,16 @@
+#pragma once
+
+#include "esp_err.h"
+#include <stdbool.h>
+
+#ifdef __cplusplus
+extern "C" {
+#endif
+
+esp_err_t wifi_connect(void);
+bool wifi_is_connected(void);
+const char *wifi_get_ssid(void);
+
+#ifdef __cplusplus
+}
+#endif

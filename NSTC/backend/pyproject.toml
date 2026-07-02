@@ -1,0 +1,52 @@
+[project]
+name = "hmeayc-backend"
+version = "0.1.0"
+description = "HMEAYC AI Engine - Real-time IMU analysis and Gemini report generation"
+requires-python = ">=3.11"
+dependencies = [
+    "fastapi>=0.115.0",
+    "uvicorn[standard]>=0.30.0",
+    "websockets>=13.0",
+    "sqlalchemy>=2.0",
+    "psycopg2-binary>=2.9",
+    "asyncpg>=0.30.0",
+    "alembic>=1.13.0",
+    "pydantic>=2.0",
+    "pydantic-settings>=2.0",
+    "google-genai>=1.0.0",
+    "httpx>=0.27.0",
+    "python-multipart>=0.0.9",
+    "numpy>=2.0",
+    "scipy>=1.14",
+    "pandas>=2.0",
+    "opencv-python-headless>=4.9",
+    "librosa>=0.10",
+    "soundfile>=0.12",
+    "matplotlib>=3.8",
+    "tqdm>=4.66",
+    "ultralytics>=8.0",
+    "torch>=2.0",
+    "lap>=0.5",
+    "mediapipe>=0.10",
+    "openai>=1.40",
+    "markdown>=3.5",
+    "weasyprint>=62.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.24.0",
+    "httpx>=0.27.0",
+]
+ai = [
+    "openai>=1.40",
+]
+pdf = [
+    "markdown>=3.5",
+    "weasyprint>=62.0",
+]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
