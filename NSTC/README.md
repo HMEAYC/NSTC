@@ -9,16 +9,25 @@
 ## Monorepo 結構
 
 ```
-HMEAYC/
+NSTC/
 ├── dashboard/                 # 前端視覺化面板 (React + Vite + TypeScript)
 ├── backend/                   # 後端 AI Engine (FastAPI + PostgreSQL)
 ├── firmware/                  # ESP32-C3 + MPU6500 韌體 (ESP-IDF)
+│   ├── main/ota_client.[ch]   # OTA 遠端韌體更新 (版本檢查/下載/ack)
+│   ├── main/device_registry.[ch]  # 裝置註冊
+│   ├── main/wifi_config_nvs.[ch]  # 遠端 WiFi 設定管理
+│   ├── main/battery.[ch]          # 電池電量讀取
+│   └── main/led_status.[ch]       # WS2812B 狀態燈
 ├── hardware/                  # 硬體設計 (schematic, PCB layout, BOM)
-├── field-testing/             # 場域測試工具與數據記錄（預留）
-├── docker-compose.yml         # 整合開發環境 (db + backend + dashboard)
+├── field-testing/             # 場域測試工具與數據記錄
+├── deploy/                    # 部署腳本
+├── .opencode/                 # opencode 組態與開發計畫
+├── .dockerignore
+├── .gitignore
 ├── Makefile                   # 常用指令快捷
-├── start.sh                   # 背景啟動全部服務 (PostgreSQL + Backend + Dashboard)
-└── stop.sh                    # 停止背景服務
+├── docker-compose.yml         # 整合開發環境 (db + backend + dashboard)
+├── start.sh / stop.sh         # 背景啟動/停止全部服務
+└── OPERATION.md               # 完整操作手冊
 ```
 
 ## 快速開始
@@ -203,11 +212,32 @@ gantt
 
 ---
 
+## 🔄 OTA 遠端韌體更新
+
+ESP32 透過 AB 分割區支援 OTA，不須 USB 即可更新韌體。
+
+### 流程
+
+1. **建置新版韌體**：`cd firmware && idf.py build`
+2. **上傳至後端**：Dashboard「韌體更新」頁面或 `curl -X POST /api/firmware/upload`
+3. **ESP32 自動更新**：每小時檢查一次，下載新版 → 寫入 ota_1 → 重啟 → 回報 ack
+
+### API 端點
+
+| 方法 | 路徑 | 說明 |
+|------|------|------|
+| GET | `/api/firmware/version?current=X` | 版本檢查 |
+| POST | `/api/firmware/upload` | 上傳韌體 binary（multipart） |
+| GET | `/api/firmware/download/{id}` | 下載韌體 binary |
+| GET | `/api/firmware/list` | 列出所有版本 |
+| POST | `/api/firmware/ack` | 裝置確認啟動成功 |
+
+---
+
 ## 💡 後續下一步
 
 1. 硬體採購下單 → 打樣 PCB + 焊接測試
-2. MPU6500 驅動整合測試（I2C scan + raw data log）
-3. Backend analysis engine 實作（節奏分析 + Freeze Dance）
-4. Dashboard UI 開發（即時圖表 + WebSocket 串接）
-5. 跨模態配對演算法真實場域驗證（IRB 核准後）
-6. MVP 里程碑追蹤
+2. 場域測試（IRB 核准後進場）
+3. 跨模態配對演算法真實場域驗證
+4. 正式版系統迭代（場域回饋整合）
+5. MVP 里程碑追蹤

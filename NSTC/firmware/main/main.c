@@ -28,12 +28,12 @@ static const char *TAG = "HMEAYC";
 #define WIFI_CONFIG_INTERVAL (SAMPLE_RATE_HZ * 1800) // check WiFi config every 30 min
 #define LED_CYCLE_COUNT     (SAMPLE_RATE_HZ * 2)     // LED blink every 2 seconds
 
-#define API_BASE_URL "http://192.168.1.105:8080/api"
+#define API_BASE_URL    CONFIG_HMEAYC_API_BASE_URL
 #define CONFIG_BASE_URL API_BASE_URL "/config"
 
 void app_main(void) {
     ESP_LOGI(TAG, "HMEAYC firmware v%s starting (ESP32-C3 + MPU6500)...",
-             FIRMWARE_VERSION);
+             CONFIG_HMEAYC_FIRMWARE_VERSION);
 
     led_status_init();
     led_status_set(LED_MAGENTA);  // booting
@@ -61,7 +61,8 @@ void app_main(void) {
     wifi_connect();
     websocket_client_init();
     if (wifi_is_connected()) {
-        device_registry_upsert(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID, FIRMWARE_VERSION);
+        device_registry_upsert(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID, CONFIG_HMEAYC_FIRMWARE_VERSION);
+        ota_send_ack(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
     }
 
     imu_data_t data;
@@ -100,7 +101,7 @@ void app_main(void) {
 
         if (tick % DEVICE_REGISTER_INTERVAL == 0 && tick > 0 && wifi_is_connected()) {
             ESP_LOGI(TAG, "refreshing device registration...");
-            device_registry_upsert(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID, FIRMWARE_VERSION);
+            device_registry_upsert(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID, CONFIG_HMEAYC_FIRMWARE_VERSION);
         }
 
         if (tick % LED_CYCLE_COUNT == 0) {

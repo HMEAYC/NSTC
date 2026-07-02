@@ -348,15 +348,23 @@ graph LR
 ```
 firmware/
 ├── CMakeLists.txt           # 頂層 CMake
-├── Kconfig.projbuild        # 選單式設定（SSID/Password/URI）
-├── partitions.csv           # 分割表
-├── sdkconfig                # ESP-IDF 設定
+├── Kconfig.projbuild        # 選單式設定（SSID/Password/URI/OTA/API）
+├── partitions.csv           # 分割表（AB OTA 分割區）
+├── sdkconfig.defaults       # 預設 IDF 設定
+├── sdkconfig                # 實際 IDF 設定（自動產生）
+├── dependencies.lock        # 元件相依鎖定
+├── managed_components/      # ESP Registry 元件（esp_websocket_client, led_strip）
 └── main/
     ├── CMakeLists.txt       # 元件 CMake
-    ├── main.c               # app_main：初始化 + 主迴圈
+    ├── main.c               # app_main：初始化 + 主迴圈（WiFi→WS→IMU→OTA）
     ├── imu_driver.c /.h     # MPU6500 I2C 驅動
     ├── wifi_manager.c /.h   # WiFi 事件處理 + 自動重連
-    └── websocket_client.c /.h # WebSocket 上傳
+    ├── websocket_client.c /.h # WebSocket 上傳
+    ├── wifi_config_nvs.c /.h  # NVS 遠端 WiFi 設定管理
+    ├── device_registry.c /.h  # 裝置註冊（POST /api/devices）
+    ├── battery.c /.h          # 電池電量 ADC 讀取
+    ├── led_status.c /.h       # WS2812B NeoPixel 狀態燈
+    └── ota_client.c /.h       # OTA 更新（版本檢查、下載、ack）
 ```
 
 ### 4.3 MPU6500 驅動
@@ -409,10 +417,14 @@ firmware/
 
 | 參數 | 預設值 | 說明 |
 |------|--------|------|
-| `HMEAYC_WIFI_SSID` | — | WiFi SSID |
+| `HMEAYC_DEVICE_ID` | `hmeayc-001` | 裝置識別碼 |
+| `HMEAYC_FIRMWARE_VERSION` | `1.0.0` | 韌體版本號（semver） |
+| `HMEAYC_WIFI_SSID` | `HMEAYC` | WiFi SSID |
 | `HMEAYC_WIFI_PASSWORD` | — | WiFi 密碼 |
-| `HMEAYC_WS_URI` | `ws://192.168.1.100:8080/ws` | WebSocket URI |
-| `HMEAYC_DEVICE_ID` | `HMEAYC-001` | 裝置識別碼 |
+| `HMEAYC_WS_URI` | `ws://192.168.1.105:8080/ws/default` | WebSocket URI |
+| `HMEAYC_SAMPLE_RATE_HZ` | `50` | IMU 取樣頻率（5–200 Hz 可調） |
+| `HMEAYC_API_BASE_URL` | `http://192.168.1.105:8080/api` | REST API 基礎 URL |
+| `HMEAYC_OTA_BASE_URL` | `http://192.168.1.105:8080/api/firmware` | OTA 伺服器 URL |
 
 ---
 
@@ -1200,7 +1212,17 @@ ESP32-C3                     Backend (FastAPI)
 | GET | `/api/firmware/list` | 列出所有版本 |
 | POST | `/api/firmware/ack` | 裝置確認新韌體啟動成功 |
 
-### 12.5 操作方式
+### 12.5 已知坑洞與修復（2026-07-02 實戰記錄）
+
+| 問題 | 現象 | 修復 |
+|------|------|------|
+| `ota_send_ack` URL 重複 `/ack` | `POST /api/firmware/ack/ack` → 404 | `snprintf(url, "%s/firmware/ack", base_url)` 改用參數傳入的 base_url |
+| JSON 版本/URL 解析 offset 少 1 | `u += 6` 停在引號、`v += 10` 停在引號，導致 `download_url` 為空 | `u += 7`, `v += 11` 正確跳過 `"url":"` / `"version":"` |
+| `WS_URI`/`OTA_BASE_URL` 預設 IP 錯誤 | Kconfig.projbuild 使用 `192.168.4.1`（ESP32 AP 模式）而非伺服器 IP | 改為 `192.168.1.105` |
+| WebSocket `Set changed size during iteration` | 多 WS 同時連線時 `_viewers` set 被併行修改 | `list(_viewers.get(...))` 建立快照再用 `.discard()` 移除 |
+| Docker nginx 缺少 WS proxy | Dashboard Docker 版無法連接 WebSocket | nginx config 加入 `/ws` location 含 Upgrade header proxy |
+
+### 12.6 操作方式
 
 ```bash
 # 1. 建立第一版韌體並燒錄（idf.py flash 寫入 ota_0）
@@ -1306,10 +1328,20 @@ MVP 不只要求功能可用，也要有可重複驗證的量化門檻。每個 
 | 裝置測試 | ESP32 連線、重連、OTA | 驗證場域穩定性 |
 | 場域測試 | 實際課堂中運行 | 驗證研究可用性 |
 
-### 15.2 必跑檢查
+### 15.2 測試現況
 
-- Backend：`pytest`
-- Frontend：`npm run lint`
+| 層級 | 套件 | 數量 | 執行方式 |
+|------|------|------|----------|
+| Backend 單元測試 | pytest | 22 tests | `make test-backend` |
+| Frontend 元件測試 | vitest + testing-library | 14 tests | `make test-dashboard` |
+| Firmware | ESP-IDF build | 編譯通過 | `idf.py build` |
+
+覆蓋範圍：auth（3 cases）、config routes、WiFi model、session/report 新欄位、LoadingSpinner（4）、ErrorBoundary（2）、API client（8）。
+
+### 15.3 必跑檢查
+
+- Backend：`make test-backend`（pytest）
+- Frontend：`make test-dashboard`（vitest）
 - Frontend：`npm run build`
 - Firmware：`idf.py build`
 - Compose：`docker compose up` 基本啟動檢查
@@ -1410,6 +1442,18 @@ HMEAYC/
 | 前端 | Lazy loading、新增韌體/WiFi 頁面、多裝置即時監控、Report 兩階段載入 |
 | 韌體 | Device registry、遠端 WiFi 設定、IMU type 標記 |
 | 全新 | `backend/app/auth.py`, `backend/app/api/config.py`, `backend/app/models/wifi_config.py`, `FirmwareUpload.tsx`, `WiFiConfig.tsx`, `start.sh`, `stop.sh` |
+
+### 12.3 2026-07-02 第 2 輪變更
+
+| 類別 | 變更 | 原因 |
+|------|------|------|
+| 後端 | `ws.py` — `_viewers` 迭代改為 `list()` 快照 | 多 WS 同時連線時 `Set changed size during iteration` |
+| 後端 | `firmware.py` — `check_version()` 使用 `request.base_url` | OTA download URL 原本用 hardcoded host |
+| 前端 | `Dockerfile` — nginx 加入 `/ws` proxy | Docker 版 Dashboard WebSocket 無法連線 |
+| 韌體 | `ota_client.c:ota_send_ack` — 改為 `base_url + "/firmware/ack"` | URL 重複 `/ack` 導致 404 |
+| 韌體 | `ota_client.c:ota_check_update` — offset 改 `v+=11`, `u+=7` | JSON 版本/URL 解析停在引號字元 |
+| 韌體 | `Kconfig.projbuild` — WS_URI/OTA_BASE_URL 改為 `192.168.1.105` | 預設 IP 指向 ESP32 AP 非伺服器 |
+| 韌體 | `sdkconfig.defaults` — 加入 `HMEAYC_FIRMWARE_VERSION` | 明確指定版本號 |
 
 詳細 diff 請參考 git 記錄 (`git diff HEAD -- NSTC/`)。
 

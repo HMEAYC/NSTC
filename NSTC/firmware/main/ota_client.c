@@ -88,7 +88,7 @@ esp_err_t ota_check_update(ota_check_result_t *result) {
     if (result->update_available) {
         const char *v = strstr(resp, "\"version\":\"");
         if (v) {
-            v += 10;
+            v += 11;
             int i = 0;
             while (*v && *v != '"' && i < (int)sizeof(result->latest_version) - 1)
                 result->latest_version[i++] = *v++;
@@ -96,7 +96,7 @@ esp_err_t ota_check_update(ota_check_result_t *result) {
         }
         const char *u = strstr(resp, "\"url\":\"");
         if (u) {
-            u += 6;
+            u += 7;
             int i = 0;
             while (*u && *u != '"' && i < (int)sizeof(result->download_url) - 1)
                 result->download_url[i++] = *u++;
@@ -188,4 +188,39 @@ esp_err_t ota_perform_update(const char *url) {
     vTaskDelay(pdMS_TO_TICKS(1000));
     esp_restart();
     return ESP_OK;
+}
+
+esp_err_t ota_send_ack(const char *base_url, const char *device_id) {
+    if (!base_url) return ESP_ERR_INVALID_ARG;
+
+    char url[512];
+    snprintf(url, sizeof(url), "%s/firmware/ack", base_url);
+
+    char body[256];
+    int body_len = snprintf(body, sizeof(body),
+                            "version=%s&device_id=%s",
+                            CONFIG_HMEAYC_FIRMWARE_VERSION,
+                            device_id ? device_id : "unknown");
+
+    esp_http_client_config_t cfg = {
+        .url = url,
+        .timeout_ms = 5000,
+        .keep_alive_enable = false,
+    };
+    esp_http_client_handle_t client = esp_http_client_init(&cfg);
+    if (!client) return ESP_FAIL;
+
+    esp_http_client_set_method(client, HTTP_METHOD_POST);
+    esp_http_client_set_header(client, "Content-Type", "application/x-www-form-urlencoded");
+    esp_http_client_set_post_field(client, body, body_len);
+
+    esp_err_t err = esp_http_client_perform(client);
+    if (err != ESP_OK) {
+        ESP_LOGW(TAG, "ack failed: %s", esp_err_to_name(err));
+    } else {
+        int status = esp_http_client_get_status_code(client);
+        ESP_LOGI(TAG, "ack response: HTTP %d", status);
+    }
+    esp_http_client_cleanup(client);
+    return err;
 }

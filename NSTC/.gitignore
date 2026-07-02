@@ -25,3 +25,6 @@ firmware/build/
 firmware/sdkconfig
 firmware/sdkconfig.old
 firmware/managed_components/
+
+# Generated firmware binaries (uploaded via API)
+backend/app/firmware_binaries/

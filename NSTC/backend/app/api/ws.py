@@ -90,15 +90,14 @@ async def imu_data_ws(websocket: WebSocket, session_id: str):
                 db.add(frame)
                 db.commit()
 
-                disconnected = set()
-                for viewer in _viewers.get(session_id, set()):
+                viewers = list(_viewers.get(session_id, set()))
+                for viewer in viewers:
                     if viewer is websocket:
                         continue
                     try:
                         await viewer.send_json(data)
                     except Exception:
-                        disconnected.add(viewer)
-                _viewers[session_id] -= disconnected
+                        _viewers.get(session_id, set()).discard(viewer)
 
                 await websocket.send_json({
                     "type": "status",
@@ -108,15 +107,14 @@ async def imu_data_ws(websocket: WebSocket, session_id: str):
                 continue
 
             if data["type"] == "analysis":
-                disconnected = set()
-                for viewer in _viewers.get(session_id, set()):
+                viewers = list(_viewers.get(session_id, set()))
+                for viewer in viewers:
                     if viewer is websocket:
                         continue
                     try:
                         await viewer.send_json(data)
                     except Exception:
-                        disconnected.add(viewer)
-                _viewers[session_id] -= disconnected
+                        _viewers.get(session_id, set()).discard(viewer)
                 await websocket.send_json({
                     "type": "status",
                     "session_id": session_id,

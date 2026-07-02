@@ -2,7 +2,7 @@ import uuid
 from datetime import datetime
 from pathlib import Path
 
-from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
+from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
 from app.db.base import get_db
@@ -16,6 +16,7 @@ _FIRMWARE_DIR.mkdir(exist_ok=True)
 
 @router.get("/version")
 def check_version(
+    request: Request,
     current: str = "",
     db: Session = Depends(get_db),
 ):
@@ -27,10 +28,11 @@ def check_version(
     if not latest or latest.version == current:
         return {"update_available": False}
 
+    base = str(request.base_url).rstrip("/")
     return {
         "update_available": True,
         "version": latest.version,
-        "url": f"/api/firmware/download/{latest.id}",
+        "url": f"{base}/api/firmware/download/{latest.id}",
     }
 
 
