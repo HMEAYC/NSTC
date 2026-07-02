@@ -1,6 +1,7 @@
 .DS_Store
 *.pdf
 web/
+kinder-vision/
 
 # Python
 __pycache__/

@@ -9,7 +9,6 @@
 ## Monorepo 結構
 
 ```
-NSTC/
 ├── dashboard/                 # 前端視覺化面板 (React + Vite + TypeScript)
 ├── backend/                   # 後端 AI Engine (FastAPI + PostgreSQL)
 ├── firmware/                  # ESP32-C3 + MPU6500 韌體 (ESP-IDF)

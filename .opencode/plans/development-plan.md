@@ -1413,28 +1413,27 @@ MVP 不只要求功能可用，也要有可重複驗證的量化門檻。每個 
 
 ```
 HMEAYC/
-├── NSTC/                        # 主要專案目錄（所有原始碼集中於此）
-│   ├── backend/                 # FastAPI 後端
-│   ├── dashboard/               # React + Vite 前端
-│   ├── firmware/                # ESP-IDF 韌體
-│   ├── hardware/                # 硬體設計文件
-│   ├── deploy/                  # 部署腳本
-│   ├── documents/               # 計畫相關文件
-│   ├── field-testing/           # 場域測試腳本
-│   ├── .opencode/               # opencode 組態與開發計畫
-│   ├── .dockerignore
-│   ├── .gitignore
-│   ├── Makefile
-│   ├── docker-compose.yml
-│   ├── start.sh / stop.sh       # 一鍵背景啟動/停止
-│   └── OPERATION.md
+├── backend/                     # FastAPI 後端
+├── dashboard/                   # React + Vite 前端
+├── firmware/                    # ESP-IDF 韌體
+├── hardware/                    # 硬體設計文件
+├── deploy/                      # 部署腳本
+├── documents/                   # 計畫相關文件
+├── field-testing/               # 場域測試腳本
+├── .opencode/                   # opencode 組態與開發計畫
+├── .dockerignore
+├── .gitignore
+├── Makefile
+├── docker-compose.yml
+├── start.sh / stop.sh           # 一鍵背景啟動/停止
+├── OPERATION.md
 ├── web/                         # 課程介紹靜態網站（gitignored, 獨立倉庫）
 └── kinder-vision/               # （新，非 git 追蹤）
 ```
 
 ### 12.2 與 git HEAD 的差異
 
-2026-07-02 檢查時，工作目錄（`NSTC/`）與 git HEAD（root 扁平結構）有 **30+ 檔案內容差異**及 **6 個全新檔案**，摘要如下：
+2026-07-02 檢查時，git HEAD（root 扁平結構）有 **30+ 檔案內容差異**及 **6 個全新檔案**，摘要如下：
 
 | 類別 | 變更 |
 |------|------|
@@ -1455,7 +1454,7 @@ HMEAYC/
 | 韌體 | `Kconfig.projbuild` — WS_URI/OTA_BASE_URL 改為 `192.168.1.105` | 預設 IP 指向 ESP32 AP 非伺服器 |
 | 韌體 | `sdkconfig.defaults` — 加入 `HMEAYC_FIRMWARE_VERSION` | 明確指定版本號 |
 
-詳細 diff 請參考 git 記錄 (`git diff HEAD -- NSTC/`)。
+詳細 diff 請參考 git 記錄。
 
 ---
 
