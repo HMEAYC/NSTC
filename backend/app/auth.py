@@ -5,7 +5,7 @@ from typing import Optional
 
 from fastapi import Header, HTTPException
 
-_API_KEY = (os.environ.get("KINDER_API_KEY") or "").strip()
+_API_KEY = (os.environ.get("HMEAYC_API_KEY") or "").strip()
 
 
 def require_api_key(x_api_key: Optional[str] = Header(default=None, alias="X-API-Key")) -> None:

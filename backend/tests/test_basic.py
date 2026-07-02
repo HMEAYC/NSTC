@@ -10,8 +10,7 @@ def test_router_count():
 
 def test_db_url():
     from app.db.base import DATABASE_URL
-    assert "postgresql" in DATABASE_URL
-    assert "asyncpg" not in DATABASE_URL
+    assert "postgresql+psycopg2" in DATABASE_URL
 
 
 def test_firmware_routes():
@@ -84,20 +83,20 @@ def test_gemini_client_fallback():
 def test_auth_no_key_set():
     import os
     from app.auth import require_api_key
-    prev = os.environ.pop("KINDER_API_KEY", None)
+    prev = os.environ.pop("HMEAYC_API_KEY", None)
     try:
         # When no API key is set, require_api_key should return None (pass through)
         result = require_api_key(x_api_key=None)
         assert result is None
     finally:
         if prev is not None:
-            os.environ["KINDER_API_KEY"] = prev
+            os.environ["HMEAYC_API_KEY"] = prev
 
 
 def test_auth_with_key_valid():
     import os
-    prev = os.environ.pop("KINDER_API_KEY", None)
-    os.environ["KINDER_API_KEY"] = "test-key-123"
+    prev = os.environ.pop("HMEAYC_API_KEY", None)
+    os.environ["HMEAYC_API_KEY"] = "test-key-123"
     # Force reimport by clearing cached value
     import importlib
     import app.auth
@@ -108,16 +107,16 @@ def test_auth_with_key_valid():
         assert result is None
     finally:
         if prev is not None:
-            os.environ["KINDER_API_KEY"] = prev
+            os.environ["HMEAYC_API_KEY"] = prev
         else:
-            os.environ.pop("KINDER_API_KEY", None)
+            os.environ.pop("HMEAYC_API_KEY", None)
         importlib.reload(app.auth)
 
 
 def test_auth_with_key_invalid():
     import os
-    prev = os.environ.pop("KINDER_API_KEY", None)
-    os.environ["KINDER_API_KEY"] = "test-key-123"
+    prev = os.environ.pop("HMEAYC_API_KEY", None)
+    os.environ["HMEAYC_API_KEY"] = "test-key-123"
     import importlib
     import app.auth
     importlib.reload(app.auth)
@@ -131,9 +130,9 @@ def test_auth_with_key_invalid():
             assert e.status_code == 401
     finally:
         if prev is not None:
-            os.environ["KINDER_API_KEY"] = prev
+            os.environ["HMEAYC_API_KEY"] = prev
         else:
-            os.environ.pop("KINDER_API_KEY", None)
+            os.environ.pop("HMEAYC_API_KEY", None)
         importlib.reload(app.auth)
 
 

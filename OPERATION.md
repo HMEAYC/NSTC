@@ -72,7 +72,7 @@
 | ESP32-C3 腰帶 | ESP-IDF v5.4 + MPU6500 | 穿戴式 IMU 感測（加速度 ±16g / 陀螺儀 ±2000°/s @ 50Hz） |
 | 後端伺服器 | FastAPI + PostgreSQL + SQLAlchemy | IMU 資料接收、分析運算、裝置管理、報告生成 |
 | Dashboard | React 19 + Vite 8 + TypeScript + Recharts + Tailwind v4 | 即時監控、歷史查詢、評估指標、裝置管理 |
-| 資料庫 | PostgreSQL（AB OTA partition table） | 持久化 IMU 資料、分析結果、報告、裝置與學員 |
+| 資料庫 | PostgreSQL | 持久化 IMU 資料、分析結果、報告、裝置與學員 |
 | 韌體 OTA | HTTP（LAN）/ HTTPS（生產） | 無線韌體更新 |
 
 ---
@@ -220,7 +220,7 @@ idf.py -p /dev/cu.usbmodem1101 flash
 idf.py -p /dev/cu.usbmodem1101 monitor
 
 # 預期輸出
-# I (381) HMEAYC: HMEAYC firmware v0.1.0 starting (ESP32-C3 + MPU6500)...
+# I (381) HMEAYC: HMEAYC firmware v1.0.0 starting (ESP32-C3 + MPU6500)...
 # I (501) MPU6xxx: WHO_AM_I verified: 0x70
 # I (511) MPU6xxx: MPU6xxx initialized (I2C 0 @ 0x68)
 # I (511) HMEAYC: connecting WiFi...
@@ -547,6 +547,7 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 **ESP32 → Server：**
 ```json
 {
+  "type": "imu",
   "ts": 1719812345678,
   "device_id": "esp32-c3",
   "ax": 0.12, "ay": -0.05, "az": 1.02,
@@ -557,6 +558,7 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 **Server → Dashboard（broadcast）：**
 ```json
 {
+  "type": "imu",
   "ts": 1719812345678,
   "device_id": "esp32-c3",
   "ax": 0.12, "ay": -0.05, "az": 1.02,

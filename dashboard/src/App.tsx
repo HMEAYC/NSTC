@@ -39,7 +39,6 @@ export default function App() {
               <Route path="/dashboard/live/:sessionId" element={<LiveView />} />
               <Route path="/dashboard/history" element={<History />} />
               <Route path="/dashboard/report/:sessionId" element={<Report />} />
-              <Route path="/dashboard/reports" element={<Report />} />
               <Route path="/dashboard/assessment/:sessionId" element={<AssessmentIndicators />} />
               <Route path="/dashboard/devices" element={<DeviceManagement />} />
               <Route path="/dashboard/firmware" element={<FirmwareUpload />} />

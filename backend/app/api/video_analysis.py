@@ -41,8 +41,8 @@ class AnalyzeResponse(BaseModel):
 
 _TASKS_LOCK = threading.Lock()
 _TASKS: dict[str, dict[str, Any]] = {}
-_TASK_TTL_SEC = max(60, int((os.environ.get("KINDER_TASK_TTL_SEC") or "86400").strip() or "86400"))
-_TASKS_DB_PATH = tmp_dir() / "kinder-api-tasks.json"
+_TASK_TTL_SEC = max(60, int((os.environ.get("HMEAYC_TASK_TTL_SEC") or "86400").strip() or "86400"))
+_TASKS_DB_PATH = tmp_dir() / "hmeayc-api-tasks.json"
 
 
 def _now_iso() -> str:
@@ -174,7 +174,7 @@ def _run_task(task_id: str, req: AnalyzeRequest) -> None:
 
 @router.get("/health")
 def health() -> dict[str, Any]:
-    return {"ok": True, "service": "kinder-vision-api", "task_ttl_sec": _TASK_TTL_SEC}
+    return {"ok": True, "service": "hmeayc-vision-api", "task_ttl_sec": _TASK_TTL_SEC}
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)

@@ -21,11 +21,11 @@ def _dir_from_env(env_name: str, default: pathlib.Path) -> pathlib.Path:
 
 
 def memory_dir() -> pathlib.Path:
-    return _dir_from_env("KINDER_MEMORY_DIR", repo_root() / "memory")
+    return _dir_from_env("HMEAYC_MEMORY_DIR", repo_root() / "memory")
 
 
 def reports_dir() -> pathlib.Path:
-    return _dir_from_env("KINDER_REPORTS_DIR", repo_root() / "reports")
+    return _dir_from_env("HMEAYC_REPORTS_DIR", repo_root() / "reports")
 
 
 def metrics_dir() -> pathlib.Path:
@@ -35,7 +35,7 @@ def metrics_dir() -> pathlib.Path:
 
 
 def tmp_dir() -> pathlib.Path:
-    return _dir_from_env("KINDER_TMP_DIR", repo_root() / "tmp")
+    return _dir_from_env("HMEAYC_TMP_DIR", repo_root() / "tmp")
 
 
 def identity_db_path() -> pathlib.Path:

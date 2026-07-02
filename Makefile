@@ -4,7 +4,7 @@ dev:
 	docker compose up --build
 
 dev-backend:
-	cd backend && uvicorn app.main:app --reload --port 8080
+	cd backend && uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
 
 dev-dashboard:
 	cd dashboard && npm run dev

@@ -20,7 +20,7 @@
 ├── hardware/                  # 硬體設計 (schematic, PCB layout, BOM)
 ├── field-testing/             # 場域測試工具與數據記錄
 ├── deploy/                    # 部署腳本
-├── .opencode/                 # opencode 組態與開發計畫
+├── .opencode/                 # opencode 組態與開發計畫（含架構規劃）
 ├── .dockerignore
 ├── .gitignore
 ├── Makefile                   # 常用指令快捷
@@ -146,10 +146,10 @@ gantt
 |------|------|------|
 | ESP32-C3-MINI-1 模組 | 10 | 穿戴式感測器主控 |
 | MPU6500 IMU 感測器 | 10 | 6 軸動作偵測 |
-| TP4056 充電板 | 10 | 鋰電池充電 |
 | ME6211 3.3V LDO | 10 | 穩壓 |
-| LiPo 503040 500mAh | 10 | 電池 |
-| USB-C 連接器 | 10 | 充電/資料 |
+| 16500 Li-ion 電池 (800mAh) | 10 | 外部電源 |
+| 16500 電池盒 (含 JST 2.0 線) | 10 | 電池座 |
+| USB-C 連接器 | 10 | 程式燒錄 |
 | Android 平板 | 2 | 場域施測 |
 | WiFi 路由器 | 1 | 場域網路 |
 
@@ -240,3 +240,5 @@ ESP32 透過 AB 分割區支援 OTA，不須 USB 即可更新韌體。
 3. 跨模態配對演算法真實場域驗證
 4. 正式版系統迭代（場域回饋整合）
 5. MVP 里程碑追蹤
+
+> 📋 詳細架構規劃請見 [`.opencode/plans/multi-tenant-rbac.md`](.opencode/plans/multi-tenant-rbac.md)

@@ -46,7 +46,7 @@ void app_main(void) {
         .i2c_port = I2C_PORT,
         .sda_pin  = PIN_SDA,
         .scl_pin  = PIN_SCL,
-        .i2c_addr = MPU6050_I2C_ADDR_DEFAULT,
+        .i2c_addr = MPU6500_I2C_ADDR_DEFAULT,
     };
     if (imu_init(&imu_cfg) != ESP_OK) {
         ESP_LOGE(TAG, "IMU init failed, rebooting in 5 s...");

@@ -145,12 +145,12 @@ def run_full_pipeline(
     run_started = datetime.now()
     date_s = run_started.strftime("%Y-%m-%d")
     pdf_stamp = run_started.strftime("%Y-%m-%d_%H-%M-%S")
-    macro_md_path = rd / f"{date_s}-kinder-macro.md"
-    micro_md_path = rd / f"{date_s}-kinder-micro.md"
-    metrics_md_path = rd / f"{date_s}-kinder-metrics.md"
-    reports_md_path = rd / f"{date_s}-kinder-report.md"
+    macro_md_path = rd / f"{date_s}-hmeayc-macro.md"
+    micro_md_path = rd / f"{date_s}-hmeayc-micro.md"
+    metrics_md_path = rd / f"{date_s}-hmeayc-metrics.md"
+    reports_md_path = rd / f"{date_s}-hmeayc-report.md"
 
-    with tempfile.TemporaryDirectory(prefix="kinder-run-", dir=base_tmp) as run_tmp:
+    with tempfile.TemporaryDirectory(prefix="hmeayc-run-", dir=base_tmp) as run_tmp:
         td = Path(run_tmp)
         full_meta = read_video_meta(orig_video_path)
         work_path = orig_video_path
@@ -166,23 +166,23 @@ def run_full_pipeline(
             win_t1_sec = max(0.0, min(win_t1_sec, float(full_meta.duration_sec)))
             if win_t1_sec <= win_t0_sec + 0.25:
                 raise ValueError("分析區間無效：請確認 t0 < t1，且區間至少約 0.25 秒")
-            segment_path = td / "kinder-segment.mp4"
+            segment_path = td / "hmeayc-segment.mp4"
             export_video_segment(orig_video_path, win_t0_sec, win_t1_sec, segment_path)
             work_path = segment_path
 
         model = YOLO(model_path)
         meta = read_video_meta(work_path)
         id_map = _identity_pass(work_path, model, learn_identities=learn_identities)
-        _write_json(td / "kinder-identity-map.json", {"items": id_map})
+        _write_json(td / "hmeayc-identity-map.json", {"items": id_map})
 
-        heatmap_path = td / "kinder-heatmap.png"
+        heatmap_path = td / "hmeayc-heatmap.png"
         macro = macro_analytics.run_macro(
             work_path, meta, model, sample_stride=sample_stride, heatmap_png=heatmap_path
         )
         if win_t0_sec is not None and win_t1_sec is not None:
             macro["analysis_window_original"] = f"{format_mmss(win_t0_sec)} — {format_mmss(win_t1_sec)}"
             macro["analysis_window_original_sec"] = [win_t0_sec, win_t1_sec]
-        _write_json(td / "kinder-macro-result.json", macro)
+        _write_json(td / "hmeayc-macro-result.json", macro)
         macro_md_path.write_text(
             "# 巨觀層分析（機讀摘要）\n\n```json\n"
             + json.dumps(macro, ensure_ascii=False, indent=2)
@@ -236,7 +236,7 @@ def run_full_pipeline(
             micro["ai_warnings"] = []
             micro["ai_section_appended"] = False
 
-        _write_json(td / "kinder-micro-result.json", micro)
+        _write_json(td / "hmeayc-micro-result.json", micro)
         micro_md_path.write_text(
             "# 微觀層分析（機讀摘要）\n\n```json\n"
             + json.dumps(micro, ensure_ascii=False, indent=2)
@@ -244,7 +244,7 @@ def run_full_pipeline(
             encoding="utf-8",
         )
 
-        _write_json(td / "kinder-metrics-check.json", metrics)
+        _write_json(td / "hmeayc-metrics-check.json", metrics)
         metrics_md_path.write_text(
             "# 指標核查（機讀摘要）\n\n```json\n"
             + json.dumps(metrics, ensure_ascii=False, indent=2)
@@ -274,7 +274,7 @@ def run_full_pipeline(
             "*詳見 reports/ 同日彙總，以及 reports/metrics/ 個別孩童 metrics。*",
         ]
         merged_report_md = "\n".join(consolidated) + "\n\n---\n\n" + edu_md
-        report_md_tmp = td / "kinder-report.md"
+        report_md_tmp = td / "hmeayc-report.md"
         report_md_tmp.write_text(merged_report_md, encoding="utf-8")
         reports_md_path.write_text(merged_report_md, encoding="utf-8")
 
@@ -295,8 +295,8 @@ def run_full_pipeline(
 
         pdf_reports_out: Path | None = None
         if emit_pdf:
-            pdf_tmp = td / "kinder-report.pdf"
-            pdf_saved = rd / f"{pdf_stamp}-kinder-report.pdf"
+            pdf_tmp = td / "hmeayc-report.pdf"
+            pdf_saved = rd / f"{pdf_stamp}-hmeayc-report.pdf"
             export_markdown_pdf(report_md_tmp, pdf_tmp)
             pdf_saved.write_bytes(pdf_tmp.read_bytes())
             pdf_reports_out = pdf_saved
