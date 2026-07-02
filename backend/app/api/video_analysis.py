@@ -12,7 +12,9 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from pydantic import BaseModel, Field
 
 from app.auth import require_api_key
+from app.auth.deps import get_current_user
 from app.paths import tmp_dir
+from app.models.user import User
 
 router = APIRouter(prefix="/api/analyze", tags=["analyze"])
 
@@ -178,7 +180,10 @@ def health() -> dict[str, Any]:
 
 
 @router.post("/analyze", response_model=AnalyzeResponse)
-def analyze(req: AnalyzeRequest, _: None = Depends(require_api_key)) -> AnalyzeResponse:
+def analyze(
+    req: AnalyzeRequest,
+    _: None = Depends(require_api_key),
+) -> AnalyzeResponse:
     task_id = uuid.uuid4().hex
     with _TASKS_LOCK:
         _cleanup_tasks_locked()
@@ -199,7 +204,11 @@ def analyze(req: AnalyzeRequest, _: None = Depends(require_api_key)) -> AnalyzeR
 
 
 @router.get("/tasks/{task_id}")
-def get_task(task_id: str, _: None = Depends(require_api_key)) -> dict[str, Any]:
+def get_task(
+    task_id: str,
+    _: None = Depends(require_api_key),
+    current_user: User | None = Depends(get_current_user),
+) -> dict[str, Any]:
     with _TASKS_LOCK:
         _cleanup_tasks_locked()
         row = _TASKS.get(task_id)
@@ -211,6 +220,7 @@ def get_task(task_id: str, _: None = Depends(require_api_key)) -> dict[str, Any]
 @router.get("/tasks")
 def list_tasks(
     _: None = Depends(require_api_key),
+    current_user: User | None = Depends(get_current_user),
     limit: int = Query(default=20, ge=1, le=200),
 ) -> dict[str, Any]:
     with _TASKS_LOCK:
@@ -222,7 +232,11 @@ def list_tasks(
 
 
 @router.post("/tasks/{task_id}/cancel")
-def cancel_task(task_id: str, _: None = Depends(require_api_key)) -> dict[str, Any]:
+def cancel_task(
+    task_id: str,
+    _: None = Depends(require_api_key),
+    current_user: User | None = Depends(get_current_user),
+) -> dict[str, Any]:
     with _TASKS_LOCK:
         _cleanup_tasks_locked()
         row = _TASKS.get(task_id)

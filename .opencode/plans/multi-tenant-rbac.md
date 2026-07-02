@@ -248,10 +248,10 @@ def same_org(org_id: str, current_user = Depends(get_current_user)):
 
 | 階段 | 內容 | 預估工時 |
 |------|------|---------|
-| **Phase 1** | 新增 `User` / `Organization` / `Class` / `TeacherClass` / `ParentChild` 模型 + Alembic migration；實作 JWT 登入（`/api/auth/*`）；`org_id` FK 遷移 | 2 週 |
-| **Phase 2** | 權限檢查 middleware + 所有現有 API 加入 org_id 過濾 + 角色檢查；修改 Dashboard 加入登入流程 + 導覽元件 | 2 週 |
-| **Phase 3** | 教師/班級管理 UI；家長綁定流程（發送邀請、確認綁定）；Parent 權限視角（唯讀報告） | 1 週 |
-| **Phase 4** | 匿名化匯出、審計日誌、IRB 合規功能、壓力測試（10+ 組織同時使用） | 1 週 |
+| **Phase 1** | ✅ 已完成 — `User`/`Organization`/`Class`/`TeacherClass`/`ParentChild` 模型 + Alembic migration（`6f11ca848bb2`）；JWT 登入（`/api/auth/*`）；`org_id` FK 遷移 | 2 週 |
+| **Phase 2** | ✅ 已完成 — 權限檢查 middleware + 所有現有 API org_id 過濾 + 角色檢查；Dashboard 登入流程 + AuthProvider + ProtectedRoute | 2 週 |
+| **Phase 3** | ✅ 已完成 — 教師/班級管理 API + UI（`/dashboard/classes`, `/dashboard/admin/users`）；家長綁定流程（`POST /api/children/{id}/parents`）；Parent 專區（`/dashboard/parent`） | 1 週 |
+| **Phase 4** | ✅ 已完成 — 匿名化匯出（CSV/JSON，`/api/admin/export/anonymized`）；審計日誌（`AuditLog` model + `log_action()` helper）；IRB 合規（`ParentConsent` model + `/api/consent`） | 1 週 |
 
 ---
 

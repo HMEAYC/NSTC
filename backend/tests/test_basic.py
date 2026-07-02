@@ -93,14 +93,19 @@ def test_auth_no_key_set():
             os.environ["HMEAYC_API_KEY"] = prev
 
 
+def _reload_auth():
+    import importlib
+    import app.auth.api_key
+    import app.auth
+    importlib.reload(app.auth.api_key)
+    importlib.reload(app.auth)
+
+
 def test_auth_with_key_valid():
     import os
     prev = os.environ.pop("HMEAYC_API_KEY", None)
     os.environ["HMEAYC_API_KEY"] = "test-key-123"
-    # Force reimport by clearing cached value
-    import importlib
-    import app.auth
-    importlib.reload(app.auth)
+    _reload_auth()
     try:
         from app.auth import require_api_key as rak
         result = rak(x_api_key="test-key-123")
@@ -110,16 +115,14 @@ def test_auth_with_key_valid():
             os.environ["HMEAYC_API_KEY"] = prev
         else:
             os.environ.pop("HMEAYC_API_KEY", None)
-        importlib.reload(app.auth)
+        _reload_auth()
 
 
 def test_auth_with_key_invalid():
     import os
     prev = os.environ.pop("HMEAYC_API_KEY", None)
     os.environ["HMEAYC_API_KEY"] = "test-key-123"
-    import importlib
-    import app.auth
-    importlib.reload(app.auth)
+    _reload_auth()
     try:
         from app.auth import require_api_key as rak
         from fastapi import HTTPException
@@ -133,7 +136,7 @@ def test_auth_with_key_invalid():
             os.environ["HMEAYC_API_KEY"] = prev
         else:
             os.environ.pop("HMEAYC_API_KEY", None)
-        importlib.reload(app.auth)
+        _reload_auth()
 
 
 def test_config_wifi_routes():

@@ -7,3 +7,10 @@ from .device import Device  # noqa: F401
 from .child import Child  # noqa: F401
 from .device_assignment import DeviceAssignment  # noqa: F401
 from .wifi_config import WifiConfig  # noqa: F401
+from .organization import Organization  # noqa: F401
+from .user import User  # noqa: F401
+from .school_class import SchoolClass  # noqa: F401
+from .teacher_class import TeacherClass  # noqa: F401
+from .parent_child import ParentChild  # noqa: F401
+from .audit_log import AuditLog  # noqa: F401
+from .parent_consent import ParentConsent  # noqa: F401

@@ -1,14 +1,15 @@
 from datetime import datetime
 from typing import Any, Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
+from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+from app.auth.jwt import decode_token
+from app.auth.org import effective_org_id
 from app.db.base import SessionLocal
 from app.models.session import Session as SessionModel
 from app.models.imu_data import IMUData
 
 router = APIRouter(tags=["websocket"])
 
-# In-memory pub/sub: session_id -> set of WebSocket clients (dashboard viewers)
 _viewers: dict[str, set[WebSocket]] = {}
 
 
@@ -40,19 +41,34 @@ def _normalize_message(data: Any, device_id_default: str) -> Optional[dict[str, 
 
 
 @router.websocket("/ws/{session_id}")
-async def imu_data_ws(websocket: WebSocket, session_id: str):
+async def imu_data_ws(
+    websocket: WebSocket,
+    session_id: str,
+    token: str = Query(default=""),
+):
     await websocket.accept()
 
-    # Register as viewer
     if session_id not in _viewers:
         _viewers[session_id] = set()
     _viewers[session_id].add(websocket)
+
+    user_org_id = None
+    if token:
+        payload = decode_token(token)
+        if payload:
+            user_org_id = payload.get("org_id")
+    resolved_org = user_org_id or None
 
     db = SessionLocal()
     try:
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if not session:
-            session = SessionModel(id=session_id, course_type="march", status="active")
+            session = SessionModel(
+                id=session_id,
+                course_type="march",
+                status="active",
+                org_id=resolved_org or "00000000-0000-0000-0000-000000000001",
+            )
             db.add(session)
             db.commit()
 

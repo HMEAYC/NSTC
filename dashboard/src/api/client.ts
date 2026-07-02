@@ -7,6 +7,7 @@ export interface SessionSummary {
   duration_sec: number | null;
   imu_count: number;
   device_count: number;
+  title?: string;
 }
 
 export interface AnalysisResult {
@@ -16,15 +17,13 @@ export interface AnalysisResult {
   result: Record<string, unknown>;
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
-
-async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(`${API_BASE}${url}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", ...init?.headers },
-  });
-  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
-  return res.json();
+export interface UserInfo {
+  id: string;
+  email: string;
+  display_name: string;
+  role: string;
+  org_id: string;
+  is_active: boolean;
 }
 
 export interface DeviceInfo {
@@ -43,6 +42,7 @@ export interface ChildInfo {
   name: string;
   student_id: string | null;
   notes: string | null;
+  class_id?: string | null;
   created_at: string | null;
 }
 
@@ -57,7 +57,36 @@ export interface AssignmentInfo {
   assigned_at: string | null;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+function getToken(): string | null {
+  return localStorage.getItem("hmeayc_token");
+}
+
+function authHeader(): Record<string, string> {
+  const tok = getToken();
+  return tok ? { Authorization: `Bearer ${tok}` } : {};
+}
+
+async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
+  const res = await fetch(`${API_BASE}${url}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", ...authHeader(), ...init?.headers },
+  });
+  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+  return res.json();
+}
+
 export const api = {
+  // Auth
+  login: (email: string, password: string) =>
+    fetchJSON<{ access_token: string; user_id: string; org_id: string; role: string; display_name: string }>(
+      "/api/auth/login", { method: "POST", body: JSON.stringify({ email, password }) }
+    ),
+
+  me: () => fetchJSON<UserInfo>("/api/auth/me"),
+
+  // Sessions
   listSessions: () =>
     fetchJSON<{ sessions: SessionSummary[] }>("/api/sessions"),
 
@@ -95,6 +124,7 @@ export const api = {
   analyzeImu: (id: string) =>
     fetchJSON<{ results: AnalysisResult[] }>(`/api/sessions/${id}/analysis`),
 
+  // Devices
   listDevices: () =>
     fetchJSON<{ devices: DeviceInfo[] }>("/api/devices"),
 
@@ -107,10 +137,10 @@ export const api = {
   listChildren: () =>
     fetchJSON<{ children: ChildInfo[] }>("/api/children"),
 
-  registerChild: (name: string, student_id?: string, notes?: string) =>
+  registerChild: (name: string, student_id?: string, notes?: string, class_id?: string) =>
     fetchJSON<{ child: ChildInfo }>("/api/children", {
       method: "POST",
-      body: JSON.stringify({ name, student_id, notes }),
+      body: JSON.stringify({ name, student_id, notes, class_id }),
     }),
 
   getAssignments: (sessionId: string) =>
@@ -131,7 +161,9 @@ export const api = {
     form.append("version", version);
     form.append("description", description);
     form.append("file", file);
-    const res = await fetch(`${API_BASE}/api/firmware/upload`, { method: "POST", body: form });
+    const tok = getToken();
+    const headers: Record<string, string> = tok ? { Authorization: `Bearer ${tok}` } : {};
+    const res = await fetch(`${API_BASE}/api/firmware/upload`, { method: "POST", body: form, headers });
     if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
     return res.json();
   },

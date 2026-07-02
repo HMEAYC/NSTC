@@ -536,11 +536,63 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 | `GET` | `/api/analyze/tasks/{id}` | 任務狀態 |
 | `POST` | `/api/analyze/tasks/{id}/cancel` | 取消任務 |
 
+#### 認證（Auth）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `POST` | `/api/auth/login` | 登入（body: `email`, `password`）→ 回傳 JWT |
+| `POST` | `/api/auth/refresh` | 刷新 Token |
+| `GET` | `/api/auth/me` | 當前使用者資訊 |
+| `POST` | `/api/auth/register` | 註冊使用者（body: `email`, `password`, `display_name`, `role`, `org_id`） |
+
+#### 組織管理（super_admin）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/admin/orgs` | 列出所有組織 |
+| `POST` | `/api/admin/orgs` | 新增組織（query: `name`, `code`, `contact_email?`） |
+
+#### 班級管理（org_admin）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/orgs/{orgId}/classes` | 班級列表 |
+| `POST` | `/api/orgs/{orgId}/classes` | 新增班級（query: `name`, `grade?`） |
+| `PUT` | `/api/classes/{id}` | 編輯班級（query: `name?`, `grade?`） |
+| `DELETE` | `/api/classes/{id}` | 刪除班級 |
+| `GET` | `/api/classes/{id}/children` | 班級幼兒列表 |
+
+#### 使用者管理（org_admin）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/orgs/{orgId}/users` | 列出組織使用者 |
+| `POST` | `/api/orgs/{orgId}/users` | 新增使用者（body: `email`, `password`, `display_name`, `role`） |
+| `PUT` | `/api/users/{id}` | 編輯使用者（body: `is_active?`, `display_name?`） |
+
+#### 家長綁定
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `POST` | `/api/children/{childId}/parents` | 綁定家長（body: `parent_id`） |
+| `GET` | `/api/parents/me/children` | 家長查看自己的幼兒 |
+| `DELETE` | `/api/parents/{parentId}/children/{childId}` | 解除綁定 |
+
+#### 合規（IRB / 審計 / 匯出）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `POST` | `/api/consent` | 上傳家長同意書（form: `child_id`, `parent_id`, `consented`, `file?`） |
+| `GET` | `/api/consent/{childId}` | 查詢幼兒同意書狀態 |
+| `GET` | `/api/admin/audit-logs` | 審計日誌列表 |
+| `GET` | `/api/admin/export/anonymized?format=json` | 匿名化資料匯出（CSV/JSON） |
+| `GET` | `/api/admin/export/consent-report` | 同意書報表 CSV |
+
 #### WebSocket
 
 | Protocol | Path | 說明 |
 |----------|------|------|
-| `WS` | `/ws/{session_id}` | IMU 即時串流（ESP32 → Server → Dashboard broadcast） |
+| `WS` | `/ws/{session_id}?token=` | IMU 即時串流（ESP32 → Server → Dashboard broadcast）；支援選填 JWT token 驗證 |
 
 ### 8.2 WebSocket 資料格式
 

@@ -241,4 +241,35 @@ ESP32 透過 AB 分割區支援 OTA，不須 USB 即可更新韌體。
 4. 正式版系統迭代（場域回饋整合）
 5. MVP 里程碑追蹤
 
-> 📋 詳細架構規劃請見 [`.opencode/plans/multi-tenant-rbac.md`](.opencode/plans/multi-tenant-rbac.md)
+---
+
+## 🔐 多租戶 RBAC 系統（已實作）
+
+此專案已實作完整多租戶角色權限架構，支援多幼兒園/多班/多教師/多家長同時使用：
+
+| 角色 | 權限範圍 |
+|------|---------|
+| **super_admin** | 全域管理，可檢視/管理所有組織 |
+| **org_admin** | 管理所屬組織的教師/班級/裝置/幼兒 |
+| **teacher** | 開課、查看所屬班級幼兒報告與指標 |
+| **parent** | 唯讀檢視自己綁定幼兒的報告與發展歷程 |
+
+### 認證方式
+
+- **JWT Token** — Dashboard 使用者透過 `POST /api/auth/login` 取得 Bearer token
+- **API Key** — ESP32 裝置與影片分析後台仍使用傳統 X-API-Key
+
+### 新增 API
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `POST` | `/api/auth/login` | 登入取得 JWT |
+| `GET` | `/api/auth/me` | 當前使用者資訊 |
+| `GET` | `/api/admin/orgs` | 組織列表（super_admin） |
+| `GET` | `/api/orgs/{orgId}/classes` | 班級列表 |
+| `POST` | `/api/children/{childId}/parents` | 綁定家長 |
+| `GET` | `/api/parents/me/children` | 家長查看幼兒 |
+| `POST` | `/api/consent` | 上傳家長同意書 |
+| `GET` | `/api/admin/export/anonymized` | 匿名化資料匯出 |
+
+> 📋 詳細架構與實作記錄請見 [`.opencode/plans/multi-tenant-rbac.md`](.opencode/plans/multi-tenant-rbac.md)

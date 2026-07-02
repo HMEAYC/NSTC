@@ -10,12 +10,17 @@ from app.api.ws import router as ws_router
 from app.api.firmware import router as firmware_router
 from app.api.devices import router as devices_router
 from app.api.config import router as config_router
+from app.api.auth import router as auth_router
+from app.api.admin import router as admin_router
+from app.api.compliance import router as compliance_router
 from app.db.base import engine, Base
 
 
 @asynccontextmanager
 async def lifespan(app: FastAPI):
     Base.metadata.create_all(bind=engine)
+    from app.auth.org import ensure_default_org
+    ensure_default_org()
     yield
 
 
@@ -44,6 +49,9 @@ app.include_router(firmware_router)
 app.include_router(devices_router)
 app.include_router(config_router)
 app.include_router(ws_router)
+app.include_router(auth_router)
+app.include_router(admin_router)
+app.include_router(compliance_router)
 
 
 @app.get("/health")

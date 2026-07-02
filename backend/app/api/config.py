@@ -3,8 +3,10 @@ from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends
 from sqlalchemy.orm import Session
+from app.auth.deps import get_current_user, require_login
 from app.db.base import get_db
 from app.models.wifi_config import WifiConfig
+from app.models.user import User
 
 router = APIRouter(prefix="/api/config", tags=["config"])
 
@@ -29,7 +31,11 @@ def get_wifi_config(
 
 
 @router.put("/wifi")
-def set_wifi_config(payload: WifiConfigUpdate, db: Session = Depends(get_db)):
+def set_wifi_config(
+    payload: WifiConfigUpdate,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_login),
+):
     cfg = db.query(WifiConfig).order_by(WifiConfig.updated_at.desc()).first()
     password = payload.password if payload.password is not None else (cfg.password if cfg else "")
     if not cfg:

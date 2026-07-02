@@ -5,8 +5,10 @@ from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
 from sqlalchemy.orm import Session
 
+from app.auth.deps import get_current_user, require_role
 from app.db.base import get_db
 from app.models.firmware import FirmwareVersion
+from app.models.user import User
 
 router = APIRouter(prefix="/api/firmware", tags=["firmware"])
 
@@ -42,6 +44,7 @@ async def upload_firmware(
     description: str = Form(""),
     file: UploadFile = File(...),
     db: Session = Depends(get_db),
+    _: User = Depends(require_role("super_admin", "org_admin")),
 ):
     existing = db.query(FirmwareVersion).filter(
         FirmwareVersion.version == version
@@ -93,7 +96,10 @@ def download_firmware(fw_id: str, db: Session = Depends(get_db)):
 
 
 @router.get("/list")
-def list_firmware(db: Session = Depends(get_db)):
+def list_firmware(
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
     versions = (
         db.query(FirmwareVersion)
         .order_by(FirmwareVersion.created_at.desc())

@@ -2,18 +2,27 @@ from datetime import datetime
 from typing import Optional
 from fastapi import APIRouter, Depends, HTTPException, Body
 from sqlalchemy.orm import Session
+from app.auth.deps import get_current_user
+from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.device import Device as DeviceModel
 from app.models.child import Child as ChildModel
 from app.models.device_assignment import DeviceAssignment
 from app.models.session import Session as SessionModel
+from app.models.user import User
 
 router = APIRouter(prefix="/api", tags=["devices"])
 
 
 @router.get("/devices")
-def list_devices(db: Session = Depends(get_db)):
-    devices = db.query(DeviceModel).order_by(DeviceModel.created_at.desc()).all()
+def list_devices(
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    devices = db.query(DeviceModel).filter(
+        DeviceModel.org_id == org_id
+    ).order_by(DeviceModel.created_at.desc()).all()
     return {
         "devices": [
             {
@@ -36,8 +45,11 @@ def register_device(
     device_id: str = Body(...),
     name: Optional[str] = Body(None),
     firmware_version: Optional[str] = Body(None),
+    org_id: Optional[str] = Body(None),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
+    resolved_org = effective_org_id(current_user, org_id)
     existing = db.query(DeviceModel).filter(DeviceModel.device_id == device_id).first()
     if existing:
         existing.status = "online"
@@ -53,6 +65,7 @@ def register_device(
         device_id=device_id,
         name=name or device_id,
         firmware_version=firmware_version,
+        org_id=resolved_org,
         status="online",
         last_seen=datetime.utcnow(),
     )
@@ -63,8 +76,14 @@ def register_device(
 
 
 @router.get("/children")
-def list_children(db: Session = Depends(get_db)):
-    children = db.query(ChildModel).order_by(ChildModel.created_at.desc()).all()
+def list_children(
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    children = db.query(ChildModel).filter(
+        ChildModel.org_id == org_id
+    ).order_by(ChildModel.created_at.desc()).all()
     return {
         "children": [
             {
@@ -72,6 +91,7 @@ def list_children(db: Session = Depends(get_db)):
                 "name": c.name,
                 "student_id": c.student_id,
                 "notes": c.notes,
+                "class_id": c.class_id,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
             }
             for c in children
@@ -84,9 +104,19 @@ def register_child(
     name: str = Body(...),
     student_id: Optional[str] = Body(None),
     notes: Optional[str] = Body(None),
+    class_id: Optional[str] = Body(None),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
-    child = ChildModel(name=name, student_id=student_id, notes=notes)
+    org_id = effective_org_id(current_user)
+    child = ChildModel(
+        name=name,
+        student_id=student_id,
+        notes=notes,
+        org_id=org_id,
+        class_id=class_id,
+        added_by=current_user.id if current_user else None,
+    )
     db.add(child)
     db.commit()
     db.refresh(child)
@@ -96,14 +126,23 @@ def register_child(
             "name": child.name,
             "student_id": child.student_id,
             "notes": child.notes,
+            "class_id": child.class_id,
             "created_at": child.created_at.isoformat() if child.created_at else None,
         }
     }
 
 
 @router.get("/sessions/{session_id}/assignments")
-def get_assignments(session_id: str, db: Session = Depends(get_db)):
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+def get_assignments(
+    session_id: str,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.org_id == org_id,
+    ).first()
     if not session:
         raise HTTPException(404, "Session not found")
     assigns = (
@@ -135,14 +174,25 @@ def assign_device(
     child_id: str = Body(...),
     confidence: float = Body(1.0),
     db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    org_id = effective_org_id(current_user)
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.org_id == org_id,
+    ).first()
     if not session:
         raise HTTPException(404, "Session not found")
-    device = db.query(DeviceModel).filter(DeviceModel.id == device_id).first()
+    device = db.query(DeviceModel).filter(
+        DeviceModel.id == device_id,
+        DeviceModel.org_id == org_id,
+    ).first()
     if not device:
         raise HTTPException(404, "Device not found")
-    child = db.query(ChildModel).filter(ChildModel.id == child_id).first()
+    child = db.query(ChildModel).filter(
+        ChildModel.id == child_id,
+        ChildModel.org_id == org_id,
+    ).first()
     if not child:
         raise HTTPException(404, "Child not found")
 

@@ -4,18 +4,33 @@ from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc, func
 
 from app.auth import require_api_key
+from app.auth.deps import get_current_user, require_role
+from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.session import Session as SessionModel
 from app.models.imu_data import IMUData
 from app.models.analysis_result import AnalysisResult
 from app.models.report import Report
 from app.models.device_assignment import DeviceAssignment
+from app.models.user import User
 
 router = APIRouter(prefix="/api/sessions", tags=["sessions"])
 
 
+def _session_filter(session_model, user: User | None):
+    org_id = effective_org_id(user)
+    filters = [session_model.org_id == org_id]
+    if user is not None and user.role == "teacher":
+        filters.append(session_model.teacher_id == user.id)
+    return filters
+
+
 @router.get("")
-def list_sessions(db: DBSession = Depends(get_db)):
+def list_sessions(
+    db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    filters = _session_filter(SessionModel, current_user)
     sessions = (
         db.query(
             SessionModel,
@@ -23,6 +38,7 @@ def list_sessions(db: DBSession = Depends(get_db)):
             func.count(func.distinct(IMUData.device_id)).label("device_count"),
         )
         .outerjoin(IMUData, IMUData.session_id == SessionModel.id)
+        .filter(*filters)
         .group_by(SessionModel.id)
         .order_by(desc(SessionModel.start_time))
         .limit(100)
@@ -44,6 +60,7 @@ def list_sessions(db: DBSession = Depends(get_db)):
             "duration_sec": round(duration) if duration else None,
             "imu_count": imu_count,
             "device_count": device_count,
+            "title": s.title,
         })
     return {"sessions": result}
 
@@ -52,8 +69,14 @@ def list_sessions(db: DBSession = Depends(get_db)):
 def create_session(
     course_type: str = "march",
     db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
-    session = SessionModel(course_type=course_type)
+    org_id = effective_org_id(current_user)
+    session = SessionModel(
+        course_type=course_type,
+        org_id=org_id,
+        teacher_id=current_user.id if current_user else None,
+    )
     db.add(session)
     db.commit()
     db.refresh(session)
@@ -65,8 +88,15 @@ def create_session(
 
 
 @router.post("/{session_id}/end")
-def end_session(session_id: str, db: DBSession = Depends(get_db)):
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+def end_session(
+    session_id: str,
+    db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    filters = [SessionModel.id == session_id]
+    org_id = effective_org_id(current_user)
+    filters.append(SessionModel.org_id == org_id)
+    session = db.query(SessionModel).filter(*filters).first()
     if not session:
         raise HTTPException(404, "Session not found")
     session.status = "completed"
@@ -80,8 +110,13 @@ def delete_session(
     session_id: str,
     _: None = Depends(require_api_key),
     db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
 ):
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+    org_id = effective_org_id(current_user)
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.org_id == org_id,
+    ).first()
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -103,8 +138,16 @@ def delete_session(
 
 
 @router.get("/{session_id}")
-def get_session(session_id: str, db: DBSession = Depends(get_db)):
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+def get_session(
+    session_id: str,
+    db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.org_id == org_id,
+    ).first()
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -127,7 +170,19 @@ def get_session(session_id: str, db: DBSession = Depends(get_db)):
 
 
 @router.get("/{session_id}/analysis")
-def get_analysis(session_id: str, db: DBSession = Depends(get_db)):
+def get_analysis(
+    session_id: str,
+    db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.org_id == org_id,
+    ).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+
     results = (
         db.query(AnalysisResult)
         .filter(AnalysisResult.session_id == session_id)
@@ -149,12 +204,19 @@ def get_analysis(session_id: str, db: DBSession = Depends(get_db)):
 
 
 @router.post("/{session_id}/report")
-def generate_report(session_id: str, db: DBSession = Depends(get_db)):
-    session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+def generate_report(
+    session_id: str,
+    db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.org_id == org_id,
+    ).first()
     if not session:
         raise HTTPException(404, "Session not found")
 
-    # Gather session metadata
     imu_count = db.query(func.count(IMUData.id)).filter(
         IMUData.session_id == session_id
     ).scalar() or 0
@@ -169,7 +231,6 @@ def generate_report(session_id: str, db: DBSession = Depends(get_db)):
     elif session.start_time:
         duration = (datetime.utcnow() - session.start_time).total_seconds()
 
-    # IMU stats
     imu_avg = db.query(
         func.avg(IMUData.accel_x),
         func.avg(IMUData.accel_y),
@@ -215,12 +276,13 @@ def generate_report(session_id: str, db: DBSession = Depends(get_db)):
 - 建議教師觀察幼兒的活動量與穩定性指標，適時調整課程強度。
 - 多次課程後可對比長期趨勢，評估幼兒動作發展進度。
 """
-    # Check for existing report
     existing = db.query(Report).filter(Report.session_id == session_id).first()
     if existing:
         existing.markdown = markdown
         existing.content = {"markdown": markdown}
         existing.status = "done"
+        if current_user:
+            existing.generated_by = current_user.id
         db.commit()
         db.refresh(existing)
         return {"report": {"id": existing.id}}
@@ -230,6 +292,7 @@ def generate_report(session_id: str, db: DBSession = Depends(get_db)):
         markdown=markdown,
         content={"markdown": markdown},
         status="done",
+        generated_by=current_user.id if current_user else None,
     )
     db.add(report)
     db.commit()
@@ -238,7 +301,19 @@ def generate_report(session_id: str, db: DBSession = Depends(get_db)):
 
 
 @router.get("/{session_id}/report")
-def get_session_report(session_id: str, db: DBSession = Depends(get_db)):
+def get_session_report(
+    session_id: str,
+    db: DBSession = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    session = db.query(SessionModel).filter(
+        SessionModel.id == session_id,
+        SessionModel.org_id == org_id,
+    ).first()
+    if not session:
+        raise HTTPException(404, "Session not found")
+
     report = (
         db.query(Report).filter(Report.session_id == session_id).first()
     )
