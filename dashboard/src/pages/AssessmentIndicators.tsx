@@ -1,7 +1,9 @@
-import { useParams, Link } from "react-router-dom";
+import { useCallback, useEffect, useState } from "react";
+import { useParams, useSearchParams, Link } from "react-router-dom";
 import { Area, AreaChart, ResponsiveContainer, Tooltip } from "recharts";
-import { useWebSocket } from "../hooks/useWebSocket";
+import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
 import { useLiveMetrics } from "../hooks/useLiveMetrics";
+import { api, type AssessmentResultInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 function Badge({ status }: { status: "ready" | "partial" | "missing" }) {
@@ -128,31 +130,82 @@ function CVMetricCard({ icon, title, desc }: { icon: string; title: string; desc
 
 export default function AssessmentIndicators() {
   const { sessionId } = useParams<{ sessionId: string }>();
+  const [searchParams] = useSearchParams();
   const sid = sessionId || "default";
-  const { metrics, onMessage } = useLiveMetrics();
+  const deviceFilter = searchParams.get("device") || "";
+  const { metrics, onMessage: onMetricsMessage } = useLiveMetrics();
+  const onMessage = useCallback((frame: IMUFrame) => {
+    setLastDeviceDataMs(Date.now());
+    onMetricsMessage(frame);
+  }, [onMetricsMessage]);
   const { status: wsStatus } = useWebSocket(sid, onMessage);
+  const [savedAssessments, setSavedAssessments] = useState<AssessmentResultInfo[]>([]);
+  const [computing, setComputing] = useState(false);
+  const [computeDone, setComputeDone] = useState(false);
+  const [lastDeviceDataMs, setLastDeviceDataMs] = useState(0);
+  const [, refreshTick] = useState(0);
 
-  const isConnected = wsStatus === "connected";
+  // Re-render every second to update stale-data detection
+  useEffect(() => {
+    const id = setInterval(() => refreshTick(n => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
+
+  const deviceOnline = lastDeviceDataMs > 0 && Date.now() - lastDeviceDataMs < 5000;
+  const isConnected = deviceOnline || (wsStatus === "connected" && metrics.sampleCount > 0);
   const hasData = metrics.sampleCount > 10;
+
+  useEffect(() => {
+    if (sid && sid !== "default") {
+      api.getSessionAssessments(sid).then((r) => {
+        setSavedAssessments(r.results || []);
+        setComputeDone((r.results || []).length > 0);
+      }).catch(() => {});
+    }
+  }, [sid]);
+
+  const handleCompute = async () => {
+    if (!sid || sid === "default") return;
+    setComputing(true);
+    try {
+      await api.computeSessionAssessment(sid);
+      const r = await api.getSessionAssessments(sid);
+      setSavedAssessments(r.results || []);
+      setComputeDone(true);
+    } catch (err: any) {
+      alert("計算失敗：" + (err.message || "請稍後再試"));
+    } finally {
+      setComputing(false);
+    }
+  };
+
+  const scopeLabel = deviceFilter
+    ? `裝置：${deviceFilter}`
+    : sid !== "default"
+      ? `課程 Session：${sid.slice(0, 8)}`
+      : "所有裝置（即時串流）";
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">🎯 評估指標總覽</h1>
+          <h1 className="text-2xl font-bold text-gray-800">🎯 評估指標</h1>
           <p className="text-sm text-gray-500">
-            Session: <span className="font-mono">{sid}</span>
-            <span className="ml-3 text-xs text-gray-400">
+            <span className="bg-gray-100 px-2 py-0.5 rounded text-xs font-mono mr-2">{scopeLabel}</span>
+            <span className="text-xs text-gray-400">
               {hasData ? `${metrics.sampleCount} 筆 / ${metrics.windowSeconds}s 區間` : "等待資料中…"}
             </span>
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <span className={`w-2.5 h-2.5 rounded-full ${wsStatus === "connected" ? "bg-green-500" : wsStatus === "connecting" ? "bg-yellow-500" : "bg-red-500"}`} />
+          <span className={`w-2.5 h-2.5 rounded-full ${isConnected ? "bg-green-500" : wsStatus === "connected" ? "bg-yellow-500" : wsStatus === "connecting" ? "bg-yellow-500" : "bg-red-500"}`} />
           <span className="text-sm text-gray-500">
-            {wsStatus === "connected" ? "IMU 已連線" : wsStatus === "connecting" ? "連線中…" : "未連線"}
+            {isConnected ? "IMU 已連線" : wsStatus === "connected" ? "資料等待中…" : wsStatus === "connecting" ? "連線中…" : "未連線"}
           </span>
+          <Link to={`/dashboard/live/${sid}${deviceFilter ? `?device=${encodeURIComponent(deviceFilter)}` : ""}`} className="text-xs text-blue-600 hover:underline ml-1">
+            📡 即時監控
+          </Link>
           <Link to={`/dashboard/history`} className="text-xs text-blue-600 hover:underline ml-2">
             歷史分析 →
           </Link>
@@ -256,6 +309,57 @@ export default function AssessmentIndicators() {
           </div>
         </div>
       </section>
+
+      {/* Saved Assessments */}
+      {sid !== "default" && (
+        <section>
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <span className="text-sm font-semibold text-gray-700">📊 伺服器評估</span>
+              <span className="text-xs text-gray-400">批次計算並儲存於後端</span>
+            </div>
+            <button
+              onClick={handleCompute}
+              disabled={computing}
+              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 disabled:opacity-50 font-medium"
+            >
+              {computing ? "計算中…" : computeDone ? "重新計算" : "計算評估"}
+            </button>
+          </div>
+          {savedAssessments.length > 0 ? (
+            <div className="bg-white rounded-xl shadow-sm overflow-hidden">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="bg-gray-50 border-b">
+                    <th className="text-left py-2 px-3 text-gray-500 font-medium">裝置</th>
+                    <th className="text-left py-2 px-3 text-gray-500 font-medium">活躍度</th>
+                    <th className="text-left py-2 px-3 text-gray-500 font-medium">平穩度</th>
+                    <th className="text-left py-2 px-3 text-gray-500 font-medium">穩定指數</th>
+                    <th className="text-left py-2 px-3 text-gray-500 font-medium">樣本數</th>
+                    <th className="text-left py-2 px-3 text-gray-500 font-medium">計算時間</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {savedAssessments.map((a) => (
+                    <tr key={a.id} className="border-b border-gray-50 hover:bg-gray-50">
+                      <td className="py-2 px-3 font-mono text-gray-700">{a.device_id}</td>
+                      <td className="py-2 px-3 font-mono text-blue-600">{a.activity_level?.toFixed(2)}</td>
+                      <td className={`py-2 px-3 font-mono ${a.smoothness !== null && a.smoothness < 0.3 ? "text-green-600" : a.smoothness !== null && a.smoothness < 0.6 ? "text-yellow-600" : "text-red-600"}`}>{a.smoothness?.toFixed(2) ?? "—"}</td>
+                      <td className={`py-2 px-3 font-mono ${a.stability_index !== null && a.stability_index >= 0.7 ? "text-green-600" : a.stability_index !== null && a.stability_index >= 0.4 ? "text-yellow-600" : "text-red-600"}`}>{a.stability_index?.toFixed(2) ?? "—"}</td>
+                      <td className="py-2 px-3 text-gray-500">{a.sample_count}</td>
+                      <td className="py-2 px-3 text-gray-500">{a.computed_at ? new Date(a.computed_at).toLocaleString("zh-TW") : "—"}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <div className="bg-white rounded-xl shadow-sm p-6 text-center text-sm text-gray-400">
+              {computeDone ? "無評估結果" : "點擊「計算評估」按鈕來分析此課程的 IMU 資料"}
+            </div>
+          )}
+        </section>
+      )}
 
       {/* No data state */}
       {!isConnected && (

@@ -1,4 +1,4 @@
-import { useState, useCallback, useRef, useMemo } from "react";
+import { useState, useCallback, useRef, useMemo, useEffect } from "react";
 import { useParams, useSearchParams } from "react-router-dom";
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
@@ -7,6 +7,7 @@ import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const MAX_POINTS = 200;
+const DEVICE_TIMEOUT_MS = 5000;
 
 interface ChartPoint {
   t: number;
@@ -91,6 +92,14 @@ export default function LiveView() {
 
   const [channels, setChannels] = useState<Map<string, DeviceChannel>>(new Map());
   const channelsRef = useRef<Map<string, DeviceChannel>>(new Map());
+  const [lastDeviceDataMs, setLastDeviceDataMs] = useState(0);
+  const [, refreshTick] = useState(0);
+
+  // Re-render every second to update stale-data detection
+  useEffect(() => {
+    const id = setInterval(() => refreshTick(n => n + 1), 1000);
+    return () => clearInterval(id);
+  }, []);
 
   const selectedDevice = searchParams.get("device") || "";
 
@@ -114,11 +123,22 @@ export default function LiveView() {
     channel.data = [...channel.data, pt].slice(-MAX_POINTS);
     channel.latest = frame;
 
+    setLastDeviceDataMs(Date.now());
     // Batch update
     setChannels(new Map(channelsRef.current));
   }, []);
 
   const { status } = useWebSocket(sid, onMessage);
+
+  // At least one device has sent data recently
+  const deviceOnline = lastDeviceDataMs > 0 && Date.now() - lastDeviceDataMs < DEVICE_TIMEOUT_MS;
+
+  // Derived status: green only when a device is actually sending data
+  const displayStatus: "connected" | "connecting" | "disconnected" =
+    deviceOnline ? "connected"
+    : lastDeviceDataMs > 0 ? "disconnected"
+    : status === "connected" ? "connecting"
+    : status;
 
   const deviceIds = useMemo(() => Array.from(channels.keys()), [channels]);
 
@@ -147,15 +167,26 @@ export default function LiveView() {
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div className="flex items-center gap-3">
           <h1 className="text-2xl font-bold text-gray-800">即時監控</h1>
-          <span className={`w-3 h-3 rounded-full ${statusColor[status]}`} />
-          <span className="text-sm text-gray-600">{statusLabel[status]}</span>
+          <span className={`w-3 h-3 rounded-full ${statusColor[displayStatus]}`} />
+          <span className="text-sm text-gray-600">{statusLabel[displayStatus]}</span>
         </div>
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-400">Session:</span>
-          <span className="font-mono text-gray-600">{sid.slice(0, 8)}</span>
-          <span className="text-gray-300 mx-1">|</span>
-          <span className="text-gray-400">裝置:</span>
-          <span className="font-semibold text-gray-700">{deviceIds.length}</span>
+        <div className="flex items-center gap-3 text-sm">
+          <div className="flex items-center gap-2">
+            <span className="text-gray-400">Session:</span>
+            <span className="font-mono text-gray-600">{sid.slice(0, 8)}</span>
+            <span className="text-gray-300 mx-1">|</span>
+            <span className="text-gray-400">裝置:</span>
+            <span className="font-semibold text-gray-700">{deviceIds.length}</span>
+          </div>
+          <span className="text-gray-300">|</span>
+            <div className="flex items-center gap-1">
+              <a href={`/dashboard/assessment/${sid}${activeDevice ? `?device=${encodeURIComponent(activeDevice)}` : ""}`}
+                className="text-xs px-2 py-0.5 rounded bg-orange-50 text-orange-600 hover:bg-orange-100 font-medium">
+                🎯 評估指標
+              </a>
+              <a href="/dashboard/firmware" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">韌體</a>
+              <a href="/dashboard/wifi" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">WiFi</a>
+            </div>
         </div>
       </div>
 
