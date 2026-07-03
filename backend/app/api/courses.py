@@ -69,6 +69,45 @@ class SessionRefOut(BaseModel):
     model_config = {"from_attributes": True}
 
 
+# ─── Request Schemas ───────────────────────────────────────────────
+
+class CreateCourseRequest(BaseModel):
+    name: str
+    class_id: str | None = None
+    template_id: str | None = None
+    description: str | None = None
+    scheduled_at: str | None = None
+
+
+class UpdateCourseRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    class_id: str | None = None
+    template_id: str | None = None
+    scheduled_at: str | None = None
+
+
+class CreateTemplateRequest(BaseModel):
+    name: str
+    description: str | None = None
+    duration_minutes: int | None = None
+    stages: list | None = None
+    metrics_config: dict | None = None
+
+
+class UpdateTemplateRequest(BaseModel):
+    name: str | None = None
+    description: str | None = None
+    duration_minutes: int | None = None
+    stages: list | None = None
+    metrics_config: dict | None = None
+
+
+class UpsertEvaluationRequest(BaseModel):
+    score: float | None = None
+    comment: str | None = None
+
+
 # ─── Helpers ───────────────────────────────────────────────────────
 
 def _serialize_course(c: Course) -> dict:
@@ -129,22 +168,18 @@ def list_templates(
 
 @router.post("/api/templates")
 def create_template(
-    name: str,
-    description: str | None = None,
-    duration_minutes: int | None = None,
-    stages: list | None = None,
-    metrics_config: dict | None = None,
+    body: CreateTemplateRequest,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
     org_id = effective_org_id(current_user)
     tpl = CourseTemplate(
         org_id=org_id,
-        name=name,
-        description=description,
-        duration_minutes=duration_minutes,
-        stages=stages,
-        metrics_config=metrics_config,
+        name=body.name,
+        description=body.description,
+        duration_minutes=body.duration_minutes,
+        stages=body.stages,
+        metrics_config=body.metrics_config,
     )
     db.add(tpl)
     db.commit()
@@ -171,11 +206,7 @@ def get_template(
 @router.put("/api/templates/{template_id}")
 def update_template(
     template_id: str,
-    name: str | None = None,
-    description: str | None = None,
-    duration_minutes: int | None = None,
-    stages: list | None = None,
-    metrics_config: dict | None = None,
+    body: UpdateTemplateRequest,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
@@ -186,16 +217,16 @@ def update_template(
     ).first()
     if not tpl:
         raise HTTPException(404, "Template not found")
-    if name is not None:
-        tpl.name = name
-    if description is not None:
-        tpl.description = description
-    if duration_minutes is not None:
-        tpl.duration_minutes = duration_minutes
-    if stages is not None:
-        tpl.stages = stages
-    if metrics_config is not None:
-        tpl.metrics_config = metrics_config
+    if body.name is not None:
+        tpl.name = body.name
+    if body.description is not None:
+        tpl.description = body.description
+    if body.duration_minutes is not None:
+        tpl.duration_minutes = body.duration_minutes
+    if body.stages is not None:
+        tpl.stages = body.stages
+    if body.metrics_config is not None:
+        tpl.metrics_config = body.metrics_config
     db.commit()
     db.refresh(tpl)
     return {"template": _serialize_template(tpl)}
@@ -240,25 +271,21 @@ def list_courses(
 
 @router.post("/api/courses")
 def create_course(
-    name: str,
-    class_id: str | None = None,
-    template_id: str | None = None,
-    description: str | None = None,
-    scheduled_at: str | None = None,
+    body: CreateCourseRequest,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
     org_id = effective_org_id(current_user)
     parsed_scheduled = None
-    if scheduled_at:
-        parsed_scheduled = datetime.fromisoformat(scheduled_at)
+    if body.scheduled_at:
+        parsed_scheduled = datetime.fromisoformat(body.scheduled_at)
 
     course = Course(
         org_id=org_id,
-        class_id=class_id,
-        template_id=template_id,
-        name=name,
-        description=description,
+        class_id=body.class_id,
+        template_id=body.template_id,
+        name=body.name,
+        description=body.description,
         scheduled_at=parsed_scheduled,
     )
     db.add(course)
@@ -309,11 +336,7 @@ def get_course(
 @router.put("/api/courses/{course_id}")
 def update_course(
     course_id: str,
-    name: str | None = None,
-    description: str | None = None,
-    class_id: str | None = None,
-    template_id: str | None = None,
-    scheduled_at: str | None = None,
+    body: UpdateCourseRequest,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
@@ -327,16 +350,16 @@ def update_course(
     if course.status not in ("draft", "scheduled"):
         raise HTTPException(400, "Only draft or scheduled courses can be edited")
 
-    if name is not None:
-        course.name = name
-    if description is not None:
-        course.description = description
-    if class_id is not None:
-        course.class_id = class_id
-    if template_id is not None:
-        course.template_id = template_id
-    if scheduled_at is not None:
-        course.scheduled_at = datetime.fromisoformat(scheduled_at) if scheduled_at else None
+    if body.name is not None:
+        course.name = body.name
+    if body.description is not None:
+        course.description = body.description
+    if body.class_id is not None:
+        course.class_id = body.class_id
+    if body.template_id is not None:
+        course.template_id = body.template_id
+    if body.scheduled_at is not None:
+        course.scheduled_at = datetime.fromisoformat(body.scheduled_at) if body.scheduled_at else None
 
     db.commit()
     db.refresh(course)
@@ -492,8 +515,7 @@ def list_course_evaluations(
 def upsert_course_evaluation(
     course_id: str,
     child_id: str,
-    score: float | None = None,
-    comment: str | None = None,
+    body: UpsertEvaluationRequest,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
@@ -515,8 +537,8 @@ def upsert_course_evaluation(
     ).first()
 
     if existing:
-        existing.score = score
-        existing.comment = comment
+        existing.score = body.score
+        existing.comment = body.comment
         existing.teacher_id = current_user.id
         existing.updated_at = datetime.utcnow()
         db.commit()
@@ -527,8 +549,8 @@ def upsert_course_evaluation(
             course_id=course_id,
             child_id=child_id,
             teacher_id=current_user.id,
-            score=score,
-            comment=comment,
+            score=body.score,
+            comment=body.comment,
         )
         db.add(ev)
         db.commit()
