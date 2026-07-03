@@ -7,6 +7,7 @@ import LoadingSpinner from "./components/LoadingSpinner";
 import Navbar from "./components/Navbar";
 
 const Login = lazy(() => import("./pages/Login"));
+const Register = lazy(() => import("./pages/Register"));
 const Landing = lazy(() => import("./pages/Landing"));
 const LiveView = lazy(() => import("./pages/LiveView"));
 const History = lazy(() => import("./pages/History"));
@@ -20,6 +21,12 @@ const ClassManagement = lazy(() => import("./pages/ClassManagement"));
 const ClassDetail = lazy(() => import("./pages/ClassDetail"));
 const UserManagement = lazy(() => import("./pages/UserManagement"));
 const ParentView = lazy(() => import("./pages/ParentView"));
+const ChildAssessments = lazy(() => import("./pages/ChildAssessments"));
+const ClassAssessments = lazy(() => import("./pages/ClassAssessments"));
+const Courses = lazy(() => import("./pages/Courses"));
+const CourseDetail = lazy(() => import("./pages/CourseDetail"));
+const Templates = lazy(() => import("./pages/Templates"));
+const CourseReport = lazy(() => import("./pages/CourseReport"));
 
 export default function App() {
   return (
@@ -37,6 +44,7 @@ export default function App() {
             >
               <Routes>
                 <Route path="/dashboard/login" element={<Login />} />
+                <Route path="/dashboard/register" element={<Register />} />
                 <Route path="/dashboard/" element={<ProtectedRoute><Landing /></ProtectedRoute>} />
                 <Route path="/dashboard/live/:sessionId" element={<ProtectedRoute><LiveView /></ProtectedRoute>} />
                 <Route path="/dashboard/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
@@ -48,6 +56,12 @@ export default function App() {
                 <Route path="/dashboard/admin" element={<RoleRoute roles={["org_admin", "super_admin"]}><AdminOrgs /></RoleRoute>} />
                 <Route path="/dashboard/classes" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassManagement /></RoleRoute>} />
                 <Route path="/dashboard/classes/:classId" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassDetail /></RoleRoute>} />
+                <Route path="/dashboard/classes/:classId/assessments" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassAssessments /></RoleRoute>} />
+                <Route path="/dashboard/courses" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><Courses /></RoleRoute>} />
+                <Route path="/dashboard/courses/:id" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><CourseDetail /></RoleRoute>} />
+                <Route path="/dashboard/courses/:id/report" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><CourseReport /></RoleRoute>} />
+                <Route path="/dashboard/templates" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><Templates /></RoleRoute>} />
+                <Route path="/dashboard/children/:childId/assessments" element={<ProtectedRoute><ChildAssessments /></ProtectedRoute>} />
                 <Route path="/dashboard/admin/users" element={<RoleRoute roles={["org_admin", "super_admin"]}><UserManagement /></RoleRoute>} />
                 <Route path="/dashboard/parent" element={<RoleRoute roles={["parent"]}><ParentView /></RoleRoute>} />
                 <Route path="*" element={<Navigate to="/dashboard/" replace />} />

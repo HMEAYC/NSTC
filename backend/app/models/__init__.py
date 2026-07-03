@@ -13,4 +13,8 @@ from .school_class import SchoolClass  # noqa: F401
 from .teacher_class import TeacherClass  # noqa: F401
 from .parent_child import ParentChild  # noqa: F401
 from .audit_log import AuditLog  # noqa: F401
+from .assessment_result import AssessmentResult  # noqa: F401
 from .parent_consent import ParentConsent  # noqa: F401
+from .course_template import CourseTemplate  # noqa: F401
+from .course import Course  # noqa: F401
+from .course_evaluation import CourseEvaluation  # noqa: F401
