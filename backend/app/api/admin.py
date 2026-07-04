@@ -160,6 +160,72 @@ def list_class_children(
     return {"children": children}
 
 
+@router.post("/api/classes/{class_id}/children")
+def create_class_child(
+    class_id: str,
+    name: str,
+    student_id: str | None = None,
+    notes: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
+):
+    cls = db.query(SchoolClass).filter(SchoolClass.id == class_id).first()
+    if not cls:
+        raise HTTPException(404, "Class not found")
+    same_org(cls.org_id, current_user)
+    child = Child(
+        org_id=cls.org_id,
+        class_id=class_id,
+        added_by=current_user.id,
+        name=name,
+        student_id=student_id,
+        notes=notes,
+    )
+    db.add(child)
+    db.commit()
+    db.refresh(child)
+    return {"child": child}
+
+
+@router.put("/api/children/{child_id}")
+def update_child(
+    child_id: str,
+    name: str | None = None,
+    student_id: str | None = None,
+    notes: str | None = None,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
+):
+    child = db.query(Child).filter(Child.id == child_id).first()
+    if not child:
+        raise HTTPException(404, "Child not found")
+    same_org(child.org_id, current_user)
+    if name is not None:
+        child.name = name
+    if student_id is not None:
+        child.student_id = student_id
+    if notes is not None:
+        child.notes = notes
+    db.commit()
+    db.refresh(child)
+    return {"child": child}
+
+
+@router.delete("/api/children/{child_id}")
+def delete_child(
+    child_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
+):
+    child = db.query(Child).filter(Child.id == child_id).first()
+    if not child:
+        raise HTTPException(404, "Child not found")
+    same_org(child.org_id, current_user)
+    db.delete(child)
+    db.commit()
+    return {"status": "deleted"}
+
+
 # ─── Users (org users management) ────────────────────────────────
 
 @router.get("/api/orgs/{org_id}/users")
@@ -218,6 +284,41 @@ def update_user(
     db.commit()
     db.refresh(user)
     return {"user": user}
+
+
+@router.get("/api/orgs/{org_id}/parents")
+def search_parents(
+    org_id: str,
+    q: str = "",
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
+):
+    same_org(org_id, current_user)
+    query = db.query(User).filter(User.org_id == org_id, User.role == "parent")
+    if q:
+        like = f"%{q}%"
+        query = query.filter(
+            User.email.ilike(like) | User.display_name.ilike(like)
+        )
+    parents = query.order_by(User.display_name).all()
+    return {"parents": parents}
+
+
+@router.get("/api/children/{child_id}/parents")
+def list_child_parents(
+    child_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+):
+    child = db.query(Child).filter(Child.id == child_id).first()
+    if not child:
+        raise HTTPException(404, "Child not found")
+    if current_user.role != "super_admin":
+        same_org(child.org_id, current_user)
+    bindings = db.query(ParentChild).filter(ParentChild.child_id == child_id).all()
+    parent_ids = [b.parent_id for b in bindings]
+    parents = db.query(User).filter(User.id.in_(parent_ids)).all() if parent_ids else []
+    return {"parents": parents}
 
 
 # ─── Parent-Child Binding ────────────────────────────────────────

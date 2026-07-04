@@ -40,7 +40,7 @@ export default function ParentView() {
               尚未綁定幼兒，請聯繫園方。
             </div>
           ) : children.map((c) => (
-            <div key={c.id} onClick={() => navigate(`/dashboard/report/default?child=${c.id}`)}
+            <div key={c.id} onClick={() => navigate(`/dashboard/children/${c.id}/assessments`)}
               className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md cursor-pointer">
               <div>
                 <div className="font-semibold text-gray-800 text-lg">{c.name}</div>

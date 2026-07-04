@@ -99,6 +99,92 @@ def list_children(
     }
 
 
+@router.get("/children/assignments")
+def list_child_assignments(
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    children = db.query(ChildModel).filter(ChildModel.org_id == org_id).all()
+    result = []
+    for c in children:
+        assignment = (
+            db.query(DeviceAssignment)
+            .filter(DeviceAssignment.child_id == c.id)
+            .order_by(DeviceAssignment.assigned_at.desc())
+            .first()
+        )
+        device_name = None
+        if assignment:
+            device = db.query(DeviceModel).filter(DeviceModel.id == assignment.device_id).first()
+            device_name = device.name if device else None
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "student_id": c.student_id,
+            "class_id": c.class_id,
+            "device_id": assignment.device_id if assignment else None,
+            "device_name": device_name,
+            "assignment_id": assignment.id if assignment else None,
+        })
+    return {"children": result}
+
+
+@router.put("/children/{child_id}/assign")
+def assign_child_device(
+    child_id: str,
+    body: dict = Body(...),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    device_id = body.get("device_id", "")
+    org_id = effective_org_id(current_user)
+    child = db.query(ChildModel).filter(ChildModel.id == child_id, ChildModel.org_id == org_id).first()
+    if not child:
+        raise HTTPException(404, "Child not found")
+    device = db.query(DeviceModel).filter(DeviceModel.id == device_id, DeviceModel.org_id == org_id).first()
+    if not device:
+        raise HTTPException(404, "Device not found")
+    session = db.query(SessionModel).filter(
+        SessionModel.org_id == org_id
+    ).order_by(SessionModel.start_time.desc()).first()
+    if not session:
+        session = SessionModel(org_id=org_id, course_type="march", start_time=datetime.utcnow(), status="active")
+        db.add(session)
+        db.commit()
+        db.refresh(session)
+    existing = db.query(DeviceAssignment).filter(
+        DeviceAssignment.child_id == child_id,
+        DeviceAssignment.session_id == session.id,
+    ).first()
+    existing_device = db.query(DeviceAssignment).filter(
+        DeviceAssignment.device_id == device_id,
+        DeviceAssignment.session_id == session.id,
+    ).first()
+    if existing and existing_device and existing.id != existing_device.id:
+        db.delete(existing_device)
+    if existing:
+        existing.device_id = device_id
+        existing.confidence = 1.0
+        existing.assigned_at = datetime.utcnow()
+    elif existing_device:
+        existing_device.child_id = child_id
+        existing_device.confidence = 1.0
+        existing_device.assigned_at = datetime.utcnow()
+    else:
+        a = DeviceAssignment(
+            session_id=session.id,
+            device_id=device_id,
+            child_id=child_id,
+            confidence=1.0,
+            method="manual",
+            assigned_at=datetime.utcnow(),
+        )
+        db.add(a)
+    db.commit()
+    return {"status": "assigned"}
+
+
 @router.post("/children")
 def register_child(
     name: str = Body(...),
@@ -234,6 +320,24 @@ def assign_device(
             "assigned_at": assignment.assigned_at.isoformat() if assignment.assigned_at else None,
         }
     }
+
+
+@router.delete("/assignments/{assignment_id}")
+def delete_assignment(
+    assignment_id: str,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    org_id = effective_org_id(current_user)
+    assignment = db.query(DeviceAssignment).filter(DeviceAssignment.id == assignment_id).first()
+    if not assignment:
+        raise HTTPException(404, "Assignment not found")
+    child = db.query(ChildModel).filter(ChildModel.id == assignment.child_id).first()
+    if child and child.org_id != org_id:
+        raise HTTPException(403, "Forbidden")
+    db.delete(assignment)
+    db.commit()
+    return {"status": "deleted"}
 
 
 def _device_dict(d: DeviceModel) -> dict:

@@ -22,7 +22,6 @@ static const char *TAG = "HMEAYC";
 #define PIN_SCL   GPIO_NUM_7
 
 #define SAMPLE_RATE_HZ      CONFIG_HMEAYC_SAMPLE_RATE_HZ
-#define RECONNECT_INTERVAL  (SAMPLE_RATE_HZ * 3)
 #define OTA_CHECK_INTERVAL  (SAMPLE_RATE_HZ * 3600)  // check once per hour
 #define DEVICE_REGISTER_INTERVAL (SAMPLE_RATE_HZ * 1800) // register every 30 min
 #define WIFI_CONFIG_INTERVAL (SAMPLE_RATE_HZ * 1800) // check WiFi config every 30 min
@@ -77,8 +76,8 @@ void app_main(void) {
         if (imu_read(&data) == ESP_OK) {
             if (websocket_is_connected()) {
                 websocket_send_json(&data);
-            } else if (tick % RECONNECT_INTERVAL == 0) {
-                ESP_LOGW(TAG, "WS disconnected, reconnecting...");
+            } else if (websocket_should_reconnect()) {
+                ESP_LOGW(TAG, "WS reconnecting...");
                 websocket_reconnect();
             }
         }
@@ -112,6 +111,14 @@ void app_main(void) {
             }
         } else if (tick % (LED_CYCLE_COUNT / 2) == 0) {
             led_status_clear();
+        }
+
+        // diagnostic status every 10s
+        if (tick % (SAMPLE_RATE_HZ * 10) == 0) {
+            ESP_LOGI(TAG, "tick=%lu wifi=%d ws=%d reconnect_pending=%d",
+                     (unsigned long)tick,
+                     wifi_is_connected(), websocket_is_connected(),
+                     websocket_reconnect_pending());
         }
 
         tick++;

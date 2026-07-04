@@ -62,16 +62,6 @@ describe("api client", () => {
     );
   });
 
-  it("getSessionReport calls GET /api/sessions/{id}/report", async () => {
-    mockFetch.mockResolvedValue({
-      ok: true,
-      json: () => Promise.resolve({ id: "r1", session_id: "s1", report_type: "educational", markdown: "# hi" }),
-    });
-    const res = await api.getSessionReport("s1");
-    expect(res.markdown).toBe("# hi");
-    expect(mockFetch).toHaveBeenCalledWith("/api/sessions/s1/report", expect.any(Object));
-  });
-
   it("uploadFirmware sends FormData", async () => {
     mockFetch.mockResolvedValue({ ok: true, json: () => Promise.resolve({}) });
     const file = new File(["fake"], "firmware.bin", { type: "application/octet-stream" });

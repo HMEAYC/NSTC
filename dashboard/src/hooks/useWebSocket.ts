@@ -51,7 +51,13 @@ export function useWebSocket(
     ws.onclose = () => {
       setStatus("disconnected");
       wsRef.current = null;
-      const delay = Math.min(1000 * 2 ** retriesRef.current, 30000);
+      const MAX_RETRIES = 30;
+      if (retriesRef.current >= MAX_RETRIES) {
+        return;
+      }
+      const base = Math.min(1000 * 2 ** retriesRef.current, 30000);
+      const jitter = Math.random() * 1000;
+      const delay = base + jitter;
       retriesRef.current += 1;
       timerRef.current = setTimeout(connect, delay);
     };

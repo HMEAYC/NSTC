@@ -11,7 +11,7 @@ const Register = lazy(() => import("./pages/Register"));
 const Landing = lazy(() => import("./pages/Landing"));
 const LiveView = lazy(() => import("./pages/LiveView"));
 const History = lazy(() => import("./pages/History"));
-const Report = lazy(() => import("./pages/Report"));
+
 const AssessmentIndicators = lazy(() => import("./pages/AssessmentIndicators"));
 const DeviceManagement = lazy(() => import("./pages/DeviceManagement"));
 const FirmwareUpload = lazy(() => import("./pages/FirmwareUpload"));
@@ -48,7 +48,6 @@ export default function App() {
                 <Route path="/dashboard/" element={<ProtectedRoute><Landing /></ProtectedRoute>} />
                 <Route path="/dashboard/live/:sessionId" element={<ProtectedRoute><LiveView /></ProtectedRoute>} />
                 <Route path="/dashboard/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
-                <Route path="/dashboard/report/:sessionId" element={<ProtectedRoute><Report /></ProtectedRoute>} />
                 <Route path="/dashboard/assessment/:sessionId" element={<ProtectedRoute><AssessmentIndicators /></ProtectedRoute>} />
                 <Route path="/dashboard/devices" element={<ProtectedRoute><DeviceManagement /></ProtectedRoute>} />
                 <Route path="/dashboard/firmware" element={<ProtectedRoute><FirmwareUpload /></ProtectedRoute>} />

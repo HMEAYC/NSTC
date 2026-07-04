@@ -11,7 +11,7 @@ RUN pip install --no-cache-dir \
     "psycopg2-binary>=2.9" \
     "asyncpg>=0.30.0" \
     "alembic>=1.13.0" \
-    "pydantic>=2.0" \
+    "pydantic[email]>=2.0" \
     "pydantic-settings>=2.0" \
     "httpx>=0.27.0" \
     "python-multipart>=0.0.9" \

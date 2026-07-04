@@ -1,3 +1,4 @@
+import asyncio
 from datetime import datetime
 from typing import Any, Optional
 
@@ -11,6 +12,28 @@ from app.models.imu_data import IMUData
 router = APIRouter(tags=["websocket"])
 
 _viewers: dict[str, set[WebSocket]] = {}
+_cleanup_started = False
+
+
+async def _cleanup_loop():
+    """Periodically ping all viewers and remove stale connections."""
+    while True:
+        await asyncio.sleep(30)
+        for session_id, viewers in list(_viewers.items()):
+            for ws in list(viewers):
+                try:
+                    await ws.send_json({"type": "ping"})
+                except Exception:
+                    viewers.discard(ws)
+            if not viewers:
+                _viewers.pop(session_id, None)
+
+
+def _ensure_cleanup():
+    global _cleanup_started
+    if not _cleanup_started:
+        _cleanup_started = True
+        asyncio.create_task(_cleanup_loop())
 
 
 def _normalize_message(data: Any, device_id_default: str) -> Optional[dict[str, Any]]:
@@ -47,6 +70,7 @@ async def imu_data_ws(
     token: str = Query(default=""),
 ):
     await websocket.accept()
+    _ensure_cleanup()
 
     if session_id not in _viewers:
         _viewers[session_id] = set()
@@ -60,6 +84,7 @@ async def imu_data_ws(
     resolved_org = user_org_id or None
 
     db = SessionLocal()
+    frame_count = 0
     try:
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if not session:
@@ -104,8 +129,11 @@ async def imu_data_ws(
                     gyro_z=float(data.get("gz", 0.0)),
                 )
                 db.add(frame)
-                db.commit()
+                frame_count += 1
+                if frame_count % 100 == 0:
+                    db.commit()
 
+                # broadcast without waiting for DB write
                 viewers = list(_viewers.get(session_id, set()))
                 for viewer in viewers:
                     if viewer is websocket:
@@ -145,6 +173,12 @@ async def imu_data_ws(
             })
     except WebSocketDisconnect:
         pass
+    except Exception:
+        db.rollback()
     finally:
         _viewers.get(session_id, set()).discard(websocket)
+        try:
+            db.commit()
+        except Exception:
+            db.rollback()
         db.close()

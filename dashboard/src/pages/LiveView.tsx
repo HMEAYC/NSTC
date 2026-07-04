@@ -4,6 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
+import { api, type SessionDetail } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const MAX_POINTS = 200;
@@ -89,6 +90,28 @@ export default function LiveView() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
   const sid = sessionId || "default";
+
+  const [sessionDetail, setSessionDetail] = useState<SessionDetail | null>(null);
+  const [actIdx, setActIdx] = useState(0);
+  const [savingAct, setSavingAct] = useState(false);
+
+  useEffect(() => {
+    if (sid === "default") return;
+    api.getSession(sid).then((d) => {
+      setSessionDetail(d);
+      setActIdx(d.current_activity_index);
+    }).catch(() => {});
+  }, [sid]);
+
+  const advanceActivity = (delta: number) => {
+    if (!sessionDetail) return;
+    const acts = sessionDetail.template_activities;
+    if (!acts || acts.length === 0) return;
+    const next = Math.max(0, Math.min(acts.length - 1, actIdx + delta));
+    setActIdx(next);
+    setSavingAct(true);
+    api.updateActivity(sid, next).finally(() => setSavingAct(false));
+  };
 
   const [channels, setChannels] = useState<Map<string, DeviceChannel>>(new Map());
   const channelsRef = useRef<Map<string, DeviceChannel>>(new Map());
@@ -189,6 +212,58 @@ export default function LiveView() {
             </div>
         </div>
       </div>
+
+      {/* Activity tracker — only when session has template activities */}
+      {sessionDetail && sessionDetail.template_activities.length > 0 && (
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <div className="flex items-center justify-between mb-2">
+            <h2 className="text-sm font-semibold text-gray-700">📋 活動流程</h2>
+            <span className="text-xs text-gray-400">
+              {actIdx + 1} / {sessionDetail.template_activities.length}
+            </span>
+          </div>
+          {/* Progress bar */}
+          <div className="w-full bg-gray-100 rounded-full h-1.5 mb-3">
+            <div
+              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
+              style={{ width: `${((actIdx + 1) / sessionDetail.template_activities.length) * 100}%` }}
+            />
+          </div>
+          {/* Current activity card */}
+          {sessionDetail.template_activities[actIdx] && (
+            <div className="border border-blue-100 bg-blue-50 rounded-lg p-3">
+              <div className="text-sm font-medium text-blue-800 mb-1">
+                {sessionDetail.template_activities[actIdx].title}
+              </div>
+              {sessionDetail.template_activities[actIdx].rhythm_pattern && (
+                <div className="text-xs font-mono text-blue-600 mb-1">
+                  節奏型: {sessionDetail.template_activities[actIdx].rhythm_pattern}
+                </div>
+              )}
+              <div className="text-xs text-blue-700/70 line-clamp-2">
+                {sessionDetail.template_activities[actIdx].content}
+              </div>
+            </div>
+          )}
+          {/* Prev / Next buttons */}
+          <div className="flex gap-2 mt-3">
+            <button
+              onClick={() => advanceActivity(-1)}
+              disabled={actIdx <= 0 || savingAct}
+              className="flex-1 text-xs py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30"
+            >
+              ← 上一個
+            </button>
+            <button
+              onClick={() => advanceActivity(1)}
+              disabled={actIdx >= sessionDetail.template_activities.length - 1 || savingAct}
+              className="flex-1 text-xs py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30"
+            >
+              下一個 →
+            </button>
+          </div>
+        </div>
+      )}
 
       {/* Device selector */}
       {deviceIds.length > 1 && (

@@ -6,6 +6,7 @@ from sqlalchemy.orm import Session
 
 from app.db.base import get_db
 from app.models.user import User
+from app.models.organization import Organization
 from app.auth.jwt import create_access_token, verify_password, get_password_hash
 from app.auth.deps import get_current_user, require_login
 
@@ -37,12 +38,11 @@ class UserResponse(BaseModel):
     model_config = {"from_attributes": True}
 
 
-class CreateUserRequest(BaseModel):
+class RegisterRequest(BaseModel):
     email: EmailStr
     password: str
     display_name: str
-    role: str = "teacher"
-    org_id: str
+    org_code: str
 
 
 @router.post("/api/auth/login", response_model=LoginResponse)
@@ -80,15 +80,20 @@ def me(current_user: User = Depends(require_login)):
 
 
 @router.post("/api/auth/register", response_model=UserResponse)
-def register(req: CreateUserRequest, db: Session = Depends(get_db)):
+def register(req: RegisterRequest, db: Session = Depends(get_db)):
+    org = db.query(Organization).filter(Organization.code == req.org_code).first()
+    if not org:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="機構代碼無效，請向園所確認")
+    if not org.is_active:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="該機構已停用")
     if db.query(User).filter(User.email == req.email).first():
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Email already registered")
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="此 Email 已經註冊過")
     user = User(
-        org_id=req.org_id,
+        org_id=org.id,
         email=req.email,
         password_hash=get_password_hash(req.password),
         display_name=req.display_name,
-        role=req.role,
+        role="parent",
     )
     db.add(user)
     db.commit()

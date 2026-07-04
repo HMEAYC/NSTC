@@ -200,6 +200,12 @@ gantt
 
 | 路徑 | 頁面 | 說明 |
 |------|------|------|
+| `/dashboard/templates` | 教案模板 | 建立可重複使用的課程階段模板 |
+| `/dashboard/courses` | 課程管理 | 排程、開課、管理課程生命週期 |
+| `/dashboard/courses/:id` | 課程詳情 | 檢視課程階段、評估、開始/結束課程 |
+| `/dashboard/courses/:id/report` | 課程報告 | 課程完整 AI 分析報告 |
+| `/dashboard/live/:sessionId` | 即時監控 | 即時 IMU 6 軸圖表 |
+| `/dashboard/history` | 課程紀錄 | Session 列表 |
 | `/dashboard/devices` | 裝置管理 | 裝置列表（狀態/電量/韌體）、學員註冊、配對機制說明 |
 | `/dashboard/assessment/default` | 評估指標 | 即時 IMU 指標運算（活動量/平穩度/穩定指數） |
 

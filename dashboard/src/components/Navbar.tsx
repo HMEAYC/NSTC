@@ -19,22 +19,23 @@ export default function Navbar() {
           <a href="/dashboard/parent" className="text-blue-600 hover:underline text-sm">我的小孩</a>
         ) : (
           <>
-            <span className="text-[11px] text-gray-400 uppercase tracking-wider">系統</span>
-            <a href="/dashboard/history" className="text-blue-600 hover:underline text-sm">歷史紀錄</a>
-            <a href="/dashboard/report/default" className="text-blue-600 hover:underline text-sm font-semibold">分析報告</a>
-            <a href="/dashboard/devices" className="text-blue-600 hover:underline text-sm">裝置管理</a>
-
             {(user?.role === "org_admin" || user?.role === "super_admin" || user?.role === "teacher") && (
               <>
-                <span className="text-[11px] text-gray-400 uppercase tracking-wider ml-1">組織</span>
-                <a href="/dashboard/classes" className="text-blue-600 hover:underline text-sm">班級</a>
-                <span className="text-[11px] text-gray-400 uppercase tracking-wider ml-1">課程</span>
-                <a href="/dashboard/courses" className="text-blue-600 hover:underline text-sm">課程列表</a>
+                <span className="text-[11px] text-gray-400 uppercase tracking-wider">課程教學</span>
                 <a href="/dashboard/templates" className="text-blue-600 hover:underline text-sm">教案模板</a>
+                <a href="/dashboard/courses" className="text-blue-600 hover:underline text-sm">課程管理</a>
+              </>
+            )}
+            {(user?.role === "org_admin" || user?.role === "super_admin" || user?.role === "teacher") && (
+              <>
+                <span className="text-[11px] text-gray-400 uppercase tracking-wider ml-1">管理</span>
+                <a href="/dashboard/classes" className="text-blue-600 hover:underline text-sm">班級管理</a>
+                <a href="/dashboard/devices" className="text-blue-600 hover:underline text-sm">裝置管理</a>
               </>
             )}
             {(user?.role === "org_admin" || user?.role === "super_admin") && (
               <>
+                <span className="text-[11px] text-gray-400 uppercase tracking-wider ml-1">系統</span>
                 <a href="/dashboard/admin/users" className="text-blue-600 hover:underline text-sm">帳號管理</a>
                 {user?.role === "super_admin" && (
                   <a href="/dashboard/admin" className="text-blue-600 hover:underline text-sm">機構管理</a>

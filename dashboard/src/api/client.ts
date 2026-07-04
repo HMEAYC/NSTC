@@ -8,6 +8,13 @@ export interface SessionSummary {
   imu_count: number;
   device_count: number;
   title?: string;
+  template_id?: string | null;
+}
+
+export interface SessionDetail extends SessionSummary {
+  template_id?: string | null;
+  current_activity_index: number;
+  template_activities: { title: string; content: string; rhythm_pattern?: string }[];
 }
 
 export interface AnalysisResult {
@@ -137,6 +144,8 @@ export interface ChildAssessmentResponse {
     session_id: string;
     course_type: string;
     session_started_at: string | null;
+    template_name?: string | null;
+    music_element?: string | null;
   })[];
 }
 
@@ -188,31 +197,22 @@ export const api = {
   listSessions: () =>
     fetchJSON<{ sessions: SessionSummary[] }>("/api/sessions"),
 
-  getSession: (id: string) => fetchJSON<SessionSummary>(`/api/sessions/${id}`),
+  getSession: (id: string) => fetchJSON<SessionDetail>(`/api/sessions/${id}`),
+
+  createSession: (data: { course_type?: string; template_id?: string; title?: string }) =>
+    fetchJSON<{ id: string; course_type: string; template_id: string | null; start_time: string }>("/api/sessions", {
+      method: "POST",
+      body: JSON.stringify(data),
+    }),
+
+  updateActivity: (sessionId: string, current_activity_index: number) =>
+    fetchJSON<{ current_activity_index: number }>(`/api/sessions/${sessionId}/activity`, {
+      method: "PUT",
+      body: JSON.stringify({ current_activity_index }),
+    }),
 
   getAnalysis: (id: string) =>
     fetchJSON<{ results: AnalysisResult[] }>(`/api/sessions/${id}/analysis`),
-
-  generateReport: (id: string) =>
-    fetchJSON<{ report: { id: string } }>(`/api/sessions/${id}/report`, {
-      method: "POST",
-    }),
-
-  getSessionReport: (id: string) =>
-    fetchJSON<{
-      id: string;
-      session_id: string;
-      report_type: string;
-      markdown: string;
-    }>(`/api/sessions/${id}/report`),
-
-  getReport: (id: string) =>
-    fetchJSON<{
-      id: string;
-      session_id: string;
-      report_type: string;
-      markdown: string;
-    }>(`/api/reports/${id}`),
 
   endSession: (id: string) =>
     fetchJSON<{ status: string }>(`/api/sessions/${id}/end`, {
@@ -301,6 +301,19 @@ export const api = {
 
   getChildAssessments: (childId: string) =>
     fetchJSON<ChildAssessmentResponse>(`/api/children/${childId}/assessments`),
+
+  getChildAnalysisTrends: (childId: string) =>
+    fetchJSON<{
+      child_id: string;
+      child_name: string;
+      trends: Record<string, {
+        session_id: string;
+        date: string | null;
+        rhythm_sync_rate: number | null;
+        freeze_reaction_time: number | null;
+        freeze_stability_score: number | null;
+      }[]>;
+    }>(`/api/children/${childId}/analysis/trends`),
 
   getClassAssessments: (classId: string) =>
     fetchJSON<ClassAssessmentResponse>(`/api/classes/${classId}/assessments`),

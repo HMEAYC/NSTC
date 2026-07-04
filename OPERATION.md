@@ -53,12 +53,16 @@
 │  │       React Dashboard (:5173)                │          │
 │  │                                                │          │
 │  │  ┌──────────┐ ┌──────────┐ ┌────────────────┐ │          │
-│  │  │ LiveView │ │ History  │ │ Assessment     │ │          │
-│  │  │ IMU 6軸  │ │ 課程列表 │ │ 指標總覽        │ │          │
+│  │  │ Templates│ │ Courses  │ │ LiveView       │ │          │
+│  │  │ 教案模板 │ │ 課程管理 │ │ 即時監控       │ │          │
 │  │  └──────────┘ └──────────┘ └────────────────┘ │          │
+│  │  ┌──────────┐ ┌────────────────┐              │          │
+│  │  │ History  │ │ Assessment     │              │          │
+│  │  │ 課程紀錄 │ │ 指標總覽       │              │          │
+│  │  └──────────┘ └────────────────┘              │          │
 │  │  ┌──────────┐ ┌──────────┐                    │          │
-│  │  │ Report   │ │ Devices  │                    │          │
-│  │  │ 報告檢視 │ │ 裝置管理  │                    │          │
+│  │  │ Devices  │ │ Classes  │                    │          │
+│  │  │ 裝置管理 │ │ 班級管理 │                    │          │
 │  │  └──────────┘ └──────────┘                    │          │
 │  └──────────────────────────────────────────────┘          │
 │                                                            │
@@ -257,23 +261,35 @@ CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
 
 | 路徑 | 頁面 | 功能 |
 |------|------|------|
-| `/dashboard/` | 首頁 | 6 張導航卡片 |
+| `/dashboard/` | 首頁 | 導航卡片 + 課程統計 + 最近課程 |
+| `/dashboard/templates` | 教案模板 | 建立可重複使用的課程階段模板 |
+| `/dashboard/courses` | 課程管理 | 排程、開課、管理課程生命週期 |
+| `/dashboard/courses/:id` | 課程詳情 | 檢視課程階段、評估、開始/結束課程 |
+| `/dashboard/courses/:id/report` | 課程報告 | 課程完整 AI 分析報告 |
 | `/dashboard/live/:sessionId` | 即時監控 | IMU 6 軸即時圖表 + WS 連線狀態 |
-| `/dashboard/history` | 歷史課程 | Session 列表，點擊進報告 |
-| `/dashboard/report/:sessionId` | 報告管理 | 教育分析報告 Markdown 檢視 |
+| `/dashboard/history` | 課程紀錄 | Session 列表 |
 | `/dashboard/assessment/:sessionId` | 評估指標 | 即時行為指標運算（IMU/CV） |
-| `/dashboard/devices` | 裝置管理 | 多人裝置註冊 / 學員管理 / 跨模態配對 |
+| `/dashboard/devices` | 裝置管理 | ESP32 腰帶註冊、狀態檢視 |
+| `/dashboard/classes` | 班級管理 | 班級、教師、幼兒資料管理 |
+| `/dashboard/admin/users` | 帳號管理 | 建立與管理教師、家長帳號 |
+| `/dashboard/admin` | 機構管理 | 組織列表（super_admin 專用） |
 
 ### 5.2 首頁（Landing）
 
-![Landing](https://via.placeholder.com/800x400?text=Landing+Page)
+依角色顯示不同區塊：
 
-6 張導航卡：
+**📋 課程教學（教師/管理員）：**
+- **教案模板** — 建立可重複使用的課程階段模板
+- **課程管理** — 排程、開課、管理課程生命週期
 - **即時監控** — 即時 IMU 6 軸圖表
-- **歷史課程** — 課程記錄列表
-- **報告管理** — 教育分析報告
-- **評估指標** — 即時行為指標運算
-- **裝置管理** — 多人裝置/學員管理
+
+**📊 課程紀錄（教師/管理員/家長）：**
+- **課程紀錄** — 瀏覽過去所有課程與分析紀錄
+
+**⚙️ 系統管理（教師/管理員）：**
+- **班級管理** — 管理班級、教師與幼兒資料
+- **裝置管理** — 檢視連線裝置與狀態
+- **帳號管理** — 建立與管理教師、家長帳號（管理員專用）
 
 ### 5.3 即時監控（LiveView）
 
@@ -291,23 +307,23 @@ CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
 2. Dashboard 自動顯示即時資料
 3. 最多保留 200 筆資料點，自動滑動
 
-### 5.4 歷史課程（History）
+### 5.4 課程紀錄（History）
 
 **路徑：** `/dashboard/history`
 
 顯示：
 - 所有 Session 列表（ID、開始時間、狀態）
 - 狀態標籤：completed（綠）/ active（藍）
-- 點擊進入該 Session 的報告頁面
+- 點擊進入該 Session 的單次報告頁面
 
-### 5.5 報告管理（Report）
+### 5.5 課程報告（CourseReport）
 
-**路徑：** `/dashboard/report/:sessionId`
+**路徑：** `/dashboard/courses/:id/report`
 
 顯示：
-- 自動生成的 Markdown 報告
-- 包含：課程資訊、節奏分析結果、Freeze Dance 結果、教育建議
-- 內建 Markdown 渲染（標題/表格/程式碼區塊）
+- 課程級別的整合報告
+- 包含：課程基本資訊、統計摘要（課程次數/IMU 資料量/裝置數）、各次課程列表
+- 各次課程的平均活動量與詳細分析
 
 ### 5.6 評估指標（Assessment）
 
@@ -490,14 +506,8 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 | `POST` | `/api/sessions` | 建立新 Session（body: `course_type`） |
 | `GET` | `/api/sessions/{id}` | 單一 Session 詳情 |
 | `GET` | `/api/sessions/{id}/analysis` | Session 分析結果 |
-| `POST` | `/api/sessions/{id}/report` | 產生報告 |
-| `GET` | `/api/sessions/{id}/report` | 取得報告 |
 
-#### Reports
 
-| Method | Path | 說明 |
-|--------|------|------|
-| `GET` | `/api/reports/{id}` | 單一報告 |
 
 #### 系統設定
 
