@@ -1,9 +1,10 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, type DeviceInfo, type ChildInfo } from "../api/client";
+import { useAuth } from "../auth/context";
+import { api, type DeviceInfo, type ChildAssignmentInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
-type Tab = "devices" | "children" | "assign";
+type Tab = "devices" | "assign";
 
 const statusColor: Record<string, string> = {
   online: "bg-green-500",
@@ -19,21 +20,42 @@ function batteryLevel(v: number | null): { color: string; label: string } {
 
 export default function DeviceManagement() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [tab, setTab] = useState<Tab>("devices");
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
-  const [children, setChildren] = useState<ChildInfo[]>([]);
+  const [children, setChildren] = useState<ChildAssignmentInfo[]>([]);
+  const [classMap, setClassMap] = useState<Record<string, string>>({});
+  const [editChild, setEditChild] = useState<ChildAssignmentInfo | null>(null);
+  const [showEditModal, setShowEditModal] = useState(false);
+  const [assignDeviceId, setAssignDeviceId] = useState("");
+  const [saving, setSaving] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [showRegisterChild, setShowRegisterChild] = useState(false);
-  const [childForm, setChildForm] = useState({ name: "", student_id: "", notes: "" });
+
+  useEffect(() => {
+    if (!showEditModal) return;
+    const handler = (e: KeyboardEvent) => { if (e.key === "Escape") setShowEditModal(false); };
+    window.addEventListener("keydown", handler);
+    return () => window.removeEventListener("keydown", handler);
+  }, [showEditModal]);
 
   const fetchData = () => {
     setLoading(true);
     setError(null);
-    Promise.all([api.listDevices(), api.listChildren()])
-      .then(([d, c]) => {
+    const token = localStorage.getItem("hmeayc_token");
+    const orgId = user?.org_id;
+    const headers: Record<string, string> = {};
+    if (token) headers["Authorization"] = `Bearer ${token}`;
+    const classPromise = orgId
+      ? fetch(`/api/orgs/${orgId}/classes`, { headers }).then(r => r.ok ? r.json() : { classes: [] })
+      : Promise.resolve({ classes: [] });
+    Promise.all([api.listDevices(), api.listChildAssignments(), classPromise])
+      .then(([d, c, cls]) => {
         setDevices(d.devices);
         setChildren(c.children);
+        const map: Record<string, string> = {};
+        (cls.classes || []).forEach((cl: any) => { map[cl.id] = cl.name; });
+        setClassMap(map);
         setLoading(false);
       })
       .catch((err) => {
@@ -44,23 +66,7 @@ export default function DeviceManagement() {
 
   useEffect(() => {
     fetchData();
-  }, []);
-
-  const handleRegisterChild = async () => {
-    if (!childForm.name.trim()) return;
-    try {
-      await api.registerChild(
-        childForm.name.trim(),
-        childForm.student_id.trim() || undefined,
-        childForm.notes.trim() || undefined,
-      );
-      setChildForm({ name: "", student_id: "", notes: "" });
-      setShowRegisterChild(false);
-      fetchData();
-    } catch {
-      // ignore
-    }
-  };
+  }, [user?.org_id]);
 
   const onlineCount = devices.filter((d) => d.status === "online").length;
 
@@ -69,15 +75,10 @@ export default function DeviceManagement() {
       {/* Header */}
       <div className="flex items-center justify-between flex-wrap gap-3">
         <div>
-          <h1 className="text-2xl font-bold text-gray-800">📡 裝置與學員管理</h1>
+              <h1 className="text-2xl font-bold text-gray-800">📡 裝置與跨模態配對</h1>
           <p className="text-sm text-gray-500">多人系統裝置管理與跨模態配對（FFT 相位匹配）</p>
         </div>
-        <button
-          onClick={fetchData}
-          className="text-xs text-blue-600 hover:underline"
-        >
-          重新整理
-        </button>
+        <button onClick={fetchData} className="text-xs text-blue-600 hover:underline">重新整理</button>
       </div>
 
       {/* Overview Cards */}
@@ -107,8 +108,7 @@ export default function DeviceManagement() {
       <div className="flex gap-1 bg-white rounded-xl shadow-sm p-1">
         {[
           { key: "devices" as Tab, label: `📡 裝置 (${devices.length})` },
-          { key: "children" as Tab, label: `👤 學員 (${children.length})` },
-          { key: "assign" as Tab, label: "🔗 跨模態配對機制" },
+          { key: "assign" as Tab, label: `🔗 跨模態配對 (${children.length} 學員)` },
         ].map((t) => (
           <button
             key={t.key}
@@ -146,7 +146,8 @@ export default function DeviceManagement() {
               return (
                 <div
                   key={d.id}
-                  className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md transition-shadow"
+                  onClick={() => d.status === "online" && navigate(`/dashboard/live/default?device=${d.device_id}`)}
+                  className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="flex items-center gap-3 min-w-0">
                     <span className={`w-3 h-3 rounded-full flex-shrink-0 ${statusColor[d.status] || "bg-gray-400"}`} />
@@ -178,16 +179,16 @@ export default function DeviceManagement() {
                       </div>
                       <div className="text-gray-400">最後上線</div>
                     </div>
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        navigate(`/dashboard/live/default?device=${d.device_id}`);
-                      }}
-                      disabled={d.status !== "online"}
-                      className="text-xs px-2 py-1 rounded bg-blue-50 text-blue-600 hover:bg-blue-100 transition-colors disabled:opacity-30 disabled:cursor-not-allowed"
-                    >
-                      監控
-                    </button>
+                    <div className="flex items-center gap-1">
+                      <a href="/dashboard/firmware"
+                        className="text-xs px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 hover:bg-gray-100">
+                        韌體
+                      </a>
+                      <a href="/dashboard/wifi"
+                        className="text-xs px-1.5 py-0.5 rounded bg-gray-50 text-gray-500 hover:bg-gray-100">
+                        WiFi
+                      </a>
+                    </div>
                     <span className={`text-xs px-2 py-0.5 rounded-full font-medium ${
                       d.status === "online"
                         ? "bg-green-100 text-green-700"
@@ -203,87 +204,52 @@ export default function DeviceManagement() {
         </div>
       )}
 
-      {/* Tab: Children */}
-      {!loading && !error && tab === "children" && (
-        <div className="space-y-3">
-          <div className="flex justify-end">
-            <button
-              onClick={() => setShowRegisterChild(!showRegisterChild)}
-              className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700 transition-colors"
-            >
-              {showRegisterChild ? "取消" : "+ 註冊學員"}
-            </button>
-          </div>
-
-          {showRegisterChild && (
-            <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-              <input
-                value={childForm.name}
-                onChange={(e) => setChildForm((p) => ({ ...p, name: e.target.value }))}
-                placeholder="姓名 *"
-                className="w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-              <input
-                value={childForm.student_id}
-                onChange={(e) => setChildForm((p) => ({ ...p, student_id: e.target.value }))}
-                placeholder="學號 (選填)"
-                className="w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-              <input
-                value={childForm.notes}
-                onChange={(e) => setChildForm((p) => ({ ...p, notes: e.target.value }))}
-                placeholder="備註 (選填)"
-                className="w-full text-sm border rounded-lg px-3 py-2 focus:outline-none focus:ring-2 focus:ring-blue-300"
-              />
-              <button
-                onClick={handleRegisterChild}
-                disabled={!childForm.name.trim()}
-                className="text-sm bg-green-600 text-white px-4 py-1.5 rounded-lg hover:bg-green-700 transition-colors disabled:opacity-50"
-              >
-                確認註冊
-              </button>
-            </div>
-          )}
-
-          {children.length === 0 && !showRegisterChild ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center">
-              <p className="text-gray-400 text-sm">尚無學員資料</p>
-            </div>
-          ) : (
-            children.map((c) => (
-              <div
-                key={c.id}
-                className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md transition-shadow"
-              >
-                <div>
-                  <div className="text-sm font-semibold text-gray-800">{c.name}</div>
-                  {c.student_id && (
-                    <div className="text-xs text-gray-400 font-mono">{c.student_id}</div>
-                  )}
-                  {c.notes && (
-                    <div className="text-xs text-gray-400 mt-0.5">{c.notes}</div>
-                  )}
-                </div>
-                <div className="text-xs text-gray-400">
-                  {c.created_at
-                    ? new Date(c.created_at).toLocaleDateString("zh-TW")
-                    : ""}
-                </div>
-              </div>
-            ))
-          )}
-        </div>
-      )}
-
       {/* Tab: Assignment Mechanism */}
       {!loading && !error && tab === "assign" && (
         <div className="space-y-4">
+          <div className="bg-white rounded-xl shadow-sm p-4">
+            <div className="mb-3">
+              <h3 className="text-sm font-semibold text-gray-700">👤 可配對學員清冊</h3>
+            </div>
+            {children.length === 0 ? (
+              <div className="text-center text-gray-400 text-sm py-6">尚無可配對學員</div>
+            ) : (
+              <div className="space-y-1">
+                {children.map((c) => (
+                  <div
+                    key={c.id}
+                    onClick={() => { setEditChild(c); setAssignDeviceId(c.device_id || ""); setShowEditModal(true); }}
+                    className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-gray-50 cursor-pointer"
+                  >
+                    <div className="flex items-center gap-2 min-w-0">
+                      <div className="min-w-0">
+                        <div className="text-sm font-medium text-gray-800">{c.name}</div>
+                        <div className="text-xs text-gray-400 truncate">
+                          {c.class_id && classMap[c.class_id] ? classMap[c.class_id] : c.student_id || ""}
+                        </div>
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 text-xs">
+                      {c.device_name ? (
+                        <span className="bg-blue-50 text-blue-600 px-2 py-0.5 rounded-full">
+                          📡 {c.device_name}
+                        </span>
+                      ) : (
+                        <span className="text-gray-300">未配對</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Mechanism info */}
           <div className="bg-white rounded-xl shadow-sm p-6">
             <h2 className="text-lg font-bold text-gray-800 mb-2">🔗 跨模態裝置配對機制</h2>
             <p className="text-sm text-gray-500 mb-4">
               根據 HMEAYC 論文提出的 N² 候選自校準 FFT 相位匹配演算法，自動將 IMU 腰帶訊號與攝影機姿態估計訊號進行配對。
             </p>
-
             <div className="grid grid-cols-1 md:grid-cols-3 gap-4 text-sm">
               <div className="bg-blue-50 rounded-lg p-3">
                 <div className="font-semibold text-blue-700 mb-1">📡 IMU 腰帶訊號</div>
@@ -363,6 +329,87 @@ export default function DeviceManagement() {
                   ))}
                 </tbody>
               </table>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Edit Assignment Modal */}
+      {showEditModal && editChild && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-sm mx-4">
+            <h3 className="text-sm font-semibold text-gray-800 mb-3">
+              配對設定：{editChild.name}
+            </h3>
+            <label className="text-xs text-gray-500 block mb-1">配對裝置</label>
+            {(() => {
+              const occupiedDeviceIds = new Set(
+                children
+                  .filter(c => c.id !== editChild.id && c.device_id)
+                  .map(c => c.device_id!)
+              );
+              const availableDevices = devices.filter(d => !occupiedDeviceIds.has(d.id));
+              return (
+                <select
+                  value={assignDeviceId}
+                  onChange={(e) => setAssignDeviceId(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm mb-4"
+                >
+                  <option value="">-- 請選擇裝置 --</option>
+                  {availableDevices.map((d) => (
+                    <option key={d.id} value={d.id}>
+                      {d.name} ({d.status === "online" ? "連線中" : "離線"})
+                    </option>
+                  ))}
+                </select>
+              );
+            })()}
+            <div className="flex gap-2 justify-end">
+              <button
+                onClick={async () => {
+                  if (!editChild.assignment_id) return;
+                  if (!confirm("確定取消配對？")) return;
+                  setSaving(true);
+                  try {
+                    await api.deleteAssignment(editChild.assignment_id);
+                    setShowEditModal(false);
+                    fetchData();
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : "刪除失敗");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={!editChild.assignment_id || saving}
+                className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50 disabled:opacity-40"
+              >
+                取消配對
+              </button>
+              <button
+                onClick={async () => {
+                  if (!assignDeviceId) return;
+                  setSaving(true);
+                  try {
+                    await api.assignChildDevice(editChild.id, assignDeviceId);
+                    setShowEditModal(false);
+                    fetchData();
+                  } catch (err) {
+                    alert(err instanceof Error ? err.message : "配對失敗");
+                  } finally {
+                    setSaving(false);
+                  }
+                }}
+                disabled={!assignDeviceId || saving}
+                className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-40"
+              >
+                {saving ? "儲存中…" : "儲存配對"}
+              </button>
+              <button
+                onClick={() => setShowEditModal(false)}
+                className="text-xs px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100"
+              >
+                取消
+              </button>
             </div>
           </div>
         </div>
