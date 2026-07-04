@@ -978,6 +978,42 @@ erDiagram
 
 Unique: `(session_id, device_id)` — 同一課程中裝置不重複配對
 
+### 8.3 課程管理資料流
+
+```
+建立課程 (draft)
+  │
+  ├─ 選擇班級 + 教案模板
+  │   課程名稱自動產生：{日期} {班級} {模板名稱}
+  │
+  ├─ 開始上課 → 課程狀態 active
+  │   └─ 自動建立 Session（course_id, template_id, status=active）
+  │       └─ 顯示「裝置配對」區塊
+  │           └─ 每個學童配對一個 ESP32 腰帶（POST /api/sessions/{id}/assign）
+  │
+  ├─ 即時串流期間
+  │   ├─ ESP32 腰帶以 50Hz WebSocket 上傳 IMU
+  │   ├─ LiveView 即時圖表監控
+  │   ├─ 活動進度追蹤（PUT /api/sessions/{id}/activity）
+  │   └─ 評估指標計算（POST /api/sessions/{id}/assessments/compute）
+  │
+  ├─ 結束課程 → 課程狀態 completed
+  │   └─ 自動結束該課程所有 active Session
+  │       ├─ 裝置配對區塊隱藏
+  │       └─ 顯示「學生評分」區塊
+  │           └─ 教師對每個學童打分數 + 評語
+  │
+  └─ 查看報告
+      ├─ 課程報告（sessions 彙整 + 評分）
+      └─ 跨 session 趨勢（逐音樂元素彙整分析結果）
+```
+
+**Session 的生命週期：**
+- Session 由「開始上課」自動建立，由「結束課程」自動關閉
+- 一個課程可以有多個 Session（同一天有多段活動）
+- DeviceAssignment 綁定在 Session 層級（一個裝置在同一 Session 只配對一個學童）
+- AnalysisResult 可跨 Session 依 music_element 分組追蹤趨勢
+
 **IMUData：**
 
 | Column | Type | Constraints | Description |
@@ -1623,7 +1659,21 @@ HMEAYC/
 | 韌體 | `Kconfig.projbuild` — WS_URI/OTA_BASE_URL 改為 `192.168.1.105` | 預設 IP 指向 ESP32 AP 非伺服器 |
 | 韌體 | `sdkconfig.defaults` — 加入 `HMEAYC_FIRMWARE_VERSION` | 明確指定版本號 |
 
-詳細 diff 請參考 git 記錄。
+### 12.4 2026-07-04 課程管理 + 裝置配對整合
+
+| 類別 | 變更 | 原因 |
+|------|------|------|
+| 後端 | `courses.py` — start_course 自動建立 active Session | 課程開始時自動產生串流記錄區間 |
+| 後端 | `courses.py` — end_course 自動結束所有 active Sessions | 課程結束時自動關閉串流 |
+| 後端 | `courses.py` — get_course 回傳 `active_session_id` | 前端需要知道當前的 Session ID 以進行配對 |
+| 前端 | `CourseDetail.tsx` — 新增「裝置配對」區塊（active 狀態顯示） | 老師在課程頁面直接配對腰帶給學童 |
+| 前端 | `Courses.tsx` — 課程名稱自動產生（日期 + 班級 + 模板） | 減少手動輸入 |
+| 前端 | `client.ts` — 新增 `getClassChildren`, `getSessionAssignments`, `assignSessionDevice` API | 支援裝置配對 UI |
+| DB   | `sessions` 加 `template_id`, `current_activity_index` | ORM 模型與 DB schema 同步 |
+| DB   | `course_templates` 加 `music_element` | 支援依音樂元素分組趨勢分析 |
+| DB   | `analysis_results` 加 `type`, `result`, `music_element` | 支援依音樂元素分組趨勢分析 |
+
+> **注意：** 以上 DB 欄位使用 `ALTER TABLE` 手動添加（無 Alembic migration script），正式部署時需補上 migration。
 
 ---
 
