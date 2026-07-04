@@ -329,6 +329,12 @@ def get_course(
         .all()
     )
     result["sessions"] = [_serialize_session(s) for s in sessions]
+    # Expose the active session id for device assignment
+    active = db.query(Session).filter(
+        Session.course_id == course_id,
+        Session.status == "active",
+    ).first()
+    result["active_session_id"] = active.id if active else None
 
     return {"course": result}
 
@@ -408,9 +414,24 @@ def start_course(
 
     course.status = "active"
     course.started_at = datetime.utcnow()
+
+    # Auto-create an active session for the course
+    session = Session(
+        course_id=course_id,
+        template_id=course.template_id,
+        org_id=org_id,
+        course_type="march",
+        title=f"{course.name} - session",
+        status="active",
+        start_time=datetime.utcnow(),
+    )
+    db.add(session)
     db.commit()
     db.refresh(course)
-    return {"course": _serialize_course(course)}
+    db.refresh(session)
+    result = _serialize_course(course)
+    result["active_session_id"] = session.id
+    return {"course": result}
 
 
 @router.post("/api/courses/{course_id}/end")
@@ -429,8 +450,17 @@ def end_course(
     if course.status != "active":
         raise HTTPException(400, "Only active courses can be ended")
 
+    # End all active sessions for this course
+    now = datetime.utcnow()
+    for s in db.query(Session).filter(
+        Session.course_id == course_id,
+        Session.status == "active",
+    ).all():
+        s.status = "completed"
+        s.end_time = now
+
     course.status = "completed"
-    course.ended_at = datetime.utcnow()
+    course.ended_at = now
     db.commit()
     db.refresh(course)
     return {"course": _serialize_course(course)}

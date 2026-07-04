@@ -1,7 +1,7 @@
-import { useEffect, useState } from "react";
+import { useEffect, useState, useCallback } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../auth/context";
-import { api, type CourseDetailInfo } from "../api/client";
+import { api, type CourseDetailInfo, type DeviceInfo, type ChildInfo, type AssignmentInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -26,6 +26,12 @@ export default function CourseDetail() {
   const [error, setError] = useState<string | null>(null);
   const [actionLoading, setActionLoading] = useState(false);
 
+  // Device assignment state
+  const [devices, setDevices] = useState<DeviceInfo[]>([]);
+  const [classChildren, setClassChildren] = useState<ChildInfo[]>([]);
+  const [assignments, setAssignments] = useState<AssignmentInfo[]>([]);
+  const [assigningDev, setAssigningDev] = useState<string | null>(null);
+
   // Evaluation state
   const [evaluations, setEvaluations] = useState<{ child_id: string; child_name: string; score: number | null; comment: string | null }[]>([]);
   const [evalLoaded, setEvalLoaded] = useState(false);
@@ -35,7 +41,7 @@ export default function CourseDetail() {
   const canControl = canEdit || user?.role === "teacher";
   const isCompleted = course?.status === "completed";
 
-  const fetchCourse = async () => {
+  const fetchData = useCallback(async () => {
     if (!id) return;
     setLoading(true);
     setError(null);
@@ -44,24 +50,55 @@ export default function CourseDetail() {
         api.getCourse(id),
         api.getCourseEvaluations(id).catch(() => ({ evaluations: [] })),
       ]);
-      setCourse(courseRes.course);
+      const c = courseRes.course;
+      setCourse(c);
       setEvaluations(evalRes.evaluations);
       setEvalLoaded(true);
+
+      // Also fetch device assignment data when course is active
+      if (c.status === "active") {
+        const [devRes, assignRes] = await Promise.all([
+          api.listDevices().catch(() => ({ devices: [] })),
+          c.active_session_id
+            ? api.getSessionAssignments(c.active_session_id).catch(() => ({ assignments: [] }))
+            : Promise.resolve({ assignments: [] }),
+        ]);
+        setDevices(devRes.devices);
+        setAssignments(assignRes.assignments);
+      }
+
+      // Fetch children from class (for device assignment)
+      if (c.class_id) {
+        const { children } = await api.getClassChildren(c.class_id).catch(() => ({ children: [] }));
+        setClassChildren(children);
+      }
     } catch (e) {
       setError(e instanceof Error ? e.message : "載入失敗");
     } finally {
       setLoading(false);
     }
-  };
+  }, [id]);
 
-  useEffect(() => { fetchCourse(); }, [id]);
+  useEffect(() => { fetchData(); }, [fetchData]);
+
+  const handleAssignDevice = async (childId: string, deviceId: string) => {
+    if (!course?.active_session_id) return;
+    setAssigningDev(childId);
+    try {
+      await api.assignSessionDevice(course.active_session_id, deviceId, childId);
+      const { assignments } = await api.getSessionAssignments(course.active_session_id);
+      setAssignments(assignments);
+    } catch { /* ignore */ } finally {
+      setAssigningDev(null);
+    }
+  };
 
   const handleStart = async () => {
     if (!id) return;
     setActionLoading(true);
     try {
       await api.startCourse(id);
-      await fetchCourse();
+      await fetchData();
     } catch { /* ignore */ } finally {
       setActionLoading(false);
     }
@@ -72,7 +109,7 @@ export default function CourseDetail() {
     setActionLoading(true);
     try {
       await api.endCourse(id);
-      await fetchCourse();
+      await fetchData();
     } catch { /* ignore */ } finally {
       setActionLoading(false);
     }
@@ -181,6 +218,71 @@ export default function CourseDetail() {
           </div>
         )}
       </div>
+
+      {/* Device Assignment (active course only) */}
+      {isActive && course.active_session_id && (
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-800 mb-4">裝置配對</h2>
+          {classChildren.length === 0 ? (
+            <div className="text-center text-gray-400 text-sm py-4">課程沒有關聯班級，無法配對裝置</div>
+          ) : (
+            <table className="w-full text-xs text-gray-600">
+              <thead>
+                <tr className="border-b text-left">
+                  <th className="pb-2 font-medium">學童</th>
+                  <th className="pb-2 font-medium">裝置</th>
+                  <th className="pb-2 font-medium w-16">操作</th>
+                </tr>
+              </thead>
+              <tbody>
+                {classChildren.map((child) => {
+                  const curr = assignments.find((a) => a.child_id === child.id);
+                  const occupiedDeviceIds = new Set(
+                    assignments.filter((a) => a.child_id !== child.id).map((a) => a.device_id),
+                  );
+                  return (
+                    <tr key={child.id} className="border-b last:border-0">
+                      <td className="py-2 font-medium">{child.name}</td>
+                      <td className="py-2">
+                        <select
+                          value={curr?.device_id ?? ""}
+                          onChange={(e) => handleAssignDevice(child.id, e.target.value)}
+                          disabled={assigningDev === child.id}
+                          className="border rounded-lg px-2 py-1 text-xs bg-white w-full"
+                        >
+                          <option value="">-- 未配對 --</option>
+                          {devices
+                            .filter((d) => d.id === curr?.device_id || !occupiedDeviceIds.has(d.id))
+                            .map((d) => (
+                              <option key={d.id} value={d.id}>{d.name}</option>
+                            ))}
+                        </select>
+                      </td>
+                      <td className="py-2">
+                        {curr && (
+                          <button
+                            onClick={async () => {
+                              if (!course?.active_session_id) return;
+                              try {
+                                await api.deleteAssignment(curr.id);
+                                const { assignments: updated } = await api.getSessionAssignments(course.active_session_id!);
+                                setAssignments(updated);
+                              } catch { /* ignore */ }
+                            }}
+                            className="text-red-500 hover:underline"
+                          >
+                            解除
+                          </button>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          )}
+        </div>
+      )}
 
       {/* Sessions List */}
       <div className="bg-white rounded-xl shadow-sm p-6">

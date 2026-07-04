@@ -21,7 +21,7 @@ export default function Courses() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ name: "", class_id: "", template_id: "", scheduled_at: "", description: "" });
+  const [form, setForm] = useState({ class_id: "", template_id: "", scheduled_at: "", description: "" });
 
   const fetchData = async () => {
     setLoading(true);
@@ -49,16 +49,20 @@ export default function Courses() {
   useEffect(() => { fetchData(); }, [user?.org_id]);
 
   const handleCreate = async () => {
-    if (!form.name.trim()) return;
+    if (!form.template_id) return;
+    const dateStr = new Date().toLocaleDateString("zh-TW");
+    const className = classList.find((c) => c.id === form.class_id)?.name || "";
+    const tplName = templates.find((t) => t.id === form.template_id)?.name || "";
+    const name = [dateStr, className, tplName].filter(Boolean).join(" ");
     try {
       await api.createCourse({
-        name: form.name,
+        name,
         class_id: form.class_id || undefined,
         template_id: form.template_id || undefined,
         scheduled_at: form.scheduled_at || undefined,
         description: form.description || undefined,
       });
-      setForm({ name: "", class_id: "", template_id: "", scheduled_at: "", description: "" });
+      setForm({ class_id: "", template_id: "", scheduled_at: "", description: "" });
       setShowCreate(false);
       fetchData();
     } catch { /* ignore */ }
@@ -80,23 +84,27 @@ export default function Courses() {
 
       {showCreate && (
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
-            placeholder="課程名稱" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
-            placeholder="描述（選填）" className="w-full border rounded-lg px-3 py-2 text-sm" />
+          <div className="text-xs text-gray-500">
+            課程名稱將自動產生：<span className="font-mono text-gray-700">
+              {new Date().toLocaleDateString("zh-TW")} {classList.find((c) => c.id === form.class_id)?.name || ""} {templates.find((t) => t.id === form.template_id)?.name || ""}
+            </span>
+          </div>
+          <select value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}
+            className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+            <option value="">選擇教案模板 *</option>
+            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
+          </select>
           <select value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">選擇班級（選填）</option>
             {classList.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
-          <select value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
-            <option value="">選擇教案模板（選填）</option>
-            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+          <input value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })}
+            placeholder="描述（選填）" className="w-full border rounded-lg px-3 py-2 text-sm" />
           <input type="datetime-local" value={form.scheduled_at} onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-sm" />
-          <button onClick={handleCreate} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm">建立</button>
+          <button onClick={handleCreate} disabled={!form.template_id}
+            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm disabled:opacity-50">建立</button>
         </div>
       )}
 

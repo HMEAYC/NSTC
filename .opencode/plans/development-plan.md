@@ -52,6 +52,9 @@
 | 身分辨識與追蹤 | 跨影片長期累積個別幼兒發展軌跡 |
 | AI 教育報告 | Gemini / OpenAI 自動生成教學建議 |
 | Dashboard 視覺化 | 即時圖表 + 歷史查詢 + 報告預覽 |
+| **課程管理** | 教案模板 CRUD、課程排程、開始/結束、活動進度追蹤 |
+| **裝置配對整合** | 課程進行中在課程頁面直接配對裝置給學童，綁定 session |
+| **跨 session 趨勢** | 逐音樂元素彙整分析結果，提供幼兒長期發展趨勢圖 |
 
 ---
 
@@ -152,9 +155,12 @@ HMEAYC/
 │       ├── timecode.py          # 時間碼工具
 │       ├── viz.py               # 圖表繪製
 │       ├── api/                 # REST + WebSocket
-│       │   ├── video_analysis.py    # 影片分析 API
-│       │   ├── sessions.py      # Session API
-│       │   └── ws.py            # IMU WebSocket
+│   │   ├── video_analysis.py    # 影片分析 API
+│   │   ├── sessions.py      # Session API（含活動進度 + 評估計算）
+│   │   ├── courses.py       # 課程 CRUD + 開始/結束自動管理 session
+│   │   ├── devices.py       # 裝置/學員管理 + session 配對
+│   │   ├── admin.py         # 班級 & 學童管理
+│   │   └── ws.py            # IMU WebSocket
 │       ├── analysis/            # 分析引擎
 │       │   ├── macro.py         # 巨觀分析
 │       │   ├── micro.py         # 微觀分析
@@ -459,7 +465,10 @@ backend/app/
 │   │                       # GET /api/analyze/tasks/{id}
 │   │                       # GET /api/analyze/tasks
 │   │                       # POST /api/analyze/tasks/{id}/cancel
-│   ├── sessions.py         # Session CRUD API
+│   ├── sessions.py         # Session CRUD API + 活動進度 + 評估計算 + 趨勢
+│   ├── courses.py          # 課程 CRUD + 開始/結束 + 班級評分
+│   ├── devices.py          # 裝置註冊 + 學員管理 + session 配對
+│   ├── admin.py            # 班級管理 + 登入驗證
 │   └── ws.py               # WebSocket /ws (IMU 即時流)
 │
 ├── analysis/
@@ -559,11 +568,15 @@ dashboard/src/
 │
 ├── pages/
 │   ├── Landing.tsx              # 首頁導航（6 張卡片）
-│   ├── LiveView.tsx             # 即時 IMU 曲線（Recharts）
+│   ├── LiveView.tsx             # 即時 IMU 曲線（Recharts）+ 活動進度追蹤
 │   ├── History.tsx              # 歷史 Session 列表 + 查詢
 │   ├── Report.tsx               # 報告 Markdown/PDF 預覽
 │   ├── AssessmentIndicators.tsx # 評估指標總覽（IMU/CV 即時運算）
-│   └── DeviceManagement.tsx     # 裝置/學員管理與跨模態配對
+│   ├── DeviceManagement.tsx     # 裝置/學員管理與跨模態配對
+│   ├── Courses.tsx              # 課程列表 + 建立（自動命名）
+│   ├── CourseDetail.tsx         # 課程詳情 + 開始/結束 + 裝置配對 + 評分
+│   ├── ChildAssessments.tsx     # 幼兒跨 session 分析趨勢圖
+│   └── Login.tsx                # 登入頁
 │
 ├── hooks/
 │   ├── useWebSocket.ts     # WS 連線管理 + 自動重連
@@ -585,11 +598,15 @@ dashboard/src/
 | 路徑 | 頁面 | 說明 |
 |------|------|------|
 | `/dashboard/` | Landing | 首頁導航 |
-| `/dashboard/live/:sessionId` | LiveView | 即時 IMU 儀表板 |
+| `/dashboard/live/:sessionId` | LiveView | 即時 IMU 儀表板 + 活動進度 |
 | `/dashboard/history` | History | 歷史 Session 列表 |
 | `/dashboard/report/:sessionId` | Report | 單筆報告檢視 |
 | `/dashboard/assessment/:sessionId` | AssessmentIndicators | 評估指標總覽 |
 | `/dashboard/devices` | DeviceManagement | 裝置與學員管理 |
+| `/dashboard/courses` | Courses | 課程列表 + 建立 |
+| `/dashboard/courses/:id` | CourseDetail | 課程詳情 + 開始/結束 + 裝置配對 + 評分 |
+| `/dashboard/courses/:id/report` | Report | 課程報告 |
+| `/dashboard/children/:id/assessments` | ChildAssessments | 幼兒跨 session 分析趨勢 |
 
 ### 6.4 WebSocket Hook 設計
 
@@ -632,7 +649,31 @@ dashboard/src/
 | `POST` | `/api/children` | 註冊學員 | — |
 | `GET` | `/api/sessions/{id}/assignments` | 查詢配對結果 | — |
 | `POST` | `/api/sessions/{id}/assign` | 執行裝置-學員配對 | — |
+| `DELETE` | `/api/assignments/{id}` | 刪除配對 | — |
+| `PUT` | `/api/children/{id}/assign` | 手動指定學員裝置（auto session） | — |
 | `DELETE` | `/api/sessions/{id}` | 刪除 Session | `X-API-Key` |
+| `GET` | `/api/templates` | 教案模板列表 | — |
+| `POST` | `/api/templates` | 新增模板 | — |
+| `GET` | `/api/templates/{id}` | 模板詳情 | — |
+| `PUT` | `/api/templates/{id}` | 更新模板 | — |
+| `DELETE` | `/api/templates/{id}` | 刪除模板 | — |
+| `GET` | `/api/courses` | 課程列表 | — |
+| `POST` | `/api/courses` | 建立課程 | — |
+| `GET` | `/api/courses/{id}` | 課程詳情（含 session、active_session_id） | — |
+| `PUT` | `/api/courses/{id}` | 更新課程 | — |
+| `DELETE` | `/api/courses/{id}` | 刪除課程 | — |
+| `POST` | `/api/courses/{id}/start` | 開始上課（自動建立 session） | teacher+ |
+| `POST` | `/api/courses/{id}/end` | 結束課程（自動結束 session） | teacher+ |
+| `GET` | `/api/courses/{id}/sessions` | 課程的 session 列表 | — |
+| `GET` | `/api/courses/{id}/evaluations` | 課程評分列表 | teacher+ |
+| `PUT` | `/api/courses/{id}/evaluations/{childId}` | 儲存學童評分 | teacher+ |
+| `GET` | `/api/courses/{id}/report` | 課程報告 | — |
+| `PUT` | `/api/sessions/{id}/activity` | 更新活動進度 | teacher+ |
+| `GET` | `/api/classes/{id}/children` | 班級學童列表 | teacher+ |
+| `GET` | `/api/children/{id}/assessments` | 幼兒跨 session 評估 | — |
+| `GET` | `/api/children/{id}/analysis/trends` | 幼兒分析趨勢（逐音樂元素） | — |
+| `GET` | `/api/classes/{id}/assessments` | 班級評估彙整 | — |
+| `POST` | `/api/sessions/{id}/assessments/compute` | 計算 session 評估指標 | — |
 
 ### 7.2 WebSocket 協定（`/ws`）
 
@@ -702,6 +743,51 @@ erDiagram
         timestamp start_time
         timestamp end_time
         jsonb child_info
+        text course_id FK
+        text template_id FK
+        int current_activity_index
+        text title
+        text org_id FK
+        text teacher_id FK
+    }
+
+    Course {
+        uuid id PK
+        text name
+        text description
+        text class_id FK
+        text template_id FK
+        text status
+        timestamp scheduled_at
+        timestamp started_at
+        timestamp ended_at
+        text org_id FK
+    }
+
+    CourseTemplate {
+        uuid id PK
+        text name
+        text description
+        int duration_minutes
+        jsonb stages
+        jsonb metrics_config
+        text music_element
+        text org_id FK
+    }
+
+    SchoolClass {
+        uuid id PK
+        text name
+        text org_id FK
+    }
+
+    CourseEvaluation {
+        uuid id PK
+        uuid course_id FK
+        uuid child_id FK
+        float score
+        text comment
+        text org_id FK
     }
 
     Device {
@@ -713,6 +799,7 @@ erDiagram
         text status
         timestamp last_seen
         timestamp created_at
+        text org_id FK
     }
 
     Child {
@@ -721,6 +808,8 @@ erDiagram
         text student_id UK
         text notes
         timestamp created_at
+        text class_id FK
+        text org_id FK
     }
 
     DeviceAssignment {
@@ -751,6 +840,10 @@ erDiagram
         timestamp created_at
         text type
         jsonb result
+        text music_element
+        float rhythm_sync_rate
+        float freeze_reaction_time
+        float freeze_stability_score
     }
 
     Report {
@@ -766,11 +859,67 @@ erDiagram
     Session ||--o{ AnalysisResult : has
     Session ||--o{ Report : has
     Session ||--o{ DeviceAssignment : has
+    Session }o--|| Course : belongs_to
+    Session }o--|| CourseTemplate : references
     Device ||--o{ DeviceAssignment : assigned_to
     Child ||--o{ DeviceAssignment : identified_as
+    SchoolClass ||--o{ Child : contains
+    SchoolClass ||--o{ Course : schedules
+    Course ||--o{ CourseEvaluation : has
+    CourseTemplate ||--o{ Course : templated_from
 ```
 
 ### 8.2 Table 定義
+
+**Course：**
+
+| Column | Type | Constraints | Description |
+|--------|------|------------|-------------|
+| id | VARCHAR(36) | PK | UUID |
+| org_id | VARCHAR(36) | FK→orgs.id | 所屬組織 |
+| class_id | VARCHAR(36) | FK→classes.id | 關聯班級 |
+| template_id | VARCHAR(36) | FK→course_templates.id | 關聯教案模板 |
+| name | VARCHAR(200) | NOT NULL | 課程名稱（自動產生） |
+| description | TEXT | — | 描述 |
+| status | VARCHAR(20) | default 'draft' | draft/scheduled/active/completed/cancelled |
+| scheduled_at | TIMESTAMPTZ | — | 排程時間 |
+| started_at | TIMESTAMPTZ | — | 實際開始時間 |
+| ended_at | TIMESTAMPTZ | — | 實際結束時間 |
+| created_at | TIMESTAMPTZ | default now() | 建立時間 |
+
+**CourseTemplate：**
+
+| Column | Type | Constraints | Description |
+|--------|------|------------|-------------|
+| id | VARCHAR(36) | PK | UUID |
+| org_id | VARCHAR(36) | FK→orgs.id | 所屬組織 |
+| name | VARCHAR(200) | NOT NULL | 模板名稱 |
+| description | TEXT | — | 描述 |
+| duration_minutes | INTEGER | — | 預計分鐘數 |
+| stages | JSONB | — | 活動階段陣列 `[{name, duration, type, ...}]` |
+| metrics_config | JSONB | — | 指標開關設定 |
+| music_element | VARCHAR(100) | — | 音樂元素（節奏/拍子/走停等） |
+| created_at | TIMESTAMPTZ | default now() | 建立時間 |
+
+**SchoolClass：**
+
+| Column | Type | Constraints | Description |
+|--------|------|------------|-------------|
+| id | VARCHAR(36) | PK | UUID |
+| org_id | VARCHAR(36) | FK→orgs.id | 所屬組織 |
+| name | VARCHAR(200) | NOT NULL | 班級名稱 |
+| created_at | TIMESTAMPTZ | default now() | 建立時間 |
+
+**CourseEvaluation：**
+
+| Column | Type | Constraints | Description |
+|--------|------|------------|-------------|
+| id | VARCHAR(36) | PK | UUID |
+| course_id | VARCHAR(36) | FK→courses.id | 所屬課程 |
+| child_id | VARCHAR(36) | FK→children.id | 學童 |
+| score | FLOAT | — | 評分 0-100 |
+| comment | TEXT | — | 評語 |
+| org_id | VARCHAR(36) | FK→orgs.id | 所屬組織 |
 
 **Session：**
 
@@ -782,6 +931,12 @@ erDiagram
 | status | ENUM | default 'active' | active / completed |
 | start_time | TIMESTAMPTZ | default now() | 開始時間 |
 | end_time | TIMESTAMPTZ | — | 結束時間 |
+| course_id | VARCHAR(36) | FK→courses.id | 所屬課程（開始上課時自動建立） |
+| template_id | VARCHAR(36) | FK→course_templates.id | 關聯教案模板 |
+| current_activity_index | INTEGER | default 0 | 當前活動進度索引 |
+| title | VARCHAR(200) | — | 標題 |
+| teacher_id | VARCHAR(36) | FK→users.id | 教師 |
+| org_id | VARCHAR(36) | FK→orgs.id | 所屬組織 |
 
 **Device：**
 
@@ -801,9 +956,12 @@ erDiagram
 | Column | Type | Constraints | Description |
 |--------|------|------------|-------------|
 | id | VARCHAR(36) | PK | UUID |
+| org_id | VARCHAR(36) | FK→orgs.id | 所屬組織 |
 | name | VARCHAR(100) | NOT NULL | 幼兒姓名 |
 | student_id | VARCHAR(50) | UNIQUE | 學號 |
 | notes | TEXT | — | 備註 |
+| class_id | VARCHAR(36) | FK→classes.id | 所屬班級 |
+| added_by | VARCHAR(36) | FK→users.id | 建立者 |
 | created_at | TIMESTAMPTZ | default now() | 建立時間 |
 
 **DeviceAssignment：**
@@ -838,9 +996,14 @@ Index: `(session_id, ts)` composite index for time-range queries.
 |--------|------|------------|-------------|
 | id | UUID | PK | 唯一識別 |
 | session_id | UUID | FK → Session.id, NOT NULL | 所屬 Session |
+| child_id | VARCHAR(36) | FK→children.id | 所屬學童 |
 | created_at | TIMESTAMPTZ | NOT NULL, default now() | 建立時間 |
 | type | VARCHAR(32) | NOT NULL | rhythm / freeze_dance / macro / micro |
 | result | JSONB | NOT NULL | 分析結果 JSON |
+| music_element | VARCHAR(100) | — | 音樂元素標記（用於趨勢分組） |
+| rhythm_sync_rate | FLOAT | — | 節奏同步率 [0,1] |
+| freeze_reaction_time | FLOAT | — | 走停反應時間（秒） |
+| freeze_stability_score | FLOAT | — | 走停穩定度 [0,1] |
 
 **Report：**
 
@@ -1029,6 +1192,12 @@ gantt
 | M6 | Dashboard LiveView + History + Report | ✅ 完成 |
 | M7 | Docker Compose 一鍵啟動 | ✅ 完成 |
 | M8 | CLI 指令可跑完整分析管線 | ✅ 完成 |
+| M9 | 課程管理（模板 CRUD + 排程 + 開始/結束 + 自動命名） | ✅ 完成 |
+| M10 | Session 活動進度追蹤（LiveView 活動面板） | ✅ 完成 |
+| M11 | 裝置配對整合至課程頁面（開始後配對、結束後鎖定） | ✅ 完成 |
+| M12 | 跨 session 分析趨勢（逐音樂元素彙整） | ✅ 完成 |
+| M13 | 課程評分（教師對學童打分 + 評語） | ✅ 完成 |
+| M14 | 班級管理（班級 CRUD + 學童管理） | ✅ 完成 |
 
 ### 10.3 團隊分工
 

@@ -91,6 +91,7 @@ export interface CourseInfo {
 export interface CourseDetailInfo extends CourseInfo {
   class_name: string | null;
   template_name: string | null;
+  active_session_id: string | null;
   sessions: {
     id: string;
     title: string | null;
@@ -314,6 +315,18 @@ export const api = {
         freeze_stability_score: number | null;
       }[]>;
     }>(`/api/children/${childId}/analysis/trends`),
+
+  getClassChildren: (classId: string) =>
+    fetchJSON<{ children: { id: string; name: string; student_id: string | null; class_id: string | null }[] }>(`/api/classes/${classId}/children`),
+
+  getSessionAssignments: (sessionId: string) =>
+    fetchJSON<{ assignments: AssignmentInfo[] }>(`/api/sessions/${sessionId}/assignments`),
+
+  assignSessionDevice: (sessionId: string, deviceId: string, childId: string) =>
+    fetchJSON<{ assignment: AssignmentInfo }>(`/api/sessions/${sessionId}/assign`, {
+      method: "POST",
+      body: JSON.stringify({ device_id: deviceId, child_id: childId, confidence: 1.0 }),
+    }),
 
   getClassAssessments: (classId: string) =>
     fetchJSON<ClassAssessmentResponse>(`/api/classes/${classId}/assessments`),
