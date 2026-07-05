@@ -25,6 +25,7 @@ static int s_retry_count = 0;
 #define MAX_RETRY 5
 
 static char s_current_ssid[64] = "";
+static char s_ip[16] = "";
 static bool s_connected = false;
 
 static esp_err_t try_connect(const char *ssid, const char *password) {
@@ -71,7 +72,8 @@ static void event_handler(void *arg, esp_event_base_t base,
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
         ip_event_got_ip_t *event = (ip_event_got_ip_t *)data;
-        ESP_LOGI(TAG, "got IP: " IPSTR, IP2STR(&event->ip_info.ip));
+        snprintf(s_ip, sizeof(s_ip), IPSTR, IP2STR(&event->ip_info.ip));
+        ESP_LOGI(TAG, "got IP: %s", s_ip);
         s_retry_count = 0;
         xEventGroupSetBits(s_wifi_event_group, WIFI_CONNECTED_BIT);
     }
@@ -123,4 +125,16 @@ bool wifi_is_connected(void) {
 
 const char *wifi_get_ssid(void) {
     return s_current_ssid;
+}
+
+const char *wifi_get_ip(void) {
+    return s_ip;
+}
+
+int wifi_get_rssi(void) {
+    wifi_ap_record_t ap;
+    if (esp_wifi_sta_get_ap_info(&ap) == ESP_OK) {
+        return ap.rssi;
+    }
+    return 0;
 }

@@ -22,7 +22,12 @@ menu "HMEAYC Firmware Configuration"
 
     config HMEAYC_WS_URI
         string "WebSocket URI"
-        default "ws://Rovers-MacBook-Pro.local:8080/ws/default"
+        default "ws://192.168.0.129:8080/ws/default"
+        help
+            Base WebSocket URI. The session path is dynamically updated at runtime
+            via GET /api/config/session — the ESP32 will reconnect to the correct
+            session when assigned via the dashboard. If no session is assigned,
+            falls back to "/ws/default".
 
     config HMEAYC_SAMPLE_RATE_HZ
         int "IMU Sample Rate (Hz)"
@@ -33,14 +38,14 @@ menu "HMEAYC Firmware Configuration"
 
     config HMEAYC_API_BASE_URL
         string "API Server Base URL"
-        default "http://Rovers-MacBook-Pro.local:8080/api"
+        default "http://192.168.0.129:8080/api"
         help
             Base URL for REST API calls (device registration, WiFi config fetch).
             Must NOT have a trailing slash.
 
     config HMEAYC_OTA_BASE_URL
         string "OTA Server Base URL"
-        default "http://Rovers-MacBook-Pro.local:8080/api/firmware"
+        default "http://192.168.0.129:8080/api/firmware"
         help
             Base URL for OTA version check and firmware download.
             Must NOT have a trailing slash.

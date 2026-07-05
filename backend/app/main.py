@@ -14,7 +14,8 @@ from app.api.auth import router as auth_router
 from app.api.admin import router as admin_router
 from app.api.compliance import router as compliance_router
 from app.api.assessments import router as assessments_router
-from app.api.courses import router as courses_router
+from app.api.templates import router as templates_router
+from app.api.pairing import router as pairing_router
 from app.db.base import engine, Base
 
 
@@ -55,7 +56,8 @@ app.include_router(auth_router)
 app.include_router(admin_router)
 app.include_router(compliance_router)
 app.include_router(assessments_router)
-app.include_router(courses_router)
+app.include_router(templates_router)
+app.include_router(pairing_router)
 
 
 @app.get("/health")

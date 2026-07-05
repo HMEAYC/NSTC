@@ -23,7 +23,7 @@ export default function Navbar() {
               <>
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider">課程教學</span>
                 <a href="/dashboard/templates" className="text-blue-600 hover:underline text-sm">教案模板</a>
-                <a href="/dashboard/courses" className="text-blue-600 hover:underline text-sm">課程管理</a>
+                <a href="/dashboard/sessions" className="text-blue-600 hover:underline text-sm">課程管理</a>
               </>
             )}
             {(user?.role === "org_admin" || user?.role === "super_admin" || user?.role === "teacher") && (

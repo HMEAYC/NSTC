@@ -2,6 +2,7 @@
 #include <string.h>
 
 #include "esp_log.h"
+#include "esp_timer.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
 
@@ -11,6 +12,7 @@
 #include "websocket_client.h"
 #include "wifi_manager.h"
 #include "wifi_config_nvs.h"
+#include "session_config_nvs.h"
 #include "battery.h"
 #include "led_status.h"
 #include "ota_client.h"
@@ -25,6 +27,7 @@ static const char *TAG = "HMEAYC";
 #define OTA_CHECK_INTERVAL  (SAMPLE_RATE_HZ * 3600)  // check once per hour
 #define DEVICE_REGISTER_INTERVAL (SAMPLE_RATE_HZ * 1800) // register every 30 min
 #define WIFI_CONFIG_INTERVAL (SAMPLE_RATE_HZ * 1800) // check WiFi config every 30 min
+#define SESSION_CONFIG_INTERVAL (SAMPLE_RATE_HZ * 1800) // check session config every 30 min
 #define LED_CYCLE_COUNT     (SAMPLE_RATE_HZ * 2)     // LED blink every 2 seconds
 
 #define API_BASE_URL    CONFIG_HMEAYC_API_BASE_URL
@@ -58,11 +61,27 @@ void app_main(void) {
 
     ESP_LOGI(TAG, "connecting WiFi...");
     wifi_connect();
-    websocket_client_init();
     if (wifi_is_connected()) {
-        device_registry_upsert(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID, CONFIG_HMEAYC_FIRMWARE_VERSION);
+        device_registry_info_t reg_info = {
+            .device_id = CONFIG_HMEAYC_DEVICE_ID,
+            .name = CONFIG_HMEAYC_DEVICE_ID,
+            .firmware_version = CONFIG_HMEAYC_FIRMWARE_VERSION,
+            .wifi_ssid = wifi_get_ssid(),
+            .wifi_rssi = wifi_get_rssi(),
+            .ip_address = wifi_get_ip(),
+        };
+        device_registry_upsert(API_BASE_URL, &reg_info);
         ota_send_ack(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
+        // Pre-initialize WebSocket URI base (so set_session_id can set the path)
+        websocket_parse_base_uri();
+        session_config_fetch_remote(CONFIG_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
+        char session_id[64] = "";
+        if (session_config_load(session_id, sizeof(session_id)) == ESP_OK && session_id[0] != '\0') {
+            websocket_set_session_id(session_id);
+        }
     }
+
+    websocket_client_init();
 
     imu_data_t data;
     TickType_t delay = pdMS_TO_TICKS(1000 / SAMPLE_RATE_HZ);
@@ -75,7 +94,10 @@ void app_main(void) {
     while (1) {
         if (imu_read(&data) == ESP_OK) {
             if (websocket_is_connected()) {
-                websocket_send_json(&data);
+                int64_t age_ms = esp_timer_get_time() / 1000 - websocket_connected_since_ms();
+                if (age_ms > 200) {
+                    websocket_send_json(&data);
+                }
             } else if (websocket_should_reconnect()) {
                 ESP_LOGW(TAG, "WS reconnecting...");
                 websocket_reconnect();
@@ -98,9 +120,31 @@ void app_main(void) {
             wifi_config_fetch_remote(CONFIG_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
         }
 
+        // Remote session config check every 30 min
+        if (tick % SESSION_CONFIG_INTERVAL == 0 && tick > 0 && wifi_is_connected()) {
+            ESP_LOGI(TAG, "checking remote session config...");
+            char old_sid[64] = "";
+            session_config_load(old_sid, sizeof(old_sid));
+
+            session_config_fetch_remote(CONFIG_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
+
+            char new_sid[64] = "";
+            if (session_config_load(new_sid, sizeof(new_sid)) == ESP_OK) {
+                websocket_set_session_id(new_sid);
+            }
+        }
+
         if (tick % DEVICE_REGISTER_INTERVAL == 0 && tick > 0 && wifi_is_connected()) {
             ESP_LOGI(TAG, "refreshing device registration...");
-            device_registry_upsert(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID, CONFIG_HMEAYC_FIRMWARE_VERSION);
+            device_registry_info_t reg_info = {
+                .device_id = CONFIG_HMEAYC_DEVICE_ID,
+                .name = CONFIG_HMEAYC_DEVICE_ID,
+                .firmware_version = CONFIG_HMEAYC_FIRMWARE_VERSION,
+                .wifi_ssid = wifi_get_ssid(),
+                .wifi_rssi = wifi_get_rssi(),
+                .ip_address = wifi_get_ip(),
+            };
+            device_registry_upsert(API_BASE_URL, &reg_info);
         }
 
         if (tick % LED_CYCLE_COUNT == 0) {

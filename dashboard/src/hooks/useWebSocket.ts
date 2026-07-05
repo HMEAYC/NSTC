@@ -62,7 +62,9 @@ export function useWebSocket(
       timerRef.current = setTimeout(connect, delay);
     };
 
-    ws.onerror = () => ws.close();
+    ws.onerror = () => {
+      if (wsRef.current) ws.close();
+    };
     wsRef.current = ws;
   }, [sessionId, onMessage]);
 
@@ -70,7 +72,9 @@ export function useWebSocket(
     connect();
     return () => {
       clearTimeout(timerRef.current);
-      wsRef.current?.close();
+      if (wsRef.current && wsRef.current.readyState !== WebSocket.CONNECTING) {
+        wsRef.current.close();
+      }
       wsRef.current = null;
     };
   }, [connect]);

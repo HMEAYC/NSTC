@@ -7,14 +7,13 @@ from app.auth.deps import get_current_user
 from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.session import Session as SessionModel
-from app.models.course_template import CourseTemplate
+from app.models.session_template import SessionTemplate
 from app.models.analysis_result import AnalysisResult
 from app.models.assessment_result import AssessmentResult
 from app.models.imu_data import IMUData
 from app.models.device_assignment import DeviceAssignment
 from app.models.device import Device
 from app.models.child import Child
-from app.models.course_template import CourseTemplate
 from app.models.user import User
 from datetime import datetime
 from uuid import uuid4
@@ -141,8 +140,8 @@ def compute_session_assessment(
         db.refresh(r)
 
     # ── populate AnalysisResult based on template music element ──
-    tmpl = db.query(CourseTemplate).filter(
-        CourseTemplate.id == session.template_id
+    tmpl = db.query(SessionTemplate).filter(
+        SessionTemplate.id == session.template_id
     ).first() if session.template_id else None
     music_element = ""
     if tmpl and tmpl.stages:
@@ -350,7 +349,7 @@ def get_child_assessments(
         if not tid:
             return (None, None)
         if tid not in template_cache:
-            tmpl = db.query(CourseTemplate).filter(CourseTemplate.id == tid).first()
+            tmpl = db.query(SessionTemplate).filter(SessionTemplate.id == tid).first()
             if tmpl and tmpl.stages:
                 stages_data = tmpl.stages
                 if isinstance(stages_data, list) and len(stages_data) > 0:
@@ -455,9 +454,9 @@ def get_child_analysis_trends(
         raise HTTPException(404, "Child not found")
 
     rows = (
-        db.query(AnalysisResult, SessionModel, CourseTemplate)
+        db.query(AnalysisResult, SessionModel, SessionTemplate)
         .join(SessionModel, SessionModel.id == AnalysisResult.session_id)
-        .outerjoin(CourseTemplate, CourseTemplate.id == SessionModel.template_id)
+        .outerjoin(SessionTemplate, SessionTemplate.id == SessionModel.template_id)
         .filter(
             AnalysisResult.child_id == child_id,
             SessionModel.org_id == org_id,

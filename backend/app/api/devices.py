@@ -1,6 +1,6 @@
 from datetime import datetime
 from typing import Optional
-from fastapi import APIRouter, Depends, HTTPException, Body
+from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.auth.deps import get_current_user
 from app.auth.org import effective_org_id
@@ -23,21 +23,7 @@ def list_devices(
     devices = db.query(DeviceModel).filter(
         DeviceModel.org_id == org_id
     ).order_by(DeviceModel.created_at.desc()).all()
-    return {
-        "devices": [
-            {
-                "id": d.id,
-                "device_id": d.device_id,
-                "name": d.name or d.device_id,
-                "firmware_version": d.firmware_version,
-                "battery_level": d.battery_level,
-                "status": d.status,
-                "last_seen": d.last_seen.isoformat() if d.last_seen else None,
-                "created_at": d.created_at.isoformat() if d.created_at else None,
-            }
-            for d in devices
-        ]
-    }
+    return {"devices": [_device_dict(d) for d in devices]}
 
 
 @router.post("/devices")
@@ -45,6 +31,10 @@ def register_device(
     device_id: str = Body(...),
     name: Optional[str] = Body(None),
     firmware_version: Optional[str] = Body(None),
+    wifi_ssid: Optional[str] = Body(None),
+    wifi_rssi: Optional[float] = Body(None),
+    ip_address: Optional[str] = Body(None),
+    mac_address: Optional[str] = Body(None),
     org_id: Optional[str] = Body(None),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
@@ -54,10 +44,18 @@ def register_device(
     if existing:
         existing.status = "online"
         existing.last_seen = datetime.utcnow()
-        if firmware_version:
+        if firmware_version is not None:
             existing.firmware_version = firmware_version
-        if name:
+        if name is not None:
             existing.name = name
+        if wifi_ssid is not None:
+            existing.wifi_ssid = wifi_ssid
+        if wifi_rssi is not None:
+            existing.wifi_rssi = wifi_rssi
+        if ip_address is not None:
+            existing.ip_address = ip_address
+        if mac_address is not None:
+            existing.mac_address = mac_address
         db.commit()
         db.refresh(existing)
         return {"device": _device_dict(existing)}
@@ -65,6 +63,10 @@ def register_device(
         device_id=device_id,
         name=name or device_id,
         firmware_version=firmware_version,
+        wifi_ssid=wifi_ssid,
+        wifi_rssi=wifi_rssi,
+        ip_address=ip_address,
+        mac_address=mac_address,
         org_id=resolved_org,
         status="online",
         last_seen=datetime.utcnow(),
@@ -309,6 +311,10 @@ def assign_device(
         db.commit()
         db.refresh(assignment)
 
+    # Update device's active session
+    device.active_session_id = session_id
+    db.commit()
+
     return {
         "assignment": {
             "id": assignment.id,
@@ -335,9 +341,31 @@ def delete_assignment(
     child = db.query(ChildModel).filter(ChildModel.id == assignment.child_id).first()
     if child and child.org_id != org_id:
         raise HTTPException(403, "Forbidden")
+
+    # Clear device's active session
+    device = db.query(DeviceModel).filter(DeviceModel.id == assignment.device_id).first()
+    if device:
+        device.active_session_id = None
+
     db.delete(assignment)
     db.commit()
     return {"status": "deleted"}
+
+
+@router.get("/config/session")
+def get_device_session_config(
+    device_id: str = Query(...),
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    resolved_org = effective_org_id(current_user)
+    dev = db.query(DeviceModel).filter(
+        DeviceModel.device_id == device_id,
+        DeviceModel.org_id == resolved_org,
+    ).first()
+    if not dev:
+        raise HTTPException(404, "Device not found")
+    return {"session_id": dev.active_session_id}
 
 
 def _device_dict(d: DeviceModel) -> dict:
@@ -347,7 +375,12 @@ def _device_dict(d: DeviceModel) -> dict:
         "name": d.name or d.device_id,
         "firmware_version": d.firmware_version,
         "battery_level": d.battery_level,
+        "wifi_ssid": d.wifi_ssid,
+        "wifi_rssi": d.wifi_rssi,
+        "ip_address": d.ip_address,
+        "mac_address": d.mac_address,
         "status": d.status,
+        "active_session_id": d.active_session_id,
         "last_seen": d.last_seen.isoformat() if d.last_seen else None,
         "created_at": d.created_at.isoformat() if d.created_at else None,
     }

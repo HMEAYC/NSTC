@@ -10,10 +10,9 @@ static const char *TAG = "DeviceRegistry";
 
 esp_err_t device_registry_upsert(
     const char *base_url,
-    const char *device_id,
-    const char *firmware_version
+    const device_registry_info_t *info
 ) {
-    if (!base_url || !device_id) {
+    if (!base_url || !info || !info->device_id) {
         return ESP_ERR_INVALID_ARG;
     }
 
@@ -23,26 +22,25 @@ esp_err_t device_registry_upsert(
         return ESP_ERR_INVALID_SIZE;
     }
 
-    char body[256];
-    int body_len;
-    if (firmware_version && firmware_version[0] != '\0') {
-        body_len = snprintf(
-            body,
-            sizeof(body),
-            "{\"device_id\":\"%s\",\"name\":\"%s\",\"firmware_version\":\"%s\"}",
-            device_id,
-            device_id,
-            firmware_version
-        );
-    } else {
-        body_len = snprintf(
-            body,
-            sizeof(body),
-            "{\"device_id\":\"%s\",\"name\":\"%s\"}",
-            device_id,
-            device_id
-        );
-    }
+    char body[512];
+    int body_len = snprintf(
+        body,
+        sizeof(body),
+        "{"
+        "\"device_id\":\"%s\","
+        "\"name\":\"%s\","
+        "\"firmware_version\":\"%s\","
+        "\"wifi_ssid\":\"%s\","
+        "\"wifi_rssi\":%d,"
+        "\"ip_address\":\"%s\""
+        "}",
+        info->device_id,
+        info->name ? info->name : info->device_id,
+        info->firmware_version ? info->firmware_version : "",
+        info->wifi_ssid ? info->wifi_ssid : "",
+        info->wifi_rssi,
+        info->ip_address ? info->ip_address : ""
+    );
     if (body_len < 0 || body_len >= (int)sizeof(body)) {
         return ESP_ERR_INVALID_SIZE;
     }
@@ -78,6 +76,6 @@ esp_err_t device_registry_upsert(
         return ESP_FAIL;
     }
 
-    ESP_LOGI(TAG, "device registration succeeded for %s", device_id);
+    ESP_LOGI(TAG, "device registration succeeded for %s", info->device_id);
     return ESP_OK;
 }

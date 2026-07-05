@@ -4,7 +4,7 @@ import { api } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 interface ReportData {
-  course: {
+  session: {
     id: string;
     name: string;
     description: string | null;
@@ -15,22 +15,14 @@ interface ReportData {
     ended_at: string | null;
   };
   summary: {
-    session_count: number;
-    total_imu_records: number;
-    unique_devices: number;
-  };
-  sessions: {
-    session_id: string;
-    title: string | null;
-    status: string;
-    start_time: string | null;
-    end_time: string | null;
     imu_count: number;
     device_count: number;
+  };
+  assessments: {
     avg_activity_level: number | null;
     avg_smoothness: number | null;
     avg_stability_index: number | null;
-  }[];
+  };
   evaluations: {
     child_id: string;
     child_name: string;
@@ -44,7 +36,7 @@ function formatNum(v: number | null | undefined, decimals = 2) {
   return v.toFixed(decimals);
 }
 
-export default function CourseReport() {
+export default function SessionReport() {
   const { id } = useParams<{ id: string }>();
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
@@ -53,7 +45,7 @@ export default function CourseReport() {
   useEffect(() => {
     if (!id) return;
     setLoading(true);
-    api.getCourseReport(id)
+    api.getSessionReport(id)
       .then(setData)
       .catch((e) => setError(e instanceof Error ? e.message : "載入失敗"))
       .finally(() => setLoading(false));
@@ -65,67 +57,55 @@ export default function CourseReport() {
     return (
       <div className="p-6 max-w-4xl mx-auto">
         <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">{error || "報告不存在"}</div>
-        <Link to="/dashboard/courses" className="text-blue-600 hover:underline text-sm mt-4 inline-block">← 返回課程列表</Link>
+        <Link to="/dashboard/sessions" className="text-blue-600 hover:underline text-sm mt-4 inline-block">← 返回課程列表</Link>
       </div>
     );
   }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-6">
-      <Link to={`/dashboard/courses/${id}`} className="text-blue-600 hover:underline text-sm">← 返回課程詳情</Link>
+      <Link to={`/dashboard/sessions/${id}`} className="text-blue-600 hover:underline text-sm">← 返回課程詳情</Link>
 
       <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
-        <h1 className="text-2xl font-bold text-gray-800">課程報告：{data.course.name}</h1>
-        {data.course.class_name && (
-          <p className="text-sm text-gray-500">班級：{data.course.class_name}</p>
+        <h1 className="text-2xl font-bold text-gray-800">課程報告：{data.session.name}</h1>
+        {data.session.class_name && (
+          <p className="text-sm text-gray-500">班級：{data.session.class_name}</p>
         )}
 
         {/* Summary cards */}
         <div className="grid grid-cols-3 gap-4">
           <div className="bg-blue-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-blue-700">{data.summary.session_count}</div>
-            <div className="text-xs text-blue-600">串流次數</div>
+            <div className="text-2xl font-bold text-blue-700">{data.summary.imu_count.toLocaleString()}</div>
+            <div className="text-xs text-blue-600">IMU 資料筆數</div>
           </div>
           <div className="bg-green-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-green-700">{data.summary.total_imu_records.toLocaleString()}</div>
-            <div className="text-xs text-green-600">IMU 資料筆數</div>
+            <div className="text-2xl font-bold text-green-700">{data.summary.device_count}</div>
+            <div className="text-xs text-green-600">使用裝置數</div>
           </div>
           <div className="bg-purple-50 rounded-lg p-4 text-center">
-            <div className="text-2xl font-bold text-purple-700">{data.summary.unique_devices}</div>
-            <div className="text-xs text-purple-600">使用裝置數</div>
+            <div className="text-2xl font-bold text-purple-700">{data.session.started_at ? new Date(data.session.started_at).toLocaleDateString("zh-TW") : "—"}</div>
+            <div className="text-xs text-purple-600">課程日期</div>
           </div>
         </div>
       </div>
 
-      {/* Sessions detail */}
+      {/* Assessment metrics */}
       <div className="bg-white rounded-xl shadow-sm p-6">
-        <h2 className="text-lg font-bold text-gray-800 mb-4">各次串流分析</h2>
-        <table className="w-full text-xs text-gray-600">
-          <thead>
-            <tr className="border-b text-left">
-              <th className="pb-2 font-medium">標題</th>
-              <th className="pb-2 font-medium">開始</th>
-              <th className="pb-2 font-medium">IMU</th>
-              <th className="pb-2 font-medium">裝置</th>
-              <th className="pb-2 font-medium">活動量</th>
-              <th className="pb-2 font-medium">平穩度</th>
-              <th className="pb-2 font-medium">穩定性</th>
-            </tr>
-          </thead>
-          <tbody>
-            {data.sessions.map((s) => (
-              <tr key={s.session_id} className="border-b last:border-0">
-                <td className="py-2">{s.title || "—"}</td>
-                <td className="py-2">{s.start_time ? new Date(s.start_time).toLocaleString("zh-TW") : "—"}</td>
-                <td className="py-2">{s.imu_count}</td>
-                <td className="py-2">{s.device_count}</td>
-                <td className="py-2">{formatNum(s.avg_activity_level)}</td>
-                <td className="py-2">{formatNum(s.avg_smoothness)}</td>
-                <td className="py-2">{formatNum(s.avg_stability_index)}</td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+        <h2 className="text-lg font-bold text-gray-800 mb-4">評估指標</h2>
+        <div className="grid grid-cols-3 gap-4 text-sm">
+          <div className="text-center">
+            <div className="font-semibold text-gray-800">{formatNum(data.assessments.avg_activity_level)}</div>
+            <div className="text-xs text-gray-400">平均活動量</div>
+          </div>
+          <div className="text-center">
+            <div className="font-semibold text-gray-800">{formatNum(data.assessments.avg_smoothness)}</div>
+            <div className="text-xs text-gray-400">平均平穩度</div>
+          </div>
+          <div className="text-center">
+            <div className="font-semibold text-gray-800">{formatNum(data.assessments.avg_stability_index)}</div>
+            <div className="text-xs text-gray-400">平均穩定性</div>
+          </div>
+        </div>
       </div>
 
       {/* Evaluations */}

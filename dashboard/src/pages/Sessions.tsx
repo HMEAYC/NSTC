@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/context";
-import { api, type CourseInfo, type CourseTemplateInfo } from "../api/client";
+import { api, type SessionInfo, type SessionTemplateInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const statusConfig: Record<string, { label: string; color: string }> = {
@@ -12,11 +12,11 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   cancelled: { label: "已取消", color: "bg-red-100 text-red-700" },
 };
 
-export default function Courses() {
+export default function Sessions() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const [courses, setCourses] = useState<CourseInfo[]>([]);
-  const [templates, setTemplates] = useState<CourseTemplateInfo[]>([]);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
+  const [templates, setTemplates] = useState<SessionTemplateInfo[]>([]);
   const [classList, setClassList] = useState<{ id: string; name: string }[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -29,14 +29,14 @@ export default function Courses() {
     try {
       const token = localStorage.getItem("hmeayc_token");
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
-      const [coursesRes, templatesRes, classRes] = await Promise.all([
-        api.listCourses(),
+      const [sessionsRes, templatesRes, classRes] = await Promise.all([
+        api.listSessions(),
         api.listTemplates(),
         user?.org_id
           ? fetch(`/api/orgs/${user.org_id}/classes`, { headers }).then(r => r.ok ? r.json() : { classes: [] })
           : Promise.resolve({ classes: [] }),
       ]);
-      setCourses(coursesRes.courses);
+      setSessions(sessionsRes.sessions);
       setTemplates(templatesRes.templates);
       setClassList((classRes.classes || []).map((c: any) => ({ id: c.id, name: c.name })));
     } catch (e) {
@@ -55,7 +55,7 @@ export default function Courses() {
     const tplName = templates.find((t) => t.id === form.template_id)?.name || "";
     const name = [dateStr, className, tplName].filter(Boolean).join(" ");
     try {
-      await api.createCourse({
+      await api.createSession({
         name,
         class_id: form.class_id || undefined,
         template_id: form.template_id || undefined,
@@ -109,25 +109,27 @@ export default function Courses() {
       )}
 
       <div className="space-y-2">
-        {courses.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">尚無課程</div>
-        ) : courses.map((c) => {
-          const cfg = statusConfig[c.status] || { label: c.status, color: "bg-gray-100 text-gray-600" };
+        {(() => {
+          const scheduled = sessions.filter((s) => s.scheduled_at);
+          return scheduled.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">尚無已排程課程</div>
+          ) : scheduled.map((s) => {
+          const cfg = statusConfig[s.status] || { label: s.status, color: "bg-gray-100 text-gray-600" };
           return (
-            <div key={c.id} onClick={() => navigate(`/dashboard/courses/${c.id}`)}
+            <div key={s.id} onClick={() => navigate(`/dashboard/sessions/${s.id}`)}
               className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md cursor-pointer">
               <div className="flex items-center gap-3">
                 <div>
-                  <div className="font-semibold text-gray-800">{c.name}</div>
+                  <div className="font-semibold text-gray-800">{s.name}</div>
                   <div className="text-xs text-gray-400 mt-0.5">
-                    {c.scheduled_at ? new Date(c.scheduled_at).toLocaleString("zh-TW") : "未排程"}
+                    {new Date(s.scheduled_at!).toLocaleString("zh-TW")}
                   </div>
                 </div>
               </div>
               <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
             </div>
           );
-        })}
+        })})()}
       </div>
     </div>
   );

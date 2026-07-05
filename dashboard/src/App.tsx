@@ -23,10 +23,10 @@ const UserManagement = lazy(() => import("./pages/UserManagement"));
 const ParentView = lazy(() => import("./pages/ParentView"));
 const ChildAssessments = lazy(() => import("./pages/ChildAssessments"));
 const ClassAssessments = lazy(() => import("./pages/ClassAssessments"));
-const Courses = lazy(() => import("./pages/Courses"));
-const CourseDetail = lazy(() => import("./pages/CourseDetail"));
+const Sessions = lazy(() => import("./pages/Sessions"));
+const SessionDetail = lazy(() => import("./pages/SessionDetail"));
 const Templates = lazy(() => import("./pages/Templates"));
-const CourseReport = lazy(() => import("./pages/CourseReport"));
+const SessionReport = lazy(() => import("./pages/SessionReport"));
 
 export default function App() {
   return (
@@ -56,9 +56,9 @@ export default function App() {
                 <Route path="/dashboard/classes" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassManagement /></RoleRoute>} />
                 <Route path="/dashboard/classes/:classId" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassDetail /></RoleRoute>} />
                 <Route path="/dashboard/classes/:classId/assessments" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassAssessments /></RoleRoute>} />
-                <Route path="/dashboard/courses" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><Courses /></RoleRoute>} />
-                <Route path="/dashboard/courses/:id" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><CourseDetail /></RoleRoute>} />
-                <Route path="/dashboard/courses/:id/report" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><CourseReport /></RoleRoute>} />
+                <Route path="/dashboard/sessions" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><Sessions /></RoleRoute>} />
+                <Route path="/dashboard/sessions/:id" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><SessionDetail /></RoleRoute>} />
+                <Route path="/dashboard/sessions/:id/report" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><SessionReport /></RoleRoute>} />
                 <Route path="/dashboard/templates" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><Templates /></RoleRoute>} />
                 <Route path="/dashboard/children/:childId/assessments" element={<ProtectedRoute><ChildAssessments /></ProtectedRoute>} />
                 <Route path="/dashboard/admin/users" element={<RoleRoute roles={["org_admin", "super_admin"]}><UserManagement /></RoleRoute>} />

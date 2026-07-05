@@ -124,7 +124,7 @@ export default function Landing() {
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">📋 課程教學</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <ActionCard icon="📝" title="教案模板" desc="建立可重複使用的課程階段模板" to="/dashboard/templates" color="bg-indigo-500" />
-            <ActionCard icon="📚" title="課程管理" desc="排程、開課與管理課程生命週期" to="/dashboard/courses" color="bg-blue-500" />
+            <ActionCard icon="📚" title="課程管理" desc="排程、開課與管理課程生命週期" to="/dashboard/sessions" color="bg-blue-500" />
           </div>
         </section>
       )}

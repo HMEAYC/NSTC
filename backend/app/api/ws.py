@@ -1,6 +1,9 @@
 import asyncio
+import logging
 from datetime import datetime
 from typing import Any, Optional
+
+logger = logging.getLogger(__name__)
 
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
 from app.auth.jwt import decode_token
@@ -8,6 +11,7 @@ from app.auth.org import effective_org_id
 from app.db.base import SessionLocal
 from app.models.session import Session as SessionModel
 from app.models.imu_data import IMUData
+from app.models.device import Device as DeviceModel
 
 router = APIRouter(tags=["websocket"])
 
@@ -72,6 +76,10 @@ async def imu_data_ws(
     await websocket.accept()
     _ensure_cleanup()
 
+    client_host = websocket.client.host if websocket.client else "unknown"
+    print(f"WS CONNECTION: {client_host} session={session_id}", flush=True)
+    logger.info("connection open from %s for session %s", client_host, session_id)
+
     if session_id not in _viewers:
         _viewers[session_id] = set()
     _viewers[session_id].add(websocket)
@@ -131,6 +139,11 @@ async def imu_data_ws(
                 db.add(frame)
                 frame_count += 1
                 if frame_count % 100 == 0:
+                    device_id = str(data.get("device_id", ""))
+                    if device_id:
+                        db.query(DeviceModel).filter(
+                            DeviceModel.device_id == device_id
+                        ).update({"active_session_id": session_id})
                     db.commit()
 
                 # broadcast without waiting for DB write
@@ -172,8 +185,12 @@ async def imu_data_ws(
                 "status": "ignored",
             })
     except WebSocketDisconnect:
-        pass
+        print(f"WS DISCONNECT: {client_host}", flush=True)
+        logger.info("WebSocket disconnected from %s", client_host)
     except Exception:
+        import traceback
+        traceback.print_exc()
+        logger.exception("WebSocket error from %s", client_host)
         db.rollback()
     finally:
         _viewers.get(session_id, set()).discard(websocket)

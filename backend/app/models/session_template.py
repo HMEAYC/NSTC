@@ -4,8 +4,8 @@ from sqlalchemy import Column, String, Integer, DateTime, JSON, ForeignKey
 from app.db.base import Base
 
 
-class CourseTemplate(Base):
-    __tablename__ = "course_templates"
+class SessionTemplate(Base):
+    __tablename__ = "session_templates"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     org_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)

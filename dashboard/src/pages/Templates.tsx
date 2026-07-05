@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { api, type CourseTemplateInfo } from "../api/client";
+import { api, type SessionTemplateInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 interface Activity {
@@ -46,7 +46,7 @@ const stageTypes = [
 ];
 
 export default function Templates() {
-  const [templates, setTemplates] = useState<CourseTemplateInfo[]>([]);
+  const [templates, setTemplates] = useState<SessionTemplateInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showModal, setShowModal] = useState(false);
@@ -102,7 +102,7 @@ export default function Templates() {
     supplementary: "",
   });
 
-  const resetForm = (t?: CourseTemplateInfo) => {
+  const resetForm = (t?: SessionTemplateInfo) => {
     if (t) {
       setEditingId(t.id);
       setForm({

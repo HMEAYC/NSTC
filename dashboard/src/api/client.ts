@@ -11,12 +11,6 @@ export interface SessionSummary {
   template_id?: string | null;
 }
 
-export interface SessionDetail extends SessionSummary {
-  template_id?: string | null;
-  current_activity_index: number;
-  template_activities: { title: string; content: string; rhythm_pattern?: string }[];
-}
-
 export interface AnalysisResult {
   id: string;
   session_id: string;
@@ -39,7 +33,12 @@ export interface DeviceInfo {
   name: string;
   firmware_version: string | null;
   battery_level: number | null;
+  wifi_ssid: string | null;
+  wifi_rssi: number | null;
+  ip_address: string | null;
+  mac_address: string | null;
   status: string;
+  active_session_id: string | null;
   last_seen: string | null;
   created_at: string | null;
 }
@@ -74,7 +73,7 @@ export interface AssignmentInfo {
   assigned_at: string | null;
 }
 
-export interface CourseInfo {
+export interface SessionInfo {
   id: string;
   org_id: string;
   class_id: string | null;
@@ -85,24 +84,18 @@ export interface CourseInfo {
   scheduled_at: string | null;
   started_at: string | null;
   ended_at: string | null;
-  created_at: string | null;
 }
 
-export interface CourseDetailInfo extends CourseInfo {
+export interface SessionDetailInfo extends SessionInfo {
   class_name: string | null;
   template_name: string | null;
-  active_session_id: string | null;
-  sessions: {
-    id: string;
-    title: string | null;
-    course_type: string;
-    status: string;
-    start_time: string | null;
-    end_time: string | null;
-  }[];
+  current_activity_index: number;
+  template_activities: { title: string; content: string; rhythm_pattern?: string }[];
+  imu_count: number;
+  device_count: number;
 }
 
-export interface CourseTemplateInfo {
+export interface SessionTemplateInfo {
   id: string;
   name: string;
   description: string | null;
@@ -198,7 +191,7 @@ export const api = {
   listSessions: () =>
     fetchJSON<{ sessions: SessionSummary[] }>("/api/sessions"),
 
-  getSession: (id: string) => fetchJSON<SessionDetail>(`/api/sessions/${id}`),
+  getSession: (id: string) => fetchJSON<{ session: SessionDetailInfo }>(`/api/sessions/${id}`),
 
   createSession: (data: { course_type?: string; template_id?: string; title?: string }) =>
     fetchJSON<{ id: string; course_type: string; template_id: string | null; start_time: string }>("/api/sessions", {
@@ -328,55 +321,62 @@ export const api = {
       body: JSON.stringify({ device_id: deviceId, child_id: childId, confidence: 1.0 }),
     }),
 
+  autoPairSession: (sessionId: string) =>
+    fetchJSON<{
+      assignments: { device_id: string; child_id: string; confidence: number; method: string }[];
+      bpm_estimate: number;
+      pose_data_available: boolean;
+    }>(`/api/sessions/${sessionId}/auto-pair`, { method: "POST" }),
+
   getClassAssessments: (classId: string) =>
     fetchJSON<ClassAssessmentResponse>(`/api/classes/${classId}/assessments`),
 
-  // Courses
-  listCourses: (params?: { status?: string; class_id?: string }) => {
+  // Sessions
+  listSessions: (params?: { status?: string; class_id?: string }) => {
     const q = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
-    return fetchJSON<{ courses: CourseInfo[] }>(`/api/courses${q}`);
+    return fetchJSON<{ sessions: SessionInfo[] }>(`/api/sessions${q}`);
   },
 
-  createCourse: (data: {
+  createSession: (data: {
     name: string;
     class_id?: string;
     template_id?: string;
     description?: string;
     scheduled_at?: string;
   }) =>
-    fetchJSON<{ course: CourseInfo }>("/api/courses", {
+    fetchJSON<{ session: SessionInfo }>("/api/sessions", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
-  getCourse: (id: string) =>
-    fetchJSON<{ course: CourseDetailInfo }>(`/api/courses/${id}`),
+  getSession: (id: string) =>
+    fetchJSON<{ session: SessionDetailInfo }>(`/api/sessions/${id}`),
 
-  updateCourse: (id: string, data: {
+  updateSession: (id: string, data: {
     name?: string;
     description?: string;
     class_id?: string | null;
     template_id?: string | null;
     scheduled_at?: string | null;
   }) =>
-    fetchJSON<{ course: CourseInfo }>(`/api/courses/${id}`, {
+    fetchJSON<{ session: SessionInfo }>(`/api/sessions/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),
 
-  deleteCourse: (id: string) =>
-    fetchJSON<{ status: string }>(`/api/courses/${id}`, {
+  deleteSession: (id: string) =>
+    fetchJSON<{ status: string }>(`/api/sessions/${id}`, {
       method: "DELETE",
     }),
 
-  startCourse: (id: string) =>
-    fetchJSON<{ course: CourseInfo }>(`/api/courses/${id}/start`, { method: "POST" }),
+  startSession: (id: string) =>
+    fetchJSON<{ session: SessionInfo }>(`/api/sessions/${id}/start`, { method: "POST" }),
 
-  endCourse: (id: string) =>
-    fetchJSON<{ course: CourseInfo }>(`/api/courses/${id}/end`, { method: "POST" }),
+  endSession: (id: string) =>
+    fetchJSON<{ session: SessionInfo }>(`/api/sessions/${id}/end`, { method: "POST" }),
 
-  getCourseSessions: (id: string) =>
-    fetchJSON<{ sessions: { id: string; title: string | null; course_type: string; status: string; start_time: string | null; end_time: string | null }[] }>(`/api/courses/${id}/sessions`),
+  getSessionSubSessions: (id: string) =>
+    fetchJSON<{ sessions: { id: string; title: string | null; course_type: string; status: string; start_time: string | null; end_time: string | null }[] }>(`/api/sessions/${id}/sessions`),
 
   // Templates
   listTemplates: () =>
@@ -414,22 +414,22 @@ export const api = {
       method: "DELETE",
     }),
 
-  // Course Evaluations
-  getCourseEvaluations: (courseId: string) =>
-    fetchJSON<{ evaluations: { child_id: string; child_name: string; score: number | null; comment: string | null }[] }>(`/api/courses/${courseId}/evaluations`),
+  // Session Evaluations
+  getSessionEvaluations: (sessionId: string) =>
+    fetchJSON<{ evaluations: { child_id: string; child_name: string; score: number | null; comment: string | null }[] }>(`/api/sessions/${sessionId}/evaluations`),
 
-  upsertCourseEvaluation: (courseId: string, childId: string, data: { score?: number | null; comment?: string | null }) =>
+  upsertSessionEvaluation: (sessionId: string, childId: string, data: { score?: number | null; comment?: string | null }) =>
     fetchJSON<{ evaluation: { child_id: string; score: number | null; comment: string | null } }>(
-      `/api/courses/${courseId}/evaluations/${childId}`,
+      `/api/sessions/${sessionId}/evaluations/${childId}`,
       { method: "PUT", body: JSON.stringify(data) },
     ),
 
-  // Course Report
-  getCourseReport: (courseId: string) =>
+  // Session Report
+  getSessionReport: (sessionId: string) =>
     fetchJSON<{
-      course: { id: string; name: string; description: string | null; status: string; class_name: string | null; scheduled_at: string | null; started_at: string | null; ended_at: string | null };
-      summary: { session_count: number; total_imu_records: number; unique_devices: number };
-      sessions: { session_id: string; title: string | null; status: string; start_time: string | null; end_time: string | null; imu_count: number; device_count: number; avg_activity_level: number | null; avg_smoothness: number | null; avg_stability_index: number | null }[];
+      session: { id: string; name: string; description: string | null; status: string; class_name: string | null; scheduled_at: string | null; started_at: string | null; ended_at: string | null };
+      summary: { imu_count: number; device_count: number };
+      assessments: { avg_activity_level: number | null; avg_smoothness: number | null; avg_stability_index: number | null };
       evaluations: { child_id: string; child_name: string; score: number | null; comment: string | null }[];
-    }>(`/api/courses/${courseId}/report`),
+    }>(`/api/sessions/${sessionId}/report`),
 };

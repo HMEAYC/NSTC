@@ -121,7 +121,7 @@ export default function History() {
           {sessions.map((s) => (
             <div
               key={s.id}
-              onClick={() => navigate(`/dashboard/courses`)}
+              onClick={() => navigate(`/dashboard/sessions`)}
               className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex items-center gap-4 min-w-0">

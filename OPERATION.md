@@ -89,7 +89,7 @@
 |------|------|------|
 | Python | ≥ 3.11 | 後端執行環境 |
 | Node.js | ≥ 20 | Dashboard 執行環境 |
-| Docker & Docker Compose | 最新 | PostgreSQL 資料庫 |
+| Docker & Docker Compose | 最新 | PostgreSQL 資料庫（開發） |
 | ESP-IDF | v5.4 | 韌體編譯 |
 | Git | 最新 | 版本控制 |
 
@@ -245,6 +245,17 @@ CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
 
 > 提示：Dashboard 端讀取 `/api/config/wifi` 時不會顯示密碼；韌體端則透過 `include_password=true` 取回完整設定以便更新 NVS。
 
+### 4.5 動態 Session 指派
+
+ESP32 開機時連線到 `/ws/default`，然後向 `GET /api/config/session?device_id=<device_id>` 查詢被指派到的 Session ID：
+
+1. 教師在 Dashboard 開課 → 指派裝置到某個 session
+2. 後端寫入 `devices.active_session_id`
+3. ESP32 定時輪詢（每 30 分鐘），發現 session 變更後自動重連 WebSocket
+4. 即時監控頁面即可收到來自正確 session 的 IMU 資料
+
+若想立即觸發重連，可在 Dashboard 重新指派裝置，或透過 `/dashboard/wifi` 頁面觸發。
+
 ### 4.4 OTA 更新（Dashboard）
 
 1. 開啟 `http://localhost:5173/dashboard/firmware`
@@ -263,9 +274,9 @@ CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
 |------|------|------|
 | `/dashboard/` | 首頁 | 導航卡片 + 課程統計 + 最近課程 |
 | `/dashboard/templates` | 教案模板 | 建立可重複使用的課程階段模板 |
-| `/dashboard/courses` | 課程管理 | 排程、開課、管理課程生命週期 |
-| `/dashboard/courses/:id` | 課程詳情 | 檢視課程階段、評估、開始/結束課程 |
-| `/dashboard/courses/:id/report` | 課程報告 | 課程完整 AI 分析報告 |
+| `/dashboard/sessions` | 課程管理 | 排程、開課、管理課程生命週期 |
+| `/dashboard/sessions/:id` | 課程詳情 | 檢視課程階段、評估、開始/結束課程 |
+| `/dashboard/sessions/:id/report` | 課程報告 | 課程完整 AI 分析報告 |
 | `/dashboard/live/:sessionId` | 即時監控 | IMU 6 軸即時圖表 + WS 連線狀態 |
 | `/dashboard/history` | 課程紀錄 | Session 列表 |
 | `/dashboard/assessment/:sessionId` | 評估指標 | 即時行為指標運算（IMU/CV） |
@@ -293,7 +304,7 @@ CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
 
 ### 5.3 即時監控（LiveView）
 
-**路徑：** `/dashboard/live/default`
+**路徑：** `/dashboard/live/:sessionId`
 
 顯示：
 - WS 連線狀態指示燈（綠/黃/紅）
@@ -303,9 +314,10 @@ CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
 - 角速度（dps）即時折線圖
 
 **操作：**
-1. ESP32 開機後會自動連線到 `/ws/default`
-2. Dashboard 自動顯示即時資料
-3. 最多保留 200 筆資料點，自動滑動
+1. ESP32 開機後會自動查詢被指派的 session，連線到正確的 WebSocket
+2. Dashboard 開啟 `/dashboard/live/<session_id>` 即可顯示即時資料
+3. 若裝置未被指派 session，會連到 `/ws/default`，此時可用 `/dashboard/live/default` 檢視
+4. 最多保留 200 筆資料點，自動滑動
 
 ### 5.4 課程紀錄（History）
 
@@ -316,9 +328,9 @@ CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
 - 狀態標籤：completed（綠）/ active（藍）
 - 點擊進入該 Session 的單次報告頁面
 
-### 5.5 課程報告（CourseReport）
+### 5.5 課程報告（SessionReport）
 
-**路徑：** `/dashboard/courses/:id/report`
+**路徑：** `/dashboard/sessions/:id/report`
 
 顯示：
 - 課程級別的整合報告
@@ -429,17 +441,19 @@ curl -X POST http://localhost:8080/api/children \
 # 1. 建立課程
 curl -X POST http://localhost:8080/api/sessions \
   -H "Content-Type: application/json" \
-  -d '{"course_type":"march"}'
+  -d '{"name":"測試課程","class_id":"...","template_id":"..."}'
 
 # 2. 配對腰帶 → 學員
 curl -X POST http://localhost:8080/api/sessions/{SESSION_ID}/assign \
   -H "Content-Type: application/json" \
-  -d '{"device_id":"{DEVICE_ID}","child_id":"{CHILD_ID}","confidence":0.95}'
+  -d '{"device_id":"{DEVICE_UUID}","child_id":"{CHILD_ID}","confidence":0.95}'
 
 # 3. 查詢配對結果
 curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
   | python3 -m json.tool
 ```
+
+> 配對後後端會自動寫入 `devices.active_session_id`，ESP32 在下次輪詢時會自動重連到該 session 的 WebSocket。
 
 **回應範例：**
 ```json
@@ -515,6 +529,7 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 |--------|------|------|
 | `GET` | `/api/config/wifi` | 讀取 WiFi 設定（預設只回傳 `ssid` 與 `updated_at`） |
 | `PUT` | `/api/config/wifi` | 更新 WiFi 設定（body: `ssid`, `password?`） |
+| `GET` | `/api/config/session?device_id=<device_id>` | 查詢裝置被指派到的 session（回傳 `{"session_id": "..."}` 或 `null`） |
 
 #### 裝置與學員管理
 
@@ -682,9 +697,13 @@ MPU6xxx: WHO_AM_I verified: 0x70      ← IMU 偵測成功
 MPU6xxx: MPU6xxx initialized           ← IMU 初始化完成
 HMEAYC: WiFi connected, IP: 192.168.x.x  ← WiFi 連線成功
 HMEAYC: WebSocket connected            ← WS 連線成功
+DeviceRegistry: device registration succeeded  ← 裝置註冊成功
+HMEAYC: checking remote session config...     ← 查詢 session 指派
+HMEAYC: session config: {"session_id":"..."}  ← 取得 session 指派
+WSClient: session changed: 'default' -> '...' ← 重連到正確 session
 
 # 2. 確認 Dashboard 收到資料
-# 開啟 http://localhost:5173/dashboard/live/default
+# 開啟 http://localhost:5173/dashboard/live/<session_id>
 # 確認圖表有即時波形
 
 # 3. 確認裝置已註冊
@@ -763,6 +782,10 @@ curl http://localhost:8080/health
 
 # 確認 ESP32 設定的 WS URI 正確
 # sdkconfig.defaults 中：CONFIG_HMEAYC_WS_URI="ws://{BACKEND_IP}:8080/ws/default"
+# 韌體會自動替換 session 路徑（透過 GET /api/config/session 查詢）
+
+# 確認裝置已被指派到某個 session
+curl -s "http://localhost:8080/api/config/session?device_id=hmeayc-001"
 
 # 從 ESP32 ping 後端 IP
 ping 192.168.1.105
@@ -873,6 +896,7 @@ erDiagram
         float battery_level
         enum status
         datetime last_seen
+        string active_session_id FK  ← 目前指派的 session（動態更新）
     }
 
     Child {
