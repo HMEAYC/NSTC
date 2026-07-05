@@ -373,23 +373,13 @@ ESP32 開機時連線到 `/ws/default`，然後向 `GET /api/config/session?devi
 
 **路徑：** `/dashboard/devices`
 
-三頁籤：
-
-**📡 裝置：**
-- 列表顯示所有註冊 ESP32 腰帶
-- 項目：名稱、Device ID、韌體版本、電量、最後上線時間、狀態
+單頁列表顯示所有註冊 ESP32 腰帶：
+- 項目：名稱、Device ID、韌體版本、WiFi SSID、訊強度、IP、電量、最後上線時間、狀態
 - 狀態指示燈（綠 = 連線中 / 灰 = 離線）
-- ESP32 開機會自動註冊
+- 額外加掛韌體 / WiFi 設定頁面快速連結
+- ESP32 開機會自動註冊（含 WiFi 資訊）
 
-**👤 學員：**
-- 列表顯示所有註冊學員
-- 可透過表單註冊新學員（姓名 + 學號 + 備註）
-
-**🔗 跨模態配對機制：**
-- 論文演算法說明
-- 三欄：IMU 腰帶訊號 / 攝影機視覺訊號 / 配對演算法
-- 配對流程步驟
-- 合成驗證結果表
+> 學員註冊與班級管理移至 `/dashboard/classes`。
 
 ---
 
@@ -398,16 +388,21 @@ ESP32 開機時連線到 `/ws/default`，然後向 `GET /api/config/session?devi
 ### 6.1 概念流程
 
 ```
-教師登入 → 註冊腰帶（ESP32 自動）→ 註冊學員（手動）→ 開始課程 → 配對腰帶↔學員
-                                                                       ↓
-                                                             手動配對 / 自動演算法
-                                                                       ↓
-                                                             確認配對結果 + 信心分數
+ESP32 開機 → 自動註冊裝置（POST /api/devices）
+                                      ↓
+教師登入 Dashboard → 開課（/dashboard/sessions）→ 課程詳情頁
+                                      ↓
+                         點擊學童列 → 配對彈窗
+                          ├── 手動選擇裝置配對
+                          ├── 🔗 跨模態自動配對（FFT + Hungarian）
+                          └── 解除配對
+                                      ↓
+                         確認配對結果 + 信心分數
 ```
 
 ### 6.2 裝置註冊
 
-**自動註冊：** ESP32 開機並連上 WiFi 後，韌體會主動送出 `POST /api/devices`，以 `device_id` 和 `firmware_version` 更新裝置狀態。可在 Dashboard 裝置列表看到。
+**自動註冊：** ESP32 開機並連上 WiFi 後，韌體會主動送出 `POST /api/devices`，以 `device_id`、`firmware_version`、`wifi_ssid`、`wifi_rssi`、`ip_address` 更新裝置狀態。可在 Dashboard 裝置列表看到。
 
 **手動註冊（測試）：**
 
@@ -420,10 +415,9 @@ curl -X POST http://localhost:8080/api/devices \
 ### 6.3 學員註冊
 
 **Dashboard 操作：**
-1. 開啟 `/dashboard/devices`
-2. 切到「👤 學員」頁籤
-3. 點擊「+ 註冊學員」
-4. 填寫姓名（必填）、學號（選填）、備註（選填）
+1. 開啟 `/dashboard/classes` → 選擇班級
+2. 在班級詳情頁點擊「+ 註冊學員」
+3. 填寫姓名（必填）、學號（選填）、備註（選填）
 
 **API：**
 
@@ -465,9 +459,18 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 }
 ```
 
-### 6.5 跨模態自動配對（未來功能）
+### 6.5 跨模態自動配對（已實作）
 
-論文演算法（FFT 相位匹配 + Hungarian 指派）預計整合至 `POST /api/sessions/{id}/assign`，以 `method: "cross_modal_fft"` 自動執行。需攝影機 MediaPipe 資料串接。
+論文演算法（FFT 相位匹配 + Hungarian 指派）已實作為 `POST /api/sessions/{id}/auto-pair`，可在課程詳情頁的配對彈窗中點擊「🔗 跨模態自動配對」執行。
+
+**流程：**
+1. 系統擷取每個裝置的 IMU 加速度 magnitude，執行 FFT 取得主頻率與相位
+2. 若攝影機已上傳課程錄影，系統對 IMU 相位與視覺髖部軌跡相位進行交叉相關
+3. 對所有 N² 候選對執行 Hungarian 全域最優指派
+4. 回傳每組配對的信心分數（含 BPM 估計值）
+5. 教師可在彈窗中「採用」建議配對或手動覆寫
+
+> 無攝影機資料時，仍會以 IMU 頻譜相位分析進行建議配對，但信心較低。
 
 ---
 

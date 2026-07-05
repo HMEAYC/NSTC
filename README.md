@@ -207,7 +207,7 @@ gantt
 | `/dashboard/sessions/:id/report` | 課程報告 | 課程完整 AI 分析報告 |
 | `/dashboard/live/:sessionId` | 即時監控 | 即時 IMU 6 軸圖表 |
 | `/dashboard/history` | 課程紀錄 | Session 列表 |
-| `/dashboard/devices` | 裝置管理 | 裝置列表（狀態/電量/韌體）、學員註冊、配對機制說明 |
+| `/dashboard/devices` | 裝置管理 | ESP32 穿戴式裝置列表（狀態/電量/韌體/WiFi） |
 | `/dashboard/assessment/default` | 評估指標 | 即時 IMU 指標運算（活動量/平穩度/穩定指數） |
 
 ### 資料庫模型
