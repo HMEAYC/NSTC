@@ -181,16 +181,25 @@ def assign_child_device(
     current_user: User | None = Depends(get_current_user),
 ):
     device_id = body.get("device_id", "")
-    org_id = effective_org_id(current_user)
-    child = db.query(ChildModel).filter(ChildModel.id == child_id, ChildModel.org_id == org_id).first()
+    is_super = current_user is not None and current_user.role == "super_admin"
+    org_id = effective_org_id(current_user) if not is_super else None
+
+    child = db.query(ChildModel).filter(ChildModel.id == child_id)
+    if org_id:
+        child = child.filter(ChildModel.org_id == org_id)
+    child = child.first()
     if not child:
         raise HTTPException(404, "Child not found")
-    device = db.query(DeviceModel).filter(DeviceModel.id == device_id, DeviceModel.org_id == org_id).first()
+    device = db.query(DeviceModel).filter(DeviceModel.id == device_id)
+    if org_id:
+        device = device.filter(DeviceModel.org_id == org_id)
+    device = device.first()
     if not device:
         raise HTTPException(404, "Device not found")
-    session = db.query(SessionModel).filter(
-        SessionModel.org_id == org_id
-    ).order_by(SessionModel.start_time.desc()).first()
+    session = db.query(SessionModel).filter()
+    if org_id:
+        session = session.filter(SessionModel.org_id == org_id)
+    session = session.order_by(SessionModel.start_time.desc()).first()
     if not session:
         session = SessionModel(org_id=org_id, course_type="march", start_time=datetime.utcnow(), status="active")
         db.add(session)
@@ -267,11 +276,10 @@ def get_assignments(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = db.query(SessionModel).filter(SessionModel.id == session_id)
+    if not (current_user is not None and current_user.role == "super_admin"):
+        session = session.filter(SessionModel.org_id == effective_org_id(current_user))
+    session = session.first()
     if not session:
         raise HTTPException(404, "Session not found")
     assigns = (
@@ -305,23 +313,25 @@ def assign_device(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    is_super = current_user is not None and current_user.role == "super_admin"
+    org_id = effective_org_id(current_user) if not is_super else None
+
+    filters = [SessionModel.id == session_id]
+    if org_id:
+        filters.append(SessionModel.org_id == org_id)
+    session = db.query(SessionModel).filter(*filters).first()
     if not session:
         raise HTTPException(404, "Session not found")
-    device = db.query(DeviceModel).filter(
-        DeviceModel.id == device_id,
-        DeviceModel.org_id == org_id,
-    ).first()
+    device = db.query(DeviceModel).filter(DeviceModel.id == device_id)
+    if org_id:
+        device = device.filter(DeviceModel.org_id == org_id)
+    device = device.first()
     if not device:
         raise HTTPException(404, "Device not found")
-    child = db.query(ChildModel).filter(
-        ChildModel.id == child_id,
-        ChildModel.org_id == org_id,
-    ).first()
+    child = db.query(ChildModel).filter(ChildModel.id == child_id)
+    if org_id:
+        child = child.filter(ChildModel.org_id == org_id)
+    child = child.first()
     if not child:
         raise HTTPException(404, "Child not found")
 
@@ -375,13 +385,15 @@ def delete_assignment(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
+    is_super = current_user is not None and current_user.role == "super_admin"
     assignment = db.query(DeviceAssignment).filter(DeviceAssignment.id == assignment_id).first()
     if not assignment:
         raise HTTPException(404, "Assignment not found")
-    child = db.query(ChildModel).filter(ChildModel.id == assignment.child_id).first()
-    if child and child.org_id != org_id:
-        raise HTTPException(403, "Forbidden")
+    if not is_super:
+        org_id = effective_org_id(current_user)
+        child = db.query(ChildModel).filter(ChildModel.id == assignment.child_id).first()
+        if child and child.org_id != org_id:
+            raise HTTPException(403, "Forbidden")
 
     # Clear device's active session
     device = db.query(DeviceModel).filter(DeviceModel.id == assignment.device_id).first()
