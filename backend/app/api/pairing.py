@@ -24,11 +24,11 @@ def auto_pair(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    is_super = current_user is not None and current_user.role == "super_admin"
+    filters = [SessionModel.id == session_id]
+    if not is_super:
+        filters.append(SessionModel.org_id == effective_org_id(current_user))
+    session = db.query(SessionModel).filter(*filters).first()
     if not session:
         raise HTTPException(404, "Session not found")
 
