@@ -1,28 +1,68 @@
 import { useEffect, useState } from "react";
+import { useAuth } from "../auth/context";
+import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
+import Modal from "../components/Modal";
+
+const API_BASE = import.meta.env.VITE_API_BASE || "";
 
 interface ManagedUser {
   id: string;
   email: string;
-  display_name: string;
+  display_name: string | null;
   role: string;
+  org_id: string;
   is_active: boolean;
+  invite_token: string | null;
 }
 
+function getToken(): string | null {
+  return localStorage.getItem("hmeayc_token");
+}
+
+function authFetch(url: string, init?: RequestInit) {
+  const tok = getToken();
+  return fetch(`${API_BASE}${url}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}`, ...init?.headers },
+  });
+}
+
+const roleLabel: Record<string, string> = {
+  super_admin: "系統管理員",
+  org_admin: "機構管理員",
+  teacher: "教師",
+  parent: "家長",
+};
+
 export default function UserManagement() {
+  const { user } = useAuth();
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
-  const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ email: "", password: "", display_name: "", role: "teacher" });
+  const isSuper = user?.role === "super_admin";
+  const myOrgId = user?.org_id || "";
+  const effectiveOrgId = isSuper ? (getActiveOrgId() || myOrgId) : myOrgId;
 
-  const token = localStorage.getItem("hmeayc_token");
-  const authHeaders = { Authorization: `Bearer ${token}`, "Content-Type": "application/json" };
+  // invite modal
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [invEmail, setInvEmail] = useState("");
+  const [invRole, setInvRole] = useState("teacher");
+  const [invSending, setInvSending] = useState(false);
+  const [invError, setInvError] = useState<string | null>(null);
+  const [invOk, setInvOk] = useState<string | null>(null);
 
-  const fetchUsers = async () => {
+  // edit modal
+  const [editUser, setEditUser] = useState<ManagedUser | null>(null);
+  const [editDisplayName, setEditDisplayName] = useState("");
+  const [editRole, setEditRole] = useState("");
+  const [editSaving, setEditSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+
+  const fetchUsers = async (orgId?: string) => {
     setLoading(true);
     try {
-      const orgId = "00000000-0000-0000-0000-000000000001";
-      const res = await fetch(`/api/orgs/${orgId}/users`, { headers: authHeaders });
+      const targetOrg = orgId || effectiveOrgId;
+      const res = await authFetch(`/api/orgs/${targetOrg}/users`);
       if (res.ok) {
         const data = await res.json();
         setUsers(data.users || []);
@@ -31,74 +71,167 @@ export default function UserManagement() {
     setLoading(false);
   };
 
-  useEffect(() => { fetchUsers(); }, []);
+  useEffect(() => {
+    if (effectiveOrgId) fetchUsers(effectiveOrgId);
+  }, [effectiveOrgId]);
 
-  const handleCreate = async () => {
-    if (!form.email.trim() || !form.password.trim() || !form.display_name.trim()) return;
+  // ── invite ──
+  const handleInvite = async () => {
+    if (!invEmail.trim() || !effectiveOrgId) return;
+    setInvSending(true);
+    setInvError(null);
+    setInvOk(null);
     try {
-      const orgId = "00000000-0000-0000-0000-000000000001";
-      await fetch(`/api/orgs/${orgId}/users`, {
+      const res = await authFetch(`/api/orgs/${effectiveOrgId}/invite`, {
         method: "POST",
-        headers: authHeaders,
-        body: JSON.stringify(form),
+        body: JSON.stringify({ email: invEmail, role: invRole }),
       });
-      setForm({ email: "", password: "", display_name: "", role: "teacher" });
-      setShowCreate(false);
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || `HTTP ${res.status}`);
+      }
+      setInvOk(`邀請已發送至 ${invEmail}`);
+      setInvEmail("");
       fetchUsers();
-    } catch { /* ignore */ }
+    } catch (err) {
+      setInvError(err instanceof Error ? err.message : "發送失敗");
+    } finally {
+      setInvSending(false);
+    }
+  };
+
+  // ── toggle active / save edit ──
+  const saveUser = async () => {
+    if (!editUser) return;
+    setEditSaving(true);
+    setEditError(null);
+    try {
+      const body: Record<string, unknown> = { display_name: editDisplayName };
+      if (isSuper) body.role = editRole;
+      const res = await authFetch(`/api/users/${editUser.id}`, {
+        method: "PUT",
+        body: JSON.stringify(body),
+      });
+      if (!res.ok) {
+        const d = await res.json();
+        throw new Error(d.detail || `HTTP ${res.status}`);
+      }
+      setEditUser(null);
+      fetchUsers();
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "儲存失敗");
+    } finally {
+      setEditSaving(false);
+    }
   };
 
   const toggleActive = async (uid: string, current: boolean) => {
     try {
-      await fetch(`/api/users/${uid}`, {
+      await authFetch(`/api/users/${uid}`, {
         method: "PUT",
-        headers: authHeaders,
         body: JSON.stringify({ is_active: !current }),
       });
-      fetchUsers();
+      fetchUsers(effectiveOrgId);
     } catch { /* ignore */ }
   };
+
+  const openEdit = (u: ManagedUser) => {
+    setEditUser(u);
+    setEditDisplayName(u.display_name || u.email);
+    setEditRole(u.role);
+    setEditError(null);
+  };
+
+  if (!effectiveOrgId) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto">
+        <h1 className="text-2xl font-bold text-gray-800 mb-4">帳號管理</h1>
+        <p className="text-gray-400 text-sm">請先到機構管理選擇機構</p>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold text-gray-800">教師管理</h1>
-        <button onClick={() => setShowCreate(!showCreate)} className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700">
-          {showCreate ? "取消" : "+ 新增教師"}
+        <h1 className="text-2xl font-bold text-gray-800">帳號管理</h1>
+        <button onClick={() => { setShowInviteModal(true); setInvError(null); setInvOk(null); }}
+          className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700">
+          + 教師邀請
         </button>
       </div>
 
-      {showCreate && (
-        <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
-          <input value={form.email} onChange={(e) => setForm({ ...form, email: e.target.value })}
-            placeholder="Email" type="email" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          <input value={form.password} onChange={(e) => setForm({ ...form, password: e.target.value })}
-            placeholder="密碼" type="password" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          <input value={form.display_name} onChange={(e) => setForm({ ...form, display_name: e.target.value })}
-            placeholder="顯示名稱" className="w-full border rounded-lg px-3 py-2 text-sm" />
-          <select value={form.role} onChange={(e) => setForm({ ...form, role: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-sm">
-            <option value="teacher">教師</option>
-            <option value="org_admin">管理員</option>
-          </select>
-          <button onClick={handleCreate} className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm">建立</button>
-        </div>
-      )}
+      {/* ── Invite modal ── */}
+      <Modal open={showInviteModal} onClose={() => setShowInviteModal(false)} title="教師邀請">
+        {invError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs">{invError}</div>}
+        {invOk && <div className="bg-green-50 border border-green-200 text-green-700 rounded-lg p-3 text-xs">{invOk}</div>}
+        <input value={invEmail} onChange={(e) => setInvEmail(e.target.value)}
+          placeholder="教師 Email" type="email" className="w-full border rounded-lg px-3 py-2 text-sm" />
+        <select value={invRole} onChange={(e) => setInvRole(e.target.value)}
+          className="w-full border rounded-lg px-3 py-2 text-sm">
+          <option value="teacher">教師</option>
+          <option value="org_admin">機構管理員</option>
+        </select>
+        <button onClick={handleInvite} disabled={invSending || !invEmail.trim()}
+          className="w-full bg-blue-600 text-white py-2 rounded-lg text-sm disabled:opacity-50">
+          {invSending ? "發送中…" : "發送邀請"}
+        </button>
+      </Modal>
 
-      {loading ? <LoadingSpinner text="載入中…" /> : (
-        <div className="space-y-2">
-          {users.filter((u) => u.role !== "parent").map((u) => (
-            <div key={u.id} className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between">
-              <div>
-                <div className="font-semibold text-gray-800">{u.display_name}</div>
-                <div className="text-xs text-gray-400">{u.email} · {u.role}</div>
-              </div>
-              <button onClick={() => toggleActive(u.id, u.is_active)}
-                className={`text-xs px-2 py-1 rounded ${u.is_active ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
-                {u.is_active ? "停用" : "啟用"}
+      {/* ── Edit user modal ── */}
+      <Modal open={!!editUser} onClose={() => setEditUser(null)} title="編輯帳號">
+        {editUser && (
+          <div className="space-y-3">
+            {editError && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs">{editError}</div>}
+            <div className="text-xs text-gray-400">{editUser.email}</div>
+            <input value={editDisplayName} onChange={(e) => setEditDisplayName(e.target.value)}
+              placeholder="顯示名稱" className="w-full border rounded-lg px-3 py-2 text-sm" />
+            {isSuper && (
+              <select value={editRole} onChange={(e) => setEditRole(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm">
+                {Object.entries(roleLabel).map(([v, l]) => (
+                  <option key={v} value={v}>{l}</option>
+                ))}
+              </select>
+            )}
+            <div className="flex gap-2 pt-1">
+              <button onClick={() => toggleActive(editUser.id, editUser.is_active)}
+                className={`flex-1 text-sm py-2 rounded-lg ${editUser.is_active ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+                {editUser.is_active ? "停用帳號" : "啟用帳號"}
+              </button>
+              <button onClick={saveUser} disabled={editSaving}
+                className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm disabled:opacity-50">
+                {editSaving ? "儲存中…" : "儲存"}
               </button>
             </div>
-          ))}
+          </div>
+        )}
+      </Modal>
+
+      {/* ── User list ── */}
+      {loading ? <LoadingSpinner text="載入中…" /> : (
+        <div className="space-y-2">
+          {users.filter((u) => u.role !== "parent").map((u) => {
+            const pending = u.invite_token != null;
+            return (
+              <div key={u.id} onClick={() => openEdit(u)}
+                className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
+                <div>
+                  <div className="font-semibold text-gray-800">{u.display_name || u.email}</div>
+                  <div className="text-xs text-gray-400">
+                    {u.email} · {roleLabel[u.role] || u.role}
+                    {pending && <span className="ml-2 text-amber-600 font-medium">待啟用</span>}
+                  </div>
+                </div>
+                <span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                  {u.is_active ? "啟用" : "停用"}
+                </span>
+              </div>
+            );
+          })}
+          {users.filter((u) => u.role !== "parent").length === 0 && (
+            <p className="text-center text-gray-400 text-sm py-8">尚無教師帳號</p>
+          )}
         </div>
       )}
     </div>

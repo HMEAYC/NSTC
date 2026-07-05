@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { useAuth } from "../auth/context";
+import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 interface ClassItem {
@@ -11,22 +12,34 @@ interface ClassItem {
   created_at: string | null;
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+function authFetch(url: string, init?: RequestInit) {
+  const tok = localStorage.getItem("hmeayc_token");
+  return fetch(`${API_BASE}${url}`, {
+    ...init,
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}`, ...init?.headers },
+  });
+}
+
 export default function ClassManagement() {
+  const { user } = useAuth();
   const navigate = useNavigate();
   const [classes, setClasses] = useState<ClassItem[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: "", grade: "" });
+  const isSuper = user?.role === "super_admin";
+  const myOrgId = user?.org_id || "";
+  const effectiveOrgId = isSuper ? (getActiveOrgId() || myOrgId) : myOrgId;
 
-  const fetchClasses = async () => {
+  const fetchClasses = async (orgId: string) => {
+    if (!orgId) return;
     setLoading(true);
     setError(null);
     try {
-      const orgId = "00000000-0000-0000-0000-000000000001";
-      const res = await fetch(`/api/orgs/${orgId}/classes`, {
-        headers: { Authorization: `Bearer ${localStorage.getItem("hmeayc_token")}` },
-      });
+      const res = await authFetch(`/api/orgs/${orgId}/classes`);
       if (res.ok) {
         const data = await res.json();
         setClasses(data.classes || []);
@@ -38,33 +51,38 @@ export default function ClassManagement() {
     }
   };
 
-  useEffect(() => { fetchClasses(); }, []);
+  useEffect(() => {
+    if (effectiveOrgId) fetchClasses(effectiveOrgId);
+  }, [effectiveOrgId]);
 
   const handleCreate = async () => {
-    if (!form.name.trim()) return;
+    if (!form.name.trim() || !effectiveOrgId) return;
     try {
-      const orgId = "00000000-0000-0000-0000-000000000001";
-      const res = await fetch(`/api/orgs/${orgId}/classes?name=${encodeURIComponent(form.name)}&grade=${encodeURIComponent(form.grade)}`, {
+      const res = await authFetch(`/api/orgs/${effectiveOrgId}/classes?name=${encodeURIComponent(form.name)}&grade=${encodeURIComponent(form.grade)}`, {
         method: "POST",
-        headers: { Authorization: `Bearer ${localStorage.getItem("hmeayc_token")}` },
       });
       if (res.ok) {
         setForm({ name: "", grade: "" });
         setShowCreate(false);
-        fetchClasses();
+        fetchClasses(effectiveOrgId);
       }
     } catch { /* ignore */ }
   };
 
-  if (loading) return <div className="p-6 max-w-4xl mx-auto"><LoadingSpinner text="載入班級…" /></div>;
+  if (loading && classes.length === 0) {
+    return <div className="p-6 max-w-4xl mx-auto"><LoadingSpinner text="載入班級…" /></div>;
+  }
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">班級管理</h1>
-        <button onClick={() => setShowCreate(!showCreate)} className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700">
-          {showCreate ? "取消" : "+ 新增班級"}
-        </button>
+        {effectiveOrgId && (
+          <button onClick={() => setShowCreate(!showCreate)}
+            className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700">
+            {showCreate ? "取消" : "+ 新增班級"}
+          </button>
+        )}
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">{error}</div>}
@@ -81,7 +99,9 @@ export default function ClassManagement() {
 
       <div className="space-y-2">
         {classes.length === 0 ? (
-          <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">尚無班級</div>
+          <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">
+            {effectiveOrgId ? "尚無班級" : "請先到機構管理選擇機構"}
+          </div>
         ) : classes.map((c) => (
           <div key={c.id} onClick={() => navigate(`/dashboard/classes/${c.id}`)}
             className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md cursor-pointer">

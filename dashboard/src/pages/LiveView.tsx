@@ -192,22 +192,16 @@ export default function LiveView() {
           <span className="text-sm text-gray-600">{statusLabel[displayStatus]}</span>
         </div>
         <div className="flex items-center gap-3 text-sm">
-          <div className="flex items-center gap-2">
-            <span className="text-gray-400">Session:</span>
-            <span className="font-mono text-gray-600">{sid.slice(0, 8)}</span>
-            <span className="text-gray-300 mx-1">|</span>
-            <span className="text-gray-400">裝置:</span>
-            <span className="font-semibold text-gray-700">{deviceIds.length}</span>
+          <span className="text-gray-400">Session:</span>
+          <span className="font-mono text-gray-600">{sid.slice(0, 8)}</span>
+          <div className="flex items-center gap-1">
+            <a href={`/dashboard/assessment/${sid}${activeDevice ? `?device=${encodeURIComponent(activeDevice)}` : ""}`}
+              className="text-xs px-2 py-0.5 rounded bg-orange-50 text-orange-600 hover:bg-orange-100 font-medium">
+              🎯 評估指標
+            </a>
+            <a href="/dashboard/firmware" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">韌體</a>
+            <a href="/dashboard/wifi" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">WiFi</a>
           </div>
-          <span className="text-gray-300">|</span>
-            <div className="flex items-center gap-1">
-              <a href={`/dashboard/assessment/${sid}${activeDevice ? `?device=${encodeURIComponent(activeDevice)}` : ""}`}
-                className="text-xs px-2 py-0.5 rounded bg-orange-50 text-orange-600 hover:bg-orange-100 font-medium">
-                🎯 評估指標
-              </a>
-              <a href="/dashboard/firmware" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">韌體</a>
-              <a href="/dashboard/wifi" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">WiFi</a>
-            </div>
         </div>
       </div>
 

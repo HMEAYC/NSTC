@@ -8,7 +8,7 @@ class SessionTemplate(Base):
     __tablename__ = "session_templates"
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
-    org_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
+    org_id = Column(String(36), ForeignKey("organizations.id"), nullable=True)
     name = Column(String(200), nullable=False)
     description = Column(String(500), nullable=True)
     duration_minutes = Column(Integer, nullable=True)

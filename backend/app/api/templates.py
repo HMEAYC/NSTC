@@ -7,7 +7,6 @@ from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc
 
 from app.auth.deps import get_current_user, require_role
-from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.session_template import SessionTemplate
 from app.models.user import User
@@ -48,10 +47,8 @@ def list_templates(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
     templates = (
         db.query(SessionTemplate)
-        .filter(SessionTemplate.org_id == org_id)
         .order_by(desc(SessionTemplate.created_at))
         .all()
     )
@@ -64,9 +61,7 @@ def create_template(
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
-    org_id = effective_org_id(current_user)
     tpl = SessionTemplate(
-        org_id=org_id,
         name=body.name,
         description=body.description,
         duration_minutes=body.duration_minutes,
@@ -85,10 +80,8 @@ def get_template(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
     tpl = db.query(SessionTemplate).filter(
         SessionTemplate.id == template_id,
-        SessionTemplate.org_id == org_id,
     ).first()
     if not tpl:
         raise HTTPException(404, "Template not found")
@@ -102,10 +95,8 @@ def update_template(
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
-    org_id = effective_org_id(current_user)
     tpl = db.query(SessionTemplate).filter(
         SessionTemplate.id == template_id,
-        SessionTemplate.org_id == org_id,
     ).first()
     if not tpl:
         raise HTTPException(404, "Template not found")
@@ -130,10 +121,8 @@ def delete_template(
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
-    org_id = effective_org_id(current_user)
     tpl = db.query(SessionTemplate).filter(
         SessionTemplate.id == template_id,
-        SessionTemplate.org_id == org_id,
     ).first()
     if not tpl:
         raise HTTPException(404, "Template not found")

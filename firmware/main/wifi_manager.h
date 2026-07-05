@@ -12,6 +12,7 @@ bool wifi_is_connected(void);
 const char *wifi_get_ssid(void);
 const char *wifi_get_ip(void);
 int wifi_get_rssi(void);
+const char *wifi_get_mac(void);
 
 #ifdef __cplusplus
 }

@@ -8,6 +8,7 @@
 #include "esp_log.h"
 #include "esp_netif.h"
 #include "esp_wifi.h"
+#include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 #include "nvs_flash.h"
@@ -26,6 +27,8 @@ static int s_retry_count = 0;
 
 static char s_current_ssid[64] = "";
 static char s_ip[16] = "";
+static char s_mac[18] = "";
+static bool s_mac_read = false;
 static bool s_connected = false;
 
 static esp_err_t try_connect(const char *ssid, const char *password) {
@@ -137,4 +140,19 @@ int wifi_get_rssi(void) {
         return ap.rssi;
     }
     return 0;
+}
+
+const char *wifi_get_mac(void) {
+    if (!s_mac_read) {
+        uint8_t mac[6];
+        esp_err_t err = esp_read_mac(mac, ESP_MAC_WIFI_STA);
+        if (err == ESP_OK) {
+            snprintf(s_mac, sizeof(s_mac), "%02X:%02X:%02X:%02X:%02X:%02X",
+                     mac[0], mac[1], mac[2], mac[3], mac[4], mac[5]);
+        } else {
+            strncpy(s_mac, "00:00:00:00:00:00", sizeof(s_mac));
+        }
+        s_mac_read = true;
+    }
+    return s_mac;
 }

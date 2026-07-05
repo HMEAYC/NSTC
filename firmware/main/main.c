@@ -63,18 +63,18 @@ void app_main(void) {
     wifi_connect();
     if (wifi_is_connected()) {
         device_registry_info_t reg_info = {
-            .device_id = CONFIG_HMEAYC_DEVICE_ID,
-            .name = CONFIG_HMEAYC_DEVICE_ID,
+            .device_id = wifi_get_mac(),
+            .name = wifi_get_mac(),
             .firmware_version = CONFIG_HMEAYC_FIRMWARE_VERSION,
             .wifi_ssid = wifi_get_ssid(),
             .wifi_rssi = wifi_get_rssi(),
             .ip_address = wifi_get_ip(),
         };
         device_registry_upsert(API_BASE_URL, &reg_info);
-        ota_send_ack(API_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
+        ota_send_ack(API_BASE_URL, wifi_get_mac());
         // Pre-initialize WebSocket URI base (so set_session_id can set the path)
         websocket_parse_base_uri();
-        session_config_fetch_remote(CONFIG_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
+        session_config_fetch_remote(CONFIG_BASE_URL, wifi_get_mac());
         char session_id[64] = "";
         if (session_config_load(session_id, sizeof(session_id)) == ESP_OK && session_id[0] != '\0') {
             websocket_set_session_id(session_id);
@@ -117,7 +117,7 @@ void app_main(void) {
         // Remote WiFi config check every 30 min
         if (tick % WIFI_CONFIG_INTERVAL == 0 && tick > 0 && wifi_is_connected()) {
             ESP_LOGI(TAG, "checking remote WiFi config...");
-            wifi_config_fetch_remote(CONFIG_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
+            wifi_config_fetch_remote(CONFIG_BASE_URL, wifi_get_mac());
         }
 
         // Remote session config check every 30 min
@@ -126,7 +126,7 @@ void app_main(void) {
             char old_sid[64] = "";
             session_config_load(old_sid, sizeof(old_sid));
 
-            session_config_fetch_remote(CONFIG_BASE_URL, CONFIG_HMEAYC_DEVICE_ID);
+            session_config_fetch_remote(CONFIG_BASE_URL, wifi_get_mac());
 
             char new_sid[64] = "";
             if (session_config_load(new_sid, sizeof(new_sid)) == ESP_OK) {
@@ -137,8 +137,8 @@ void app_main(void) {
         if (tick % DEVICE_REGISTER_INTERVAL == 0 && tick > 0 && wifi_is_connected()) {
             ESP_LOGI(TAG, "refreshing device registration...");
             device_registry_info_t reg_info = {
-                .device_id = CONFIG_HMEAYC_DEVICE_ID,
-                .name = CONFIG_HMEAYC_DEVICE_ID,
+                .device_id = wifi_get_mac(),
+                .name = wifi_get_mac(),
                 .firmware_version = CONFIG_HMEAYC_FIRMWARE_VERSION,
                 .wifi_ssid = wifi_get_ssid(),
                 .wifi_rssi = wifi_get_rssi(),

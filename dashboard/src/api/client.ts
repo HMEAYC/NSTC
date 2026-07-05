@@ -37,6 +37,7 @@ export interface DeviceInfo {
   wifi_rssi: number | null;
   ip_address: string | null;
   mac_address: string | null;
+  org_id: string;
   status: string;
   active_session_id: string | null;
   last_seen: string | null;
@@ -100,7 +101,7 @@ export interface SessionTemplateInfo {
   name: string;
   description: string | null;
   duration_minutes: number | null;
-  stages: { name: string; duration: number; type?: string }[] | null;
+  stages: { name: string; duration: number; type?: string; age_group?: string }[] | null;
   metrics_config: Record<string, boolean> | null;
   created_at: string | null;
 }
@@ -226,6 +227,12 @@ export const api = {
       body: JSON.stringify({ device_id, name, firmware_version }),
     }),
 
+  updateDevice: (id: string, data: { name?: string; org_id?: string }) =>
+    fetchJSON<{ device: DeviceInfo }>(`/api/devices/${id}`, {
+      method: "PUT",
+      body: JSON.stringify(data),
+    }),
+
   listChildren: () =>
     fetchJSON<{ children: ChildInfo[] }>("/api/children"),
 
@@ -332,7 +339,7 @@ export const api = {
     fetchJSON<ClassAssessmentResponse>(`/api/classes/${classId}/assessments`),
 
   // Sessions
-  listSessions: (params?: { status?: string; class_id?: string }) => {
+  listSessions: (params?: { status?: string; class_id?: string; org_id?: string }) => {
     const q = params ? "?" + new URLSearchParams(params as Record<string, string>).toString() : "";
     return fetchJSON<{ sessions: SessionInfo[] }>(`/api/sessions${q}`);
   },
@@ -343,6 +350,7 @@ export const api = {
     template_id?: string;
     description?: string;
     scheduled_at?: string;
+    org_id?: string;
   }) =>
     fetchJSON<{ session: SessionInfo }>("/api/sessions", {
       method: "POST",

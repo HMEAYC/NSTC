@@ -1,10 +1,11 @@
 menu "HMEAYC Firmware Configuration"
 
     config HMEAYC_DEVICE_ID
-        string "Device ID"
-        default "hmeayc-001"
+        string "Device ID (deprecated — MAC is used instead)"
+        default ""
         help
-            Unique identifier for this device, sent in every IMU frame.
+            No longer used. Device now identifies itself via WiFi MAC address.
+            Kept to avoid breaking existing sdkconfig files.
 
     config HMEAYC_FIRMWARE_VERSION
         string "Firmware Version"

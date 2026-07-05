@@ -1,4 +1,5 @@
 from __future__ import annotations
+import uuid
 
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel, EmailStr
@@ -7,6 +8,7 @@ from sqlalchemy.orm import Session
 from app.auth.deps import get_current_user, require_role, same_org
 from app.auth.jwt import get_password_hash
 from app.db.base import get_db
+from app.email import send_invite_email
 from app.models.organization import Organization
 from app.models.school_class import SchoolClass
 from app.models.user import User
@@ -64,25 +66,81 @@ class ChildResponse(BaseModel):
 @router.get("/api/admin/orgs")
 def list_orgs(
     db: Session = Depends(get_db),
-    _: User = Depends(require_role("super_admin")),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
-    orgs = db.query(Organization).all()
+    if current_user.role == "super_admin":
+        orgs = db.query(Organization).all()
+    else:
+        orgs = db.query(Organization).filter(Organization.id == current_user.org_id).all()
     return {"orgs": orgs}
+
+
+class CreateOrgRequest(BaseModel):
+    name: str
+    code: str
+    contact_email: str | None = None
 
 
 @router.post("/api/admin/orgs")
 def create_org(
-    name: str, code: str, contact_email: str | None = None,
+    body: CreateOrgRequest,
     db: Session = Depends(get_db),
     _: User = Depends(require_role("super_admin")),
 ):
-    if db.query(Organization).filter(Organization.code == code).first():
+    if db.query(Organization).filter(Organization.code == body.code).first():
         raise HTTPException(409, "Organization code already exists")
-    org = Organization(name=name, code=code, contact_email=contact_email)
+    org = Organization(
+        name=body.name,
+        code=body.code,
+        contact_email=body.contact_email,
+    )
     db.add(org)
     db.commit()
     db.refresh(org)
     return {"org": org}
+
+
+class UpdateOrgRequest(BaseModel):
+    name: str | None = None
+    code: str | None = None
+    contact_email: str | None = None
+
+
+@router.put("/api/admin/orgs/{org_id}")
+def update_org(
+    org_id: str,
+    body: UpdateOrgRequest,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("super_admin")),
+):
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    if body.name is not None:
+        org.name = body.name
+    if body.code is not None:
+        if db.query(Organization).filter(Organization.code == body.code, Organization.id != org_id).first():
+            raise HTTPException(409, "Code already in use")
+        org.code = body.code
+    if body.contact_email is not None:
+        org.contact_email = body.contact_email
+    db.commit()
+    db.refresh(org)
+    return {"org": org}
+
+
+@router.delete("/api/admin/orgs/{org_id}")
+def delete_org(
+    org_id: str,
+    db: Session = Depends(get_db),
+    _: User = Depends(require_role("super_admin")),
+):
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    if not org:
+        raise HTTPException(404, "Organization not found")
+    db.delete(org)
+    db.commit()
+    return {"status": "deleted"}
 
 
 # ─── Classes ─────────────────────────────────────────────────────
@@ -239,37 +297,50 @@ def list_org_users(
     return {"users": users}
 
 
-@router.post("/api/orgs/{org_id}/users")
-def create_org_user(
+class InviteUserRequest(BaseModel):
+    email: EmailStr
+    role: str = "teacher"
+
+
+@router.post("/api/orgs/{org_id}/invite")
+def invite_user(
     org_id: str,
-    email: EmailStr,
-    password: str,
-    display_name: str,
-    role: str = "teacher",
+    body: InviteUserRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
     same_org(org_id, current_user)
-    if db.query(User).filter(User.email == email).first():
+    if db.query(User).filter(User.email == body.email).first():
         raise HTTPException(409, "Email already registered")
+    invite_token = str(uuid.uuid4())
     user = User(
         org_id=org_id,
-        email=email,
-        password_hash=get_password_hash(password),
-        display_name=display_name,
-        role=role,
+        email=body.email,
+        role=body.role,
+        is_active=False,
+        invite_token=invite_token,
     )
     db.add(user)
     db.commit()
     db.refresh(user)
-    return {"user": user}
+
+    org = db.query(Organization).filter(Organization.id == org_id).first()
+    send_invite_email(body.email, invite_token, current_user.display_name, org.name if org else "機構")
+
+    return {"user": {"id": user.id, "email": user.email, "role": user.role, "org_id": user.org_id}}
+
+
+class UpdateUserRequest(BaseModel):
+    is_active: bool | None = None
+    display_name: str | None = None
+    password: str | None = None
+    role: str | None = None
 
 
 @router.put("/api/users/{user_id}")
 def update_user(
     user_id: str,
-    is_active: bool | None = None,
-    display_name: str | None = None,
+    body: UpdateUserRequest,
     db: Session = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
@@ -277,10 +348,14 @@ def update_user(
     if not user:
         raise HTTPException(404, "User not found")
     same_org(user.org_id, current_user)
-    if is_active is not None:
-        user.is_active = is_active
-    if display_name is not None:
-        user.display_name = display_name
+    if body.is_active is not None:
+        user.is_active = body.is_active
+    if body.display_name is not None:
+        user.display_name = body.display_name
+    if body.password is not None:
+        user.password_hash = get_password_hash(body.password)
+    if body.role is not None and current_user.role == "super_admin":
+        user.role = body.role
     db.commit()
     db.refresh(user)
     return {"user": user}

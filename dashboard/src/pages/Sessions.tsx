@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/context";
+import { getActiveOrgId } from "../lib/activeOrg";
 import { api, type SessionInfo, type SessionTemplateInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
@@ -29,11 +30,13 @@ export default function Sessions() {
     try {
       const token = localStorage.getItem("hmeayc_token");
       const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
+      const orgOverride = user?.org_id ? undefined : getActiveOrgId() || undefined;
+      const effectiveOrgId = orgOverride || user?.org_id;
       const [sessionsRes, templatesRes, classRes] = await Promise.all([
-        api.listSessions(),
+        api.listSessions({ org_id: orgOverride }),
         api.listTemplates(),
-        user?.org_id
-          ? fetch(`/api/orgs/${user.org_id}/classes`, { headers }).then(r => r.ok ? r.json() : { classes: [] })
+        effectiveOrgId
+          ? fetch(`/api/orgs/${effectiveOrgId}/classes`, { headers }).then(r => r.ok ? r.json() : { classes: [] })
           : Promise.resolve({ classes: [] }),
       ]);
       setSessions(sessionsRes.sessions);
@@ -54,6 +57,7 @@ export default function Sessions() {
     const className = classList.find((c) => c.id === form.class_id)?.name || "";
     const tplName = templates.find((t) => t.id === form.template_id)?.name || "";
     const name = [dateStr, className, tplName].filter(Boolean).join(" ");
+    const orgOverride = user?.org_id ? undefined : getActiveOrgId() || undefined;
     try {
       await api.createSession({
         name,
@@ -61,6 +65,7 @@ export default function Sessions() {
         template_id: form.template_id || undefined,
         scheduled_at: form.scheduled_at || undefined,
         description: form.description || undefined,
+        org_id: orgOverride,
       });
       setForm({ class_id: "", template_id: "", scheduled_at: "", description: "" });
       setShowCreate(false);
@@ -89,11 +94,18 @@ export default function Sessions() {
               {new Date().toLocaleDateString("zh-TW")} {classList.find((c) => c.id === form.class_id)?.name || ""} {templates.find((t) => t.id === form.template_id)?.name || ""}
             </span>
           </div>
-          <select value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}
-            className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
-            <option value="">選擇教案模板 *</option>
-            {templates.map((t) => <option key={t.id} value={t.id}>{t.name}</option>)}
-          </select>
+            <select value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}
+              className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
+              <option value="">選擇教案模板 *</option>
+              {templates.map((t) => {
+                const ag = t.stages?.[0]?.age_group;
+                return (
+                  <option key={t.id} value={t.id}>
+                    {ag ? `[${ag}] ` : ""}{t.name}
+                  </option>
+                );
+              })}
+            </select>
           <select value={form.class_id} onChange={(e) => setForm({ ...form, class_id: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
             <option value="">選擇班級（選填）</option>

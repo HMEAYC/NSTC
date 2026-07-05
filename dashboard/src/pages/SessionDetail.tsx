@@ -42,9 +42,7 @@ export default function SessionDetail() {
   const [evalLoaded, setEvalLoaded] = useState(false);
   const [savingEval, setSavingEval] = useState<string | null>(null);
 
-  // Activity flow state
-  const [actIdx, setActIdx] = useState(0);
-  const [savingAct, setSavingAct] = useState(false);
+
 
   const canEdit = user?.role === "org_admin" || user?.role === "super_admin";
   const canControl = canEdit || user?.role === "teacher";
@@ -61,7 +59,6 @@ export default function SessionDetail() {
       ]);
       const s = sessionRes.session;
       setSession(s);
-      setActIdx(s.current_activity_index || 0);
       setEvaluations(evalRes.evaluations);
       setEvalLoaded(true);
 
@@ -122,6 +119,17 @@ export default function SessionDetail() {
     }
   };
 
+  const handleDelete = async () => {
+    if (!id || !confirm("確定刪除此課程？此操作無法復原。")) return;
+    setActionLoading(true);
+    try {
+      await api.deleteSession(id);
+      navigate("/dashboard/sessions");
+    } catch { /* ignore */ } finally {
+      setActionLoading(false);
+    }
+  };
+
   const handleEnd = async () => {
     if (!id) return;
     setActionLoading(true);
@@ -131,16 +139,6 @@ export default function SessionDetail() {
     } catch { /* ignore */ } finally {
       setActionLoading(false);
     }
-  };
-
-  const advanceActivity = (delta: number) => {
-    if (!session) return;
-    const acts = session.template_activities;
-    if (!acts || acts.length === 0) return;
-    const next = Math.max(0, Math.min(acts.length - 1, actIdx + delta));
-    setActIdx(next);
-    setSavingAct(true);
-    api.updateActivity(id!, next).finally(() => setSavingAct(false));
   };
 
   const handleEvalChange = (childId: string, field: "score" | "comment", value: string) => {
@@ -226,10 +224,18 @@ export default function SessionDetail() {
         {canControl && (
           <div className="flex gap-2 pt-2">
             {isDraftOrScheduled && (
+              <>
               <button onClick={handleStart} disabled={actionLoading}
                 className="bg-green-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-green-700 disabled:opacity-50">
                 {actionLoading ? "處理中…" : "開始上課"}
               </button>
+              {session.status === "draft" && (
+                <button onClick={handleDelete} disabled={actionLoading}
+                  className="bg-red-100 text-red-700 px-4 py-1.5 rounded-lg text-sm hover:bg-red-200 disabled:opacity-50">
+                  {actionLoading ? "刪除中…" : "刪除課程"}
+                </button>
+              )}
+              </>
             )}
             {isActive && (
               <button onClick={handleEnd} disabled={actionLoading}
@@ -487,48 +493,20 @@ export default function SessionDetail() {
       {/* Activity Flow (active session with template) */}
       {isActive && session.template_activities && session.template_activities.length > 0 && (
         <div className="bg-white rounded-xl shadow-sm p-4">
-          <div className="flex items-center justify-between mb-2">
-            <h2 className="text-sm font-semibold text-gray-700">📋 活動流程</h2>
-            <span className="text-xs text-gray-400">
-              {actIdx + 1} / {session.template_activities.length}
-            </span>
-          </div>
-          <div className="w-full bg-gray-100 rounded-full h-1.5 mb-3">
-            <div
-              className="bg-blue-500 h-1.5 rounded-full transition-all duration-300"
-              style={{ width: `${((actIdx + 1) / session.template_activities.length) * 100}%` }}
-            />
-          </div>
-          {session.template_activities[actIdx] && (
-            <div className="border border-blue-100 bg-blue-50 rounded-lg p-3">
-              <div className="text-sm font-medium text-blue-800 mb-1">
-                {session.template_activities[actIdx].title}
+          <h2 className="text-sm font-semibold text-gray-700 mb-3">📋 活動流程</h2>
+          <div className="space-y-2">
+            {session.template_activities.map((act, i) => (
+              <div key={i} className="border border-blue-100 bg-blue-50 rounded-lg p-3">
+                <div className="text-xs text-blue-500 font-medium mb-1">活動 {i + 1}</div>
+                <div className="text-sm font-medium text-blue-800 mb-1">{act.title}</div>
+                {act.rhythm_pattern && (
+                  <div className="text-xs font-mono text-blue-600 mb-1">
+                    節奏型: {act.rhythm_pattern}
+                  </div>
+                )}
+                <div className="text-xs text-blue-700/70 whitespace-pre-wrap">{act.content}</div>
               </div>
-              {session.template_activities[actIdx].rhythm_pattern && (
-                <div className="text-xs font-mono text-blue-600 mb-1">
-                  節奏型: {session.template_activities[actIdx].rhythm_pattern}
-                </div>
-              )}
-              <div className="text-xs text-blue-700/70 line-clamp-2">
-                {session.template_activities[actIdx].content}
-              </div>
-            </div>
-          )}
-          <div className="flex gap-2 mt-3">
-            <button
-              onClick={() => advanceActivity(-1)}
-              disabled={actIdx <= 0 || savingAct}
-              className="flex-1 text-xs py-1.5 rounded-lg border border-gray-200 text-gray-600 hover:bg-gray-50 disabled:opacity-30"
-            >
-              ← 上一個
-            </button>
-            <button
-              onClick={() => advanceActivity(1)}
-              disabled={actIdx >= session.template_activities.length - 1 || savingAct}
-              className="flex-1 text-xs py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-30"
-            >
-              下一個 →
-            </button>
+            ))}
           </div>
         </div>
       )}

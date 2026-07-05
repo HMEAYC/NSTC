@@ -1,5 +1,6 @@
 from datetime import datetime
 from typing import Optional
+from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.auth.deps import get_current_user
@@ -8,10 +9,16 @@ from app.db.base import get_db
 from app.models.device import Device as DeviceModel
 from app.models.child import Child as ChildModel
 from app.models.device_assignment import DeviceAssignment
+from app.models.organization import Organization
 from app.models.session import Session as SessionModel
 from app.models.user import User
 
 router = APIRouter(prefix="/api", tags=["devices"])
+
+
+class UpdateDeviceRequest(BaseModel):
+    name: str | None = None
+    org_id: str | None = None
 
 
 @router.get("/devices")
@@ -19,10 +26,12 @@ def list_devices(
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    devices = db.query(DeviceModel).filter(
-        DeviceModel.org_id == org_id
-    ).order_by(DeviceModel.created_at.desc()).all()
+    is_super = current_user is not None and current_user.role == "super_admin"
+    query = db.query(DeviceModel)
+    if not is_super:
+        org_id = effective_org_id(current_user)
+        query = query.filter(DeviceModel.org_id == org_id)
+    devices = query.order_by(DeviceModel.created_at.desc()).all()
     return {"devices": [_device_dict(d) for d in devices]}
 
 
@@ -40,6 +49,7 @@ def register_device(
     current_user: User | None = Depends(get_current_user),
 ):
     resolved_org = effective_org_id(current_user, org_id)
+    device_id = device_id.upper()
     existing = db.query(DeviceModel).filter(DeviceModel.device_id == device_id).first()
     if existing:
         existing.status = "online"
@@ -72,6 +82,37 @@ def register_device(
         last_seen=datetime.utcnow(),
     )
     db.add(device)
+    db.commit()
+    db.refresh(device)
+    return {"device": _device_dict(device)}
+
+
+@router.put("/devices/{device_id}")
+def update_device(
+    device_id: str,
+    body: UpdateDeviceRequest,
+    db: Session = Depends(get_db),
+    current_user: User | None = Depends(get_current_user),
+):
+    is_super = current_user is not None and current_user.role == "super_admin"
+
+    device = db.query(DeviceModel).filter(DeviceModel.id == device_id)
+    if not is_super:
+        device = device.filter(DeviceModel.org_id == effective_org_id(current_user))
+    device = device.first()
+    if not device:
+        raise HTTPException(404, "Device not found")
+
+    if body.name is not None:
+        device.name = body.name
+    if body.org_id is not None:
+        if not is_super:
+            raise HTTPException(403, "Only super_admin can change device org")
+        org = db.query(Organization).filter(Organization.id == body.org_id).first()
+        if not org:
+            raise HTTPException(404, "Organization not found")
+        device.org_id = body.org_id
+
     db.commit()
     db.refresh(device)
     return {"device": _device_dict(device)}
@@ -360,7 +401,7 @@ def get_device_session_config(
 ):
     resolved_org = effective_org_id(current_user)
     dev = db.query(DeviceModel).filter(
-        DeviceModel.device_id == device_id,
+        DeviceModel.device_id == device_id.upper(),
         DeviceModel.org_id == resolved_org,
     ).first()
     if not dev:
@@ -379,6 +420,7 @@ def _device_dict(d: DeviceModel) -> dict:
         "wifi_rssi": d.wifi_rssi,
         "ip_address": d.ip_address,
         "mac_address": d.mac_address,
+        "org_id": d.org_id,
         "status": d.status,
         "active_session_id": d.active_session_id,
         "last_seen": d.last_seen.isoformat() if d.last_seen else None,

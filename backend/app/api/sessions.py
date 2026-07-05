@@ -34,6 +34,7 @@ class CreateSessionRequest(BaseModel):
     description: str | None = None
     scheduled_at: str | None = None
     course_type: str = "march"
+    org_id: str | None = None
 
 
 class UpdateSessionRequest(BaseModel):
@@ -55,12 +56,30 @@ class UpsertEvaluationRequest(BaseModel):
 
 # ─── Helpers ────────────────────────────────────────────────────────
 
-def _session_filter(session_model, user: User | None):
-    org_id = effective_org_id(user)
-    filters = [session_model.org_id == org_id]
+def _resolve_org_id(user: User | None, override: str | None = None) -> str | None:
+    if override and user is not None and user.role == "super_admin":
+        return override
+    oid = effective_org_id(user)
+    return oid if oid else None
+
+
+def _session_filter(session_model, user: User | None, org_override: str | None = None):
+    org_id = _resolve_org_id(user, org_override)
+    filters = []
+    if org_id:
+        filters.append(session_model.org_id == org_id)
     if user is not None and user.role == "teacher":
         filters.append(session_model.teacher_id == user.id)
     return filters
+
+
+def _session_query(db: DBSession, session_id: str, user: User | None, org_override: str | None = None):
+    """Query a session by id, scoped by org unless super_admin."""
+    org_id = _resolve_org_id(user, org_override)
+    filters = [SessionModel.id == session_id]
+    if org_id:
+        filters.append(SessionModel.org_id == org_id)
+    return db.query(SessionModel).filter(*filters).first()
 
 
 def _serialize(s: SessionModel) -> dict:
@@ -94,10 +113,11 @@ def _serialize_evaluation(ev: SessionEvaluation, child_name: str | None = None) 
 def list_sessions(
     status: str | None = None,
     class_id: str | None = None,
+    org_id: str | None = None,
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    filters = _session_filter(SessionModel, current_user)
+    filters = _session_filter(SessionModel, current_user, org_id)
     if status:
         filters.append(SessionModel.status == status)
     if class_id:
@@ -117,7 +137,9 @@ def create_session(
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
-    org_id = effective_org_id(current_user)
+    org_id = _resolve_org_id(current_user, body.org_id) or current_user.org_id
+    if not org_id:
+        raise HTTPException(400, "org_id is required for super_admin")
     parsed_scheduled = None
     if body.scheduled_at:
         parsed_scheduled = datetime.fromisoformat(body.scheduled_at)
@@ -147,11 +169,7 @@ def get_session(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -202,11 +220,7 @@ def update_session(
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
     if session.status not in ("draft", "scheduled"):
@@ -235,11 +249,7 @@ def delete_session(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
     if session.status not in ("draft", "cancelled"):
@@ -270,11 +280,7 @@ def start_session(
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
     if session.status not in ("draft", "scheduled"):
@@ -293,10 +299,7 @@ def end_session(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    filters = [SessionModel.id == session_id]
-    org_id = effective_org_id(current_user)
-    filters.append(SessionModel.org_id == org_id)
-    session = db.query(SessionModel).filter(*filters).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
     session.status = "completed"
@@ -314,11 +317,7 @@ def update_activity(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
     session.current_activity_index = body.current_activity_index
@@ -334,11 +333,7 @@ def get_analysis(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -370,11 +365,7 @@ def list_evaluations(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -418,11 +409,7 @@ def upsert_evaluation(
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 
@@ -465,11 +452,7 @@ def get_session_report(
     db: DBSession = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    session = db.query(SessionModel).filter(
-        SessionModel.id == session_id,
-        SessionModel.org_id == org_id,
-    ).first()
+    session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
 

@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
 import { api, type DeviceInfo } from "../api/client";
+import { useAuth } from "../auth/context";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const statusColor: Record<string, string> = {
@@ -15,11 +15,22 @@ function batteryLevel(v: number | null): { color: string; label: string } {
   return { color: "bg-red-500", label: `${Math.round(v * 100)}%` };
 }
 
+const API_BASE = import.meta.env.VITE_API_BASE || "";
+
+interface Org { id: string; name: string; code: string; }
+
 export default function DeviceManagement() {
-  const navigate = useNavigate();
+  const { user } = useAuth();
   const [devices, setDevices] = useState<DeviceInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [editingDevice, setEditingDevice] = useState<DeviceInfo | null>(null);
+  const [editName, setEditName] = useState("");
+  const [editOrgId, setEditOrgId] = useState("");
+  const [orgs, setOrgs] = useState<Org[]>([]);
+  const [saving, setSaving] = useState(false);
+  const [editError, setEditError] = useState<string | null>(null);
+  const isSuper = user?.role === "super_admin";
 
   const fetchData = () => {
     setLoading(true);
@@ -36,6 +47,41 @@ export default function DeviceManagement() {
   };
 
   useEffect(() => { fetchData(); }, []);
+
+  const openModal = (d: DeviceInfo) => {
+    setEditingDevice(d);
+    setEditName(d.name);
+    setEditOrgId(d.org_id);
+    setEditError(null);
+    if (isSuper) {
+      const tok = localStorage.getItem("hmeayc_token");
+      fetch(`${API_BASE}/api/admin/orgs`, {
+        headers: { Authorization: `Bearer ${tok}` },
+      })
+        .then((r) => r.json())
+        .then((data) => setOrgs(data.orgs || []))
+        .catch(() => {});
+    }
+  };
+
+  const handleSave = async () => {
+    if (!editingDevice) return;
+    setSaving(true);
+    setEditError(null);
+    try {
+      const data: { name?: string; org_id?: string } = { name: editName };
+      if (isSuper && editOrgId !== editingDevice.org_id) {
+        data.org_id = editOrgId;
+      }
+      const res = await api.updateDevice(editingDevice.id, data);
+      setDevices((prev) => prev.map((d) => d.id === editingDevice.id ? { ...d, ...res.device } : d));
+      setEditingDevice(null);
+    } catch (err) {
+      setEditError(err instanceof Error ? err.message : "儲存失敗");
+    } finally {
+      setSaving(false);
+    }
+  };
 
   const onlineCount = devices.filter((d) => d.status === "online").length;
 
@@ -88,7 +134,7 @@ export default function DeviceManagement() {
               return (
                 <div
                   key={d.id}
-                  onClick={() => d.status === "online" && navigate(`/dashboard/live/${d.active_session_id || "default"}?device=${d.id}`)}
+                  onClick={() => openModal(d)}
                   className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
                 >
                   <div className="flex items-center gap-3 min-w-0">
@@ -96,6 +142,7 @@ export default function DeviceManagement() {
                     <div className="min-w-0">
                       <div className="text-sm font-semibold text-gray-800 truncate">{d.name}</div>
                       <div className="text-xs text-gray-400 font-mono">{d.device_id}</div>
+                      <div className="text-[10px] text-gray-300 leading-none">MAC</div>
                     </div>
                   </div>
                   <div className="flex items-center gap-4 text-xs text-gray-500">
@@ -147,6 +194,81 @@ export default function DeviceManagement() {
               );
             })
           )}
+        </div>
+      )}
+
+      {/* Edit Modal */}
+      {editingDevice && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md mx-4">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-800">編輯裝置</h3>
+              <button onClick={() => setEditingDevice(null)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+            </div>
+
+            <div className="space-y-3">
+              {editError && (
+                <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs">
+                  {editError}
+                </div>
+              )}
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">裝置名稱</label>
+                <input value={editName} onChange={(e) => setEditName(e.target.value)}
+                  className="w-full border rounded-lg px-3 py-2 text-sm" />
+              </div>
+              <div>
+                <label className="text-xs text-gray-500 block mb-1">MAC 位址</label>
+                <p className="text-sm font-mono text-gray-700">{editingDevice.device_id}</p>
+              </div>
+              {isSuper && (
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">所屬組織</label>
+                  <select value={editOrgId} onChange={(e) => setEditOrgId(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm">
+                    {orgs.map((o) => (
+                      <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
+                    ))}
+                  </select>
+                </div>
+              )}
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">韌體版本</label>
+                  <p className="text-sm">{editingDevice.firmware_version || "—"}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">狀態</label>
+                  <p className="text-sm">{editingDevice.status === "online" ? "連線中" : "離線"}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">WiFi SSID</label>
+                  <p className="text-sm">{editingDevice.wifi_ssid || "—"}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">訊號強度</label>
+                  <p className="text-sm">{editingDevice.wifi_rssi != null ? `${editingDevice.wifi_rssi} dBm` : "—"}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">IP 位址</label>
+                  <p className="text-sm">{editingDevice.ip_address || "—"}</p>
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">電量</label>
+                  <p className="text-sm">{batteryLevel(editingDevice.battery_level).label}</p>
+                </div>
+              </div>
+            </div>
+
+            <div className="flex gap-2 justify-end mt-6">
+              <button onClick={() => setEditingDevice(null)}
+                className="text-xs px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">取消</button>
+              <button onClick={handleSave} disabled={saving || !editName.trim()}
+                className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                {saving ? "儲存中…" : "儲存"}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

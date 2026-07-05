@@ -9,7 +9,7 @@ class Device(Base):
 
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     org_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
-    device_id = Column(String(50), unique=True, nullable=False, index=True)
+    device_id = Column(String(50), unique=True, nullable=False, index=True)  # MAC address (e.g. "AA:BB:CC:DD:EE:FF")
     name = Column(String(100), nullable=True)
     firmware_version = Column(String(32), nullable=True)
     battery_level = Column(Float, nullable=True)

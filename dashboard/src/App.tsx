@@ -8,6 +8,7 @@ import Navbar from "./components/Navbar";
 
 const Login = lazy(() => import("./pages/Login"));
 const Register = lazy(() => import("./pages/Register"));
+const AcceptInvite = lazy(() => import("./pages/AcceptInvite"));
 const Landing = lazy(() => import("./pages/Landing"));
 const LiveView = lazy(() => import("./pages/LiveView"));
 const History = lazy(() => import("./pages/History"));
@@ -45,6 +46,7 @@ export default function App() {
               <Routes>
                 <Route path="/dashboard/login" element={<Login />} />
                 <Route path="/dashboard/register" element={<Register />} />
+                <Route path="/dashboard/accept-invite" element={<AcceptInvite />} />
                 <Route path="/dashboard/" element={<ProtectedRoute><Landing /></ProtectedRoute>} />
                 <Route path="/dashboard/live/:sessionId" element={<ProtectedRoute><LiveView /></ProtectedRoute>} />
                 <Route path="/dashboard/history" element={<ProtectedRoute><History /></ProtectedRoute>} />

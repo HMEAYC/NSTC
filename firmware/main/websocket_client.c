@@ -9,10 +9,11 @@
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
 
+#include "wifi_manager.h"
+
 static const char *TAG = "WSClient";
 
 #define WS_URI           CONFIG_HMEAYC_WS_URI
-#define DEVICE_ID        CONFIG_HMEAYC_DEVICE_ID
 #define RECONNECT_DELAY_MS  3000
 #define MIN_RECONNECT_INTERVAL_MS 10000
 
@@ -209,7 +210,7 @@ esp_err_t websocket_send_json(const imu_data_t *data) {
         "\"ax\":%.4f,\"ay\":%.4f,\"az\":%.4f,"
         "\"gx\":%.2f,\"gy\":%.2f,\"gz\":%.2f"
         "}",
-        (long long)ts, DEVICE_ID,
+        (long long)ts, wifi_get_mac(),
         data->accel_x, data->accel_y, data->accel_z,
         data->gyro_x, data->gyro_y, data->gyro_z);
 
