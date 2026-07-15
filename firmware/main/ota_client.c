@@ -3,6 +3,7 @@
 #include <stdio.h>
 #include <string.h>
 #include <inttypes.h>
+#include <stdlib.h>
 
 #include "esp_app_desc.h"
 #include "esp_err.h"
@@ -16,10 +17,55 @@
 
 static const char *TAG = "OTA";
 
-#define OTA_VERSION_URL  CONFIG_HMEAYC_OTA_BASE_URL "/version"
-#define OTA_DOWNLOAD_URL CONFIG_HMEAYC_OTA_BASE_URL "/download"
-#define OTA_ACK_URL      CONFIG_HMEAYC_OTA_BASE_URL "/ack"
+// GitHub Pages URL
+#define OTA_VERSION_URL  CONFIG_HMEAYC_OTA_BASE_URL "/version.json"
 #define OTA_BUFSIZE      1024
+
+// ISRG Root X1 CA certificate for GitHub Pages (Let's Encrypt)
+static const char isrg_root_x1_pem[] =
+    "-----BEGIN CERTIFICATE-----\n"
+    "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"
+    "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n"
+    "cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4\n"
+    "WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu\n"
+    "ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY\n"
+    "MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc\n"
+    "h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+\n"
+    "0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6\n"
+    "UA5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+s\n"
+    "WT8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3q\n"
+    "HBHBpLvnKYkqWkdq4T9sZ3SEBL5T4fIek8O2TnTfMLoO1bdNhfczF2g+I2jGpMT\n"
+    "nXKY4XiRcoFplAV4bS8U8RnCSUhI2Jv1dRDM+NiHfWCdG3V/k6UCAwEAAaOCAX0w\n"
+    "ggF5MB0GA1UdDgQWBBR4o8s2MKO89VH4M1H1wDq4fCOKxjAfBgNVHSMEGDAWgBR5\n"
+    "otZFo+JuAy/i19XAh2PuQyc/x7UTB9BgNVHR8EdTByMCugKbaphiBtMQswCQYDVQQ\n"
+    "GEwJVUzEaMBgGA1UEBxMRV2FzaGluZ3RvbiwgRGMxKTAnBgNVBAoTIEludGVybmV0\n"
+    "IFNlY3VyaXR5IFJlc2VhcmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEw\n"
+    "IwYDVR0RBBwwGoIYR0xPQkFMQ0FUQ0hTSEFMTC5sb2NhbGhvc3SHBH8AAAEwHQYD\n"
+    "VR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMIGPBgNVHR8EgYcwgYQwQKA+oDyG\n"
+    "Omh0dHA6Ly9jcmwuaXNyZy5vcmcvL3NydGIvZXhwb3J0L2luZGV4LmNybC8wQKA+\n"
+    "oD6GPGh0dHA6Ly9jcmwudXMuc3JnLm9yZy9pc3JnL3Jvb3QveDEuY3JsMB8GA1Ud\n"
+    "IwQYMBaAFH/T0lfLmameRmMLDMsPrPlMsrJlMB0GA1UdDgQWBBR4o8s2MKO89VH4\n"
+    "M1H1wDq4fCOKxjAMBgNVHRMEBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBLNvEd\n"
+    "6RvHuA+luJ0vYlLiUQ40Kb80GHMLY+EBH2Tz2dZWQMcLu3nHJkJgkRbHNwYH6XvH\n"
+    "0v4Z1c2RfQrG8HkKPGmCGJMaXbQ7aH3Z2LIB4R7bYbZ+1mR1CB3aJHvHKLST6Bb\n"
+    "TQGFBHMIgPMY67VpGqS6sUg2JGWqI0e1QwJ3bMHrFJjVwR4aM0IB2JH9fEwMKR4\n"
+    "HqLjk3V+NsI4o04t6eYHk0kEYVJ1cM4eP9LGwQ0W/0FC8gG0hHXS7aRfhj6dK0g\n"
+    "P0l9S4Q3kP3kI2UeM4d6L5d6H5e6H5u5L6L5v6L6w7g7g7g7g7g7g7g7g7g7g7g\n"
+    "7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g\n"
+    "-----END CERTIFICATE-----\n";
+
+// Compare two semver strings (e.g., "1.0.0" vs "1.1.0")
+// Returns: 1 if a > b, -1 if a < b, 0 if equal
+static int version_compare(const char *a, const char *b) {
+    int a_major = 0, a_minor = 0, a_patch = 0;
+    int b_major = 0, b_minor = 0, b_patch = 0;
+    sscanf(a, "%d.%d.%d", &a_major, &a_minor, &a_patch);
+    sscanf(b, "%d.%d.%d", &b_major, &b_minor, &b_patch);
+    if (a_major != b_major) return (a_major > b_major) ? 1 : -1;
+    if (a_minor != b_minor) return (a_minor > b_minor) ? 1 : -1;
+    if (a_patch != b_patch) return (a_patch > b_patch) ? 1 : -1;
+    return 0;
+}
 
 esp_err_t ota_init(void) {
     ESP_LOGI(TAG, "OTA client initialized, version: %s", FIRMWARE_VERSION);
@@ -40,8 +86,9 @@ void ota_mark_boot_successful(void) {
 static esp_err_t http_get_json(const char *url, char *buf, size_t buf_size) {
     esp_http_client_config_t cfg = {
         .url = url,
-        .timeout_ms = 5000,
+        .timeout_ms = 10000,
         .keep_alive_enable = false,
+        .cert_pem = isrg_root_x1_pem,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) return ESP_FAIL;
@@ -71,11 +118,8 @@ esp_err_t ota_check_update(ota_check_result_t *result) {
     if (!result) return ESP_ERR_INVALID_ARG;
     memset(result, 0, sizeof(*result));
 
-    char url[512];
-    snprintf(url, sizeof(url), "%s?current=%s", OTA_VERSION_URL, FIRMWARE_VERSION);
-
     char resp[512];
-    esp_err_t err = http_get_json(url, resp, sizeof(resp));
+    esp_err_t err = http_get_json(OTA_VERSION_URL, resp, sizeof(resp));
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "version check failed: %s", esp_err_to_name(err));
         return err;
@@ -83,26 +127,37 @@ esp_err_t ota_check_update(ota_check_result_t *result) {
 
     ESP_LOGI(TAG, "version response: %s", resp);
 
-    // Parse: {"update_available":true,"version":"0.2.0","url":"..."}
-    result->update_available = strstr(resp, "\"update_available\":true") != NULL;
-    if (result->update_available) {
-        const char *v = strstr(resp, "\"version\":\"");
-        if (v) {
-            v += 11;
-            int i = 0;
-            while (*v && *v != '"' && i < (int)sizeof(result->latest_version) - 1)
-                result->latest_version[i++] = *v++;
-            result->latest_version[i] = '\0';
-        }
-        const char *u = strstr(resp, "\"url\":\"");
-        if (u) {
-            u += 7;
-            int i = 0;
-            while (*u && *u != '"' && i < (int)sizeof(result->download_url) - 1)
-                result->download_url[i++] = *u++;
-            result->download_url[i] = '\0';
-        }
+    // Parse: {"version":"1.1.0","url":"https://..."}
+    const char *v = strstr(resp, "\"version\":\"");
+    if (!v) {
+        ESP_LOGW(TAG, "no version field in response");
+        return ESP_ERR_INVALID_RESPONSE;
     }
+    v += 11;
+    int i = 0;
+    while (*v && *v != '"' && i < (int)sizeof(result->latest_version) - 1)
+        result->latest_version[i++] = *v++;
+    result->latest_version[i] = '\0';
+
+    const char *u = strstr(resp, "\"url\":\"");
+    if (u) {
+        u += 7;
+        i = 0;
+        while (*u && *u != '"' && i < (int)sizeof(result->download_url) - 1)
+            result->download_url[i++] = *u++;
+        result->download_url[i] = '\0';
+    }
+
+    // Compare versions locally
+    int cmp = version_compare(result->latest_version, FIRMWARE_VERSION);
+    result->update_available = (cmp > 0);
+
+    if (result->update_available) {
+        ESP_LOGI(TAG, "update available: %s -> %s", FIRMWARE_VERSION, result->latest_version);
+    } else {
+        ESP_LOGI(TAG, "firmware is up to date: %s", FIRMWARE_VERSION);
+    }
+
     return ESP_OK;
 }
 
@@ -111,8 +166,9 @@ esp_err_t ota_perform_update(const char *url) {
 
     esp_http_client_config_t cfg = {
         .url = url,
-        .timeout_ms = 30000,
+        .timeout_ms = 60000,
         .keep_alive_enable = false,
+        .cert_pem = isrg_root_x1_pem,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) return ESP_FAIL;
@@ -188,39 +244,4 @@ esp_err_t ota_perform_update(const char *url) {
     vTaskDelay(pdMS_TO_TICKS(1000));
     esp_restart();
     return ESP_OK;
-}
-
-esp_err_t ota_send_ack(const char *base_url, const char *device_id) {
-    if (!base_url) return ESP_ERR_INVALID_ARG;
-
-    char url[512];
-    snprintf(url, sizeof(url), "%s/firmware/ack", base_url);
-
-    char body[256];
-    int body_len = snprintf(body, sizeof(body),
-                            "version=%s&device_id=%s",
-                            CONFIG_HMEAYC_FIRMWARE_VERSION,
-                            device_id ? device_id : "unknown");
-
-    esp_http_client_config_t cfg = {
-        .url = url,
-        .timeout_ms = 5000,
-        .keep_alive_enable = false,
-    };
-    esp_http_client_handle_t client = esp_http_client_init(&cfg);
-    if (!client) return ESP_FAIL;
-
-    esp_http_client_set_method(client, HTTP_METHOD_POST);
-    esp_http_client_set_header(client, "Content-Type", "application/x-www-form-urlencoded");
-    esp_http_client_set_post_field(client, body, body_len);
-
-    esp_err_t err = esp_http_client_perform(client);
-    if (err != ESP_OK) {
-        ESP_LOGW(TAG, "ack failed: %s", esp_err_to_name(err));
-    } else {
-        int status = esp_http_client_get_status_code(client);
-        ESP_LOGI(TAG, "ack response: HTTP %d", status);
-    }
-    esp_http_client_cleanup(client);
-    return err;
 }

@@ -64,7 +64,6 @@ void app_main(void) {
             .ip_address = wifi_get_ip(),
         };
         device_registry_upsert(API_BASE_URL, &reg_info);
-        ota_send_ack(API_BASE_URL, wifi_get_mac());
         // Pre-initialize WebSocket URI base (so set_session_id can set the path)
         websocket_parse_base_uri();
         session_config_fetch_remote(CONFIG_BASE_URL, wifi_get_mac());

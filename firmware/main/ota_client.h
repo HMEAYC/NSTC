@@ -19,7 +19,6 @@ esp_err_t ota_init(void);
 void ota_mark_boot_successful(void);
 esp_err_t ota_check_update(ota_check_result_t *result);
 esp_err_t ota_perform_update(const char *url);
-esp_err_t ota_send_ack(const char *base_url, const char *device_id);
 
 #ifdef __cplusplus
 }
