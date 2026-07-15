@@ -137,10 +137,16 @@ void app_main(void) {
 
         // diagnostic status every 10s
         if (tick % (SAMPLE_RATE_HZ * 10) == 0) {
-            ESP_LOGI(TAG, "tick=%lu wifi=%d ws=%d reconnect_pending=%d",
+            uint32_t bat_mv = 0;
+            battery_read_mv(&bat_mv);
+            uint8_t bat_pct = battery_level_percent(bat_mv);
+            ESP_LOGI(TAG, "tick=%lu wifi=%d ws=%d bat=%lumV(%d%%)",
                      (unsigned long)tick,
                      wifi_is_connected(), websocket_is_connected(),
-                     websocket_reconnect_pending());
+                     (unsigned long)bat_mv, bat_pct);
+            if (battery_is_low(bat_mv)) {
+                ESP_LOGW(TAG, "LOW BATTERY: %lumV", (unsigned long)bat_mv);
+            }
         }
 
         tick++;

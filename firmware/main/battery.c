@@ -14,6 +14,11 @@ static adc_oneshot_unit_handle_t adc_handle = NULL;
 #define ADC_BITS       12
 #define ADC_MAX        ((1 << ADC_BITS) - 1)
 
+// Voltage thresholds for 16500 Li-ion battery
+#define BATTERY_FULL_MV    4200
+#define BATTERY_LOW_MV     3200   // Low battery warning threshold
+#define BATTERY_EMPTY_MV   2800   // Critical - system may brownout
+
 esp_err_t battery_init(void) {
     adc_oneshot_unit_init_cfg_t unit_cfg = {
         .unit_id = ADC_UNIT_1,
@@ -44,9 +49,12 @@ esp_err_t battery_read_mv(uint32_t *voltage_mv) {
 }
 
 uint8_t battery_level_percent(uint32_t voltage_mv) {
-    // 16500 Li-ion: 4.2V = 100%, 3.0V = 0% (discharge cutoff)
-    // ME6211 dropout ~100mV @ 100mA, min input ~3.4V for 3.3V output
-    if (voltage_mv >= 4200) return 100;
-    if (voltage_mv <= 3000) return 0;
-    return (uint8_t)((voltage_mv - 3000) * 100 / (4200 - 3000));
+    // 16500 Li-ion: 4.2V = 100%, 2.8V = 0% (critical brownout level)
+    if (voltage_mv >= BATTERY_FULL_MV) return 100;
+    if (voltage_mv <= BATTERY_EMPTY_MV) return 0;
+    return (uint8_t)((voltage_mv - BATTERY_EMPTY_MV) * 100 / (BATTERY_FULL_MV - BATTERY_EMPTY_MV));
+}
+
+bool battery_is_low(uint32_t voltage_mv) {
+    return voltage_mv <= BATTERY_LOW_MV;
 }

@@ -153,13 +153,13 @@ PCB 顏色              綠色
 
 SMT 組裝：
   最小元件尺寸        0603
-  IC 封装             SOP-8, SOT-23-5, QFN-24
+  IC 封裝             QFN-24
                       (MPU6500 QFN 需開鋼板 0.12mm)
 
 估算成本 (10 pcs, PCB + 組裝)：
   PCB 裸板：          ~$5 USD
   SMT 組裝：          ~$15 USD
-  零件費：            ~$8 USD (不含 ESP32-C3 模組)
+  零件費：            ~$6 USD (不含 ESP32-C3 Super Mini 模組)
   運費：              ~$10 USD
-  合計：              ~$38 USD (約 NT$1,200)
+  合計：              ~$36 USD (約 NT$1,140)
 ```
