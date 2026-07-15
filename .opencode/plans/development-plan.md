@@ -1466,22 +1466,19 @@ ESP32-C3                     Backend (FastAPI)
 ### 12.3 更新流程
 
 1. **啟動確認**：`ota_mark_boot_successful()` 標記本次開機為有效（`esp_ota_mark_app_valid_cancel_rollback`）
-2. **定期檢查**：main loop 每小時 `GET /api/firmware/version?current=X` 檢查新版本
+2. **定期檢查**：main loop 每 24 小時 `GET https://HMEAYC.github.io/NSTC/ota/version.json` 檢查新版本，韌體本地比較版本字串
 3. **下載更新**：有新版本時呼叫 `ota_perform_update(url)`：
-   - `esp_http_client_open` → 串流讀取 binary
+   - `esp_http_client_open` → 串流讀取 binary（HTTPS + ISRG Root X1 CA）
    - `esp_ota_begin` → `esp_ota_write`（分塊寫入 ota_1）→ `esp_ota_end`
    - `esp_ota_set_boot_partition(ota_1)` → `esp_restart()`
 4. **回退機制**：新版本啟動後若未呼叫 `ota_mark_boot_successful()`（crash 或手動重啟兩次），bootloader 自動切回舊分割區
 
-### 12.4 後端 API
+### 12.4 後端 API（OTA 部分已改用 GitHub Pages，以下為管理介面保留）
 
 | 方法 | 路徑 | 說明 |
 |------|------|------|
-| GET | `/api/firmware/version?current=X` | 版本檢查（回傳有無更新 + 下載 URL） |
 | POST | `/api/firmware/upload` | 上傳新韌體 binary（multipart form） |
-| GET | `/api/firmware/download/{id}` | 下載韌體 binary |
 | GET | `/api/firmware/list` | 列出所有版本 |
-| POST | `/api/firmware/ack` | 裝置確認新韌體啟動成功 |
 
 ### 12.5 已知坑洞與修復（2026-07-02 實戰記錄）
 

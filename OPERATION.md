@@ -604,11 +604,10 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 
 | Method | Path | 說明 |
 |--------|------|------|
-| `GET` | `/api/firmware/version` | 檢查更新（query: `current`） |
 | `POST` | `/api/firmware/upload` | 上傳新韌體（form: `version`, `description?`, `file`） |
-| `GET` | `/api/firmware/download/{id}` | 下載韌體 |
 | `GET` | `/api/firmware/list` | 列出所有版本 |
-| `POST` | `/api/firmware/ack` | OTA 確認（form: `version`, `device_id`） |
+
+> **註**：OTA 版本檢查已改用 GitHub Pages 靜態檔案（`https://HMEAYC.github.io/NSTC/ota/version.json`），後端僅保留上傳與列表功能。
 
 #### 影片分析
 

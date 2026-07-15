@@ -223,17 +223,16 @@ ESP32 透過 AB 分割區支援 OTA，不須 USB 即可更新韌體。
 
 1. **建置新版韌體**：`cd firmware && idf.py build`
 2. **上傳至後端**：Dashboard「韌體更新」頁面或 `curl -X POST /api/firmware/upload`
-3. **ESP32 自動更新**：每小時檢查一次，下載新版 → 寫入 ota_1 → 重啟 → 回報 ack
+3. **ESP32 自動更新**：每 24 小時檢查 GitHub Pages 版本，下載新版 → 重啟
 
 ### API 端點
 
 | 方法 | 路徑 | 說明 |
 |------|------|------|
-| GET | `/api/firmware/version?current=X` | 版本檢查 |
 | POST | `/api/firmware/upload` | 上傳韌體 binary（multipart） |
-| GET | `/api/firmware/download/{id}` | 下載韌體 binary |
 | GET | `/api/firmware/list` | 列出所有版本 |
-| POST | `/api/firmware/ack` | 裝置確認啟動成功 |
+
+> **註**：OTA 版本檢查已改用 GitHub Pages（`https://HMEAYC.github.io/NSTC/ota/version.json`）。
 
 ---
 
