@@ -118,6 +118,68 @@ gantt
 
 ---
 
+## ✅ 系統完成度總覽
+
+MVP 核心模組已全部完成實作，目前**無尚未完成或部分完成項目**（韌體、後端分析、Dashboard、部署、RBAC 均已對齊實際程式碼）。
+
+| 模組 | 狀態 |
+|------|------|
+| 韌體（ESP32-C3 + MPU6500 IMU） | ✅ 完成 |
+| 後端 WebSocket 即時串流 | ✅ 完成 |
+| 節奏分析 `rhythm.py` | ✅ 完成 |
+| Freeze Dance 分析 `freeze_dance.py` | ✅ 完成 |
+| 巨觀分析 `macro.py`（隊形/熱區/參與度） | ✅ 完成 |
+| 微觀分析 `micro.py`（追蹤/流暢度） | ✅ 完成 |
+| 指標燈號 `metrics.py` | ✅ 完成 |
+| 跨模態裝置配對（FFT + Hungarian） | ✅ 完成 |
+| 課程管理（CRUD + 開始/結束 + 評分） | ✅ 完成 |
+| 多租戶 RBAC（4 角色 + JWT + org_id 隔離） | ✅ 完成 |
+| Dashboard 20 個頁面 | ✅ 完成 |
+| Docker Compose 一鍵啟動 | ✅ 完成 |
+| OTA 韌體更新 | ✅ 完成 |
+| 教案 PDF 匯入工具 | ✅ 完成 |
+| 即時音樂源整合 | ✅ 完成（2026/07） |
+| 即時攝影機管線 | ✅ 完成（2026/07） |
+
+<details>
+<summary>即時音樂源整合 — 實作明細</summary>
+
+| 項目 | 狀態 |
+|------|------|
+| 後端 `music.py`：librosa BPM/beat/stop 分析 | ✅ |
+| Session 音樂欄位（7 欄）+ Alembic migration | ✅ |
+| `POST/DELETE /api/sessions/{id}/music` | ✅ |
+| `POST /api/sessions/{id}/music-url`（CD 曲目 → music_url） | ✅ |
+| `RealtimeAnalyzer`：1500 緩衝、250 幀節奏分析 | ✅ |
+| WS `rhythm_update`/`freeze_update` 持久化至 DB | ✅ |
+| `assessments.py` 整合 rhythm.py/freeze_dance.py | ✅ |
+| `BeatIndicator.tsx`：BPM 脈衝 + 同步率 | ✅ |
+| `LiveView.tsx`：YouTube embed / audio 播放器 | ✅ |
+| `SessionDetail.tsx`：音樂上傳/BPM/CD 曲目選擇 | ✅ |
+| `Templates.tsx`：CD 曲目新增 link 欄位 | ✅ |
+| 音樂分析快取（file hash LRU） | ✅ |
+
+</details>
+
+<details>
+<summary>即時攝影機管線 — 實作明細</summary>
+
+| 項目 | 狀態 |
+|------|------|
+| `RealtimeVideoAnalyzer`：YOLO + MediaPipe + Centroid 追蹤 | ✅ |
+| 6 項 CV 指標即時計算（投入度/隊形/空間/步態/平衡/協調） | ✅ |
+| WebSocket binary 攝影機幀接收 + camera_start/stop 訊息 | ✅ |
+| `useCamera.ts`：前端 getUserMedia → Canvas → JPEG 10fps | ✅ |
+| `LiveView.tsx`：攝影機預覽 + COCO-17 骨架疊加 | ✅ |
+| `AssessmentIndicators.tsx`：6 項 CV 指標從 placeholder 改為真實數據 | ✅ |
+| Alembic: CV metrics 持久化至 AnalysisResult | ✅ |
+
+</details>
+
+> 場域測試（IRB 核准 + 硬體採購完成後進場）進度見下方「🚀 近期執行任務」與「💡 後續下一步」。
+
+---
+
 ## 👥 團隊與分工
 
 | 成員 | 角色 | 主要負責範圍 |
@@ -152,7 +214,12 @@ gantt
 | Android 平板 | 2 | 場域施測 |
 | WiFi 路由器 | 1 | 場域網路 |
 
----
+### 場域測試前置作業
+
+1. **IRB 送審文件** — 見上方「IRB 倫理審查準備」（Liza 主責）
+2. **硬體採購** — 見上方採購清單（Rover 主責）
+3. **場域 WiFi 環境建置** — 路由器 + 教室網路拓撲驗證
+4. **場域測試執行** — IRB 核准後進場
 
 ---
 
@@ -282,36 +349,5 @@ ESP32 透過 AB 分割區支援 OTA，不須 USB 即可更新韌體。
 | 6 | 跨模態配對演算法真實場域驗證 | ⏳ 待場域測試 | 需真實場域數據 |
 | 7 | 正式版系統迭代（場域回饋整合） | ⏳ 待場域測試 | 場域回饋後迭代 |
 | 8 | MVP 里程碑追蹤 | 📋 進行中 | 2026/12 目標完成 |
-
----
-
-## 🔐 多租戶 RBAC 系統（已實作）
-
-此專案已實作完整多租戶角色權限架構，支援多幼兒園/多班/多教師/多家長同時使用：
-
-| 角色 | 權限範圍 |
-|------|---------|
-| **super_admin** | 全域管理，可檢視/管理所有組織 |
-| **org_admin** | 管理所屬組織的教師/班級/裝置/幼兒 |
-| **teacher** | 開課、查看所屬班級幼兒報告與指標 |
-| **parent** | 唯讀檢視自己綁定幼兒的報告與發展歷程 |
-
-### 認證方式
-
-- **JWT Token** — Dashboard 使用者透過 `POST /api/auth/login` 取得 Bearer token
-- **API Key** — ESP32 裝置與影片分析後台仍使用傳統 X-API-Key
-
-### 新增 API
-
-| Method | Path | 說明 |
-|--------|------|------|
-| `POST` | `/api/auth/login` | 登入取得 JWT |
-| `GET` | `/api/auth/me` | 當前使用者資訊 |
-| `GET` | `/api/admin/orgs` | 組織列表（super_admin） |
-| `GET` | `/api/orgs/{orgId}/classes` | 班級列表 |
-| `POST` | `/api/children/{childId}/parents` | 綁定家長 |
-| `GET` | `/api/parents/me/children` | 家長查看幼兒 |
-| `POST` | `/api/consent` | 上傳家長同意書 |
-| `GET` | `/api/admin/export/anonymized` | 匿名化資料匯出 |
 
 > 📋 詳細架構與實作記錄請見 [`.opencode/plans/multi-tenant-rbac.md`](.opencode/plans/multi-tenant-rbac.md)
