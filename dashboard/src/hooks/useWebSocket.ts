@@ -1,7 +1,7 @@
 import { useEffect, useRef, useCallback, useState } from "react";
 
 export interface IMUFrame {
-  type?: "imu" | "analysis" | "status";
+  type?: "imu" | "analysis" | "status" | "music" | "music_start" | "rhythm_update" | "freeze_update";
   ts: number;
   device_id?: string;
   ax: number;
@@ -10,6 +10,29 @@ export interface IMUFrame {
   gx: number;
   gy: number;
   gz: number;
+}
+
+export interface MusicInfo {
+  bpm: number;
+  beatTimes: number[];
+  stopTimes: number[];
+  duration: number;
+  element: string | null;
+}
+
+export interface RhythmUpdate {
+  type: "rhythm_update";
+  sync_rate: number;
+  bpm: number;
+  peak_count: number;
+  beat_count: number;
+}
+
+export interface FreezeUpdate {
+  type: "freeze_update";
+  stop_time: number;
+  reaction_time: number;
+  stability_score: number;
 }
 
 export type ConnectionStatus = "connecting" | "connected" | "disconnected";
@@ -22,6 +45,9 @@ export function useWebSocket(
   const retriesRef = useRef(0);
   const timerRef = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
   const [status, setStatus] = useState<ConnectionStatus>("disconnected");
+  const [music, setMusic] = useState<MusicInfo | null>(null);
+  const [rhythm, setRhythm] = useState<RhythmUpdate | null>(null);
+  const [freeze, setFreeze] = useState<FreezeUpdate | null>(null);
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -42,6 +68,19 @@ export function useWebSocket(
         const frame: IMUFrame = JSON.parse(event.data);
         if (!frame.type || frame.type === "imu") {
           onMessage(frame);
+        } else if (frame.type === "music") {
+          const m = frame as unknown as MusicInfo & { session_id: string };
+          setMusic({
+            bpm: m.bpm,
+            beatTimes: m.beatTimes ?? (frame as any).music_beat_times ?? [],
+            stopTimes: m.stopTimes ?? (frame as any).music_stop_times ?? [],
+            duration: m.duration ?? (frame as any).music_duration ?? 0,
+            element: m.element ?? (frame as any).music_element ?? null,
+          });
+        } else if (frame.type === "rhythm_update") {
+          setRhythm(frame as unknown as RhythmUpdate);
+        } else if (frame.type === "freeze_update") {
+          setFreeze(frame as unknown as FreezeUpdate);
         }
       } catch {
         // ignore malformed frames
@@ -85,5 +124,9 @@ export function useWebSocket(
     }
   }, []);
 
-  return { status, send };
+  const sendMusicStart = useCallback(() => {
+    send({ type: "music_start", ts: Date.now() });
+  }, [send]);
+
+  return { status, send, music, rhythm, freeze, sendMusicStart };
 }

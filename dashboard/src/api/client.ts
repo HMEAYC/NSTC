@@ -92,8 +92,15 @@ export interface SessionDetailInfo extends SessionInfo {
   template_name: string | null;
   current_activity_index: number;
   template_activities: { title: string; content: string; rhythm_pattern?: string }[];
+  template_cd_tracks: { album: string; track: string; details: string; link?: string }[];
   imu_count: number;
   device_count: number;
+  music_bpm: number | null;
+  music_beat_times: number[] | null;
+  music_stop_times: number[] | null;
+  music_duration: number | null;
+  music_element: string | null;
+  music_url: string | null;
 }
 
 export interface SessionTemplateInfo {
@@ -187,35 +194,6 @@ export const api = {
     ),
 
   me: () => fetchJSON<UserInfo>("/api/auth/me"),
-
-  // Sessions
-  listSessions: () =>
-    fetchJSON<{ sessions: SessionSummary[] }>("/api/sessions"),
-
-  getSession: (id: string) => fetchJSON<{ session: SessionDetailInfo }>(`/api/sessions/${id}`),
-
-  createSession: (data: { course_type?: string; template_id?: string; title?: string }) =>
-    fetchJSON<{ id: string; course_type: string; template_id: string | null; start_time: string }>("/api/sessions", {
-      method: "POST",
-      body: JSON.stringify(data),
-    }),
-
-  updateActivity: (sessionId: string, current_activity_index: number) =>
-    fetchJSON<{ current_activity_index: number }>(`/api/sessions/${sessionId}/activity`, {
-      method: "PUT",
-      body: JSON.stringify({ current_activity_index }),
-    }),
-
-  getAnalysis: (id: string) =>
-    fetchJSON<{ results: AnalysisResult[] }>(`/api/sessions/${id}/analysis`),
-
-  endSession: (id: string) =>
-    fetchJSON<{ status: string }>(`/api/sessions/${id}/end`, {
-      method: "POST",
-    }),
-
-  analyzeImu: (id: string) =>
-    fetchJSON<{ results: AnalysisResult[] }>(`/api/sessions/${id}/analysis`),
 
   // Devices
   listDevices: () =>
@@ -377,6 +355,46 @@ export const api = {
       method: "DELETE",
     }),
 
+  uploadSessionMusic: (sessionId: string, file: File) => {
+    const form = new FormData();
+    form.append("file", file);
+    return fetchJSON<{
+      music_bpm: number;
+      music_beat_times: number[];
+      music_stop_times: number[];
+      music_duration: number;
+      music_element: string | null;
+    }>(`/api/sessions/${sessionId}/music`, {
+      method: "POST",
+      body: form,
+    });
+  },
+
+  setSessionBpm: (sessionId: string, bpm: number) =>
+    fetchJSON<{
+      music_bpm: number;
+      music_beat_times: number[];
+      music_stop_times: number[];
+      music_duration: number;
+      music_element: string | null;
+    }>(`/api/sessions/${sessionId}/music`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ bpm }),
+    }),
+
+  removeSessionMusic: (sessionId: string) =>
+    fetchJSON<{ status: string }>(`/api/sessions/${sessionId}/music`, {
+      method: "DELETE",
+    }),
+
+  setSessionMusicUrl: (sessionId: string, url: string, trackName?: string, album?: string) =>
+    fetchJSON<{ music_url: string; music_element: string | null }>(`/api/sessions/${sessionId}/music-url`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ url, track_name: trackName, album }),
+    }),
+
   startSession: (id: string) =>
     fetchJSON<{ session: SessionInfo }>(`/api/sessions/${id}/start`, { method: "POST" }),
 
@@ -388,7 +406,7 @@ export const api = {
 
   // Templates
   listTemplates: () =>
-    fetchJSON<{ templates: CourseTemplateInfo[] }>("/api/templates"),
+    fetchJSON<{ templates: SessionTemplateInfo[] }>("/api/templates"),
 
   createTemplate: (data: {
     name: string;
@@ -397,13 +415,13 @@ export const api = {
     stages?: { name: string; duration: number; type?: string }[];
     metrics_config?: Record<string, boolean>;
   }) =>
-    fetchJSON<{ template: CourseTemplateInfo }>("/api/templates", {
+    fetchJSON<{ template: SessionTemplateInfo }>("/api/templates", {
       method: "POST",
       body: JSON.stringify(data),
     }),
 
   getTemplate: (id: string) =>
-    fetchJSON<{ template: CourseTemplateInfo }>(`/api/templates/${id}`),
+    fetchJSON<{ template: SessionTemplateInfo }>(`/api/templates/${id}`),
 
   updateTemplate: (id: string, data: {
     name?: string;
@@ -412,7 +430,7 @@ export const api = {
     stages?: { name: string; duration: number; type?: string }[];
     metrics_config?: Record<string, boolean>;
   }) =>
-    fetchJSON<{ template: CourseTemplateInfo }>(`/api/templates/${id}`, {
+    fetchJSON<{ template: SessionTemplateInfo }>(`/api/templates/${id}`, {
       method: "PUT",
       body: JSON.stringify(data),
     }),

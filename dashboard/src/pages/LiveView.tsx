@@ -6,6 +6,7 @@ import {
 import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
 import { api, type SessionDetailInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
+import BeatIndicator from "../components/BeatIndicator";
 
 const MAX_POINTS = 200;
 const DEVICE_TIMEOUT_MS = 5000;
@@ -146,7 +147,7 @@ export default function LiveView() {
     setChannels(new Map(channelsRef.current));
   }, []);
 
-  const { status } = useWebSocket(sid, onMessage);
+  const { status, music, rhythm, freeze, sendMusicStart } = useWebSocket(sid, onMessage);
 
   // At least one device has sent data recently
   const deviceOnline = lastDeviceDataMs > 0 && Date.now() - lastDeviceDataMs < DEVICE_TIMEOUT_MS;
@@ -242,6 +243,64 @@ export default function LiveView() {
               <div className="text-gray-400 text-xs">{v.unit}</div>
             </div>
           ))}
+        </div>
+      )}
+
+      {/* Music info + Beat indicator */}
+      {music && (
+        <div className="bg-white rounded-lg shadow p-4 space-y-3">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-semibold text-gray-500">🎵 音樂資訊</h2>
+            <button
+              onClick={sendMusicStart}
+              className="text-xs px-3 py-1 rounded bg-green-500 text-white hover:bg-green-600 font-medium"
+            >
+              ▶ 播放開始
+            </button>
+          </div>
+          <div className="flex items-center gap-6 text-sm">
+            <div>
+              <span className="text-gray-400">BPM: </span>
+              <span className="font-semibold text-gray-700">{music.bpm}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">時長: </span>
+              <span className="font-semibold text-gray-700">{music.duration}s</span>
+            </div>
+            {music.element && (
+              <div>
+                <span className="text-gray-400">元素: </span>
+                <span className="font-semibold text-gray-700">{music.element}</span>
+              </div>
+            )}
+            <div>
+              <span className="text-gray-400">節拍數: </span>
+              <span className="font-semibold text-gray-700">{music.beatTimes.length}</span>
+            </div>
+            <div>
+              <span className="text-gray-400">停止點: </span>
+              <span className="font-semibold text-gray-700">{music.stopTimes.length}</span>
+            </div>
+          </div>
+          <BeatIndicator
+            bpm={music.bpm}
+            beatTimes={music.beatTimes}
+            rhythmSync={rhythm?.sync_rate}
+          />
+          {rhythm && (
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span>同步率: <span className="font-semibold text-blue-600">{(rhythm.sync_rate * 100).toFixed(0)}%</span></span>
+              <span>偵測節拍: {rhythm.peak_count}</span>
+              <span>音樂節拍: {rhythm.beat_count}</span>
+            </div>
+          )}
+          {freeze && (
+            <div className="flex items-center gap-4 text-xs text-gray-500">
+              <span>停止時間: {freeze.stop_time.toFixed(1)}s</span>
+              <span>反應時間: <span className="font-semibold text-orange-600">{freeze.reaction_time.toFixed(2)}s</span></span>
+              <span>穩定度: <span className="font-semibold text-green-600">{(freeze.stability_score * 100).toFixed(0)}%</span></span>
+            </div>
+          )}
         </div>
       )}
 

@@ -12,6 +12,11 @@ const statusConfig: Record<string, { label: string; color: string }> = {
   cancelled: { label: "已取消", color: "bg-red-100 text-red-700" },
 };
 
+function formatNum(v: number | null | undefined, decimals = 2) {
+  if (v === null || v === undefined) return "—";
+  return v.toFixed(decimals);
+}
+
 export default function SessionDetail() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
@@ -40,9 +45,18 @@ export default function SessionDetail() {
   // Evaluation state
   const [evaluations, setEvaluations] = useState<{ child_id: string; child_name: string; score: number | null; comment: string | null }[]>([]);
   const [evalLoaded, setEvalLoaded] = useState(false);
-  const [savingEval, setSavingEval] = useState<string | null>(null);
 
+  // Evaluation modal state
+  const [evalModalChildId, setEvalModalChildId] = useState<string | null>(null);
+  const [evalModalScore, setEvalModalScore] = useState("");
+  const [evalModalComment, setEvalModalComment] = useState("");
+  const [evalModalSaving, setEvalModalSaving] = useState(false);
 
+  // Report state (completed sessions only)
+  const [reportData, setReportData] = useState<{
+    summary: { imu_count: number; device_count: number };
+    assessments: { avg_activity_level: number | null; avg_smoothness: number | null; avg_stability_index: number | null };
+  } | null>(null);
 
   const canEdit = user?.role === "org_admin" || user?.role === "super_admin";
   const canControl = canEdit || user?.role === "teacher";
@@ -69,6 +83,12 @@ export default function SessionDetail() {
         ]);
         setDevices(devRes.devices);
         setAssignments(assignRes.assignments);
+      }
+
+      if (s.status === "completed") {
+        api.getSessionReport(id).then((r) => {
+          setReportData({ summary: r.summary, assessments: r.assessments });
+        }).catch(() => {});
       }
 
       if (s.class_id) {
@@ -141,27 +161,30 @@ export default function SessionDetail() {
     }
   };
 
-  const handleEvalChange = (childId: string, field: "score" | "comment", value: string) => {
-    setEvaluations((prev) =>
-      prev.map((e) =>
-        e.child_id === childId
-          ? { ...e, [field]: field === "score" ? (value ? parseFloat(value) : null) : value }
-          : e,
-      ),
-    );
+  const openEvalModal = (childId: string) => {
+    const ev = evaluations.find((e) => e.child_id === childId);
+    setEvalModalChildId(childId);
+    setEvalModalScore(ev?.score !== null && ev?.score !== undefined ? String(ev.score) : "");
+    setEvalModalComment(ev?.comment ?? "");
   };
 
-  const handleEvalSave = async (childId: string) => {
-    const ev = evaluations.find((e) => e.child_id === childId);
-    if (!ev) return;
-    setSavingEval(childId);
+  const handleEvalModalSave = async () => {
+    if (!id || !evalModalChildId) return;
+    setEvalModalSaving(true);
+    const score = evalModalScore ? parseFloat(evalModalScore) : null;
     try {
-      await api.upsertSessionEvaluation(id!, childId, {
-        score: ev.score,
-        comment: ev.comment || null,
+      await api.upsertSessionEvaluation(id, evalModalChildId, {
+        score,
+        comment: evalModalComment || null,
       });
+      setEvaluations((prev) =>
+        prev.map((e) =>
+          e.child_id === evalModalChildId ? { ...e, score, comment: evalModalComment || null } : e,
+        ),
+      );
+      setEvalModalChildId(null);
     } catch { /* ignore */ } finally {
-      setSavingEval(null);
+      setEvalModalSaving(false);
     }
   };
 
@@ -243,15 +266,198 @@ export default function SessionDetail() {
                 {actionLoading ? "處理中…" : "結束課程"}
               </button>
             )}
-            {isCompleted && (
-              <Link to={`/dashboard/sessions/${session.id}/report`}
-                className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-blue-700">
-                查看報告
-              </Link>
-            )}
+
           </div>
         )}
       </div>
+
+      {/* Music Settings (draft/scheduled/active sessions) */}
+      {(isDraftOrScheduled || isActive) && (
+        <div className="bg-white rounded-xl shadow-sm p-6">
+          <h2 className="text-lg font-bold text-gray-800 mb-4">🎵 音樂設定</h2>
+          {session.music_bpm ? (
+            <div className="space-y-3">
+              <div className="flex items-center gap-6 text-sm">
+                <div>
+                  <span className="text-gray-400">BPM: </span>
+                  <span className="font-semibold text-gray-700">{session.music_bpm}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">時長: </span>
+                  <span className="font-semibold text-gray-700">{session.music_duration}s</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">節拍數: </span>
+                  <span className="font-semibold text-gray-700">{session.music_beat_times?.length ?? 0}</span>
+                </div>
+                <div>
+                  <span className="text-gray-400">停止點: </span>
+                  <span className="font-semibold text-gray-700">{session.music_stop_times?.length ?? 0}</span>
+                </div>
+                {session.music_element && (
+                  <div>
+                    <span className="text-gray-400">元素: </span>
+                    <span className="font-semibold text-gray-700">{session.music_element}</span>
+                  </div>
+                )}
+              </div>
+              {canControl && (
+                <button
+                  onClick={async () => {
+                    if (!id) return;
+                    setActionLoading(true);
+                    try {
+                      await api.removeSessionMusic(id);
+                      setSession({ ...session, music_bpm: null, music_beat_times: null, music_stop_times: null, music_duration: null, music_element: null, music_url: null });
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 underline"
+                >
+                  移除音樂設定
+                </button>
+              )}
+            </div>
+          ) : session.music_url ? (
+            /* External URL selected from CD track */
+            <div className="space-y-3">
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400">已選取:</span>
+                <span className="text-sm font-medium text-gray-700">{session.music_element || "外部音樂"}</span>
+              </div>
+              {/* Embedded player */}
+              {session.music_url.includes("youtube.com") || session.music_url.includes("youtu.be") ? (
+                <div className="w-full aspect-video rounded-lg overflow-hidden">
+                  <iframe
+                    src={`https://www.youtube.com/embed/${session.music_url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)?.[1] || ""}`}
+                    className="w-full h-full"
+                    allow="autoplay; encrypted-media"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <audio controls src={session.music_url} className="w-full" />
+              )}
+              {canControl && (
+                <button
+                  onClick={async () => {
+                    if (!id) return;
+                    setActionLoading(true);
+                    try {
+                      await api.removeSessionMusic(id);
+                      setSession({ ...session, music_url: null, music_element: null });
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  }}
+                  className="text-xs text-red-500 hover:text-red-700 underline"
+                >
+                  移除音樂
+                </button>
+              )}
+            </div>
+          ) : (
+            <div className="space-y-4">
+              <div className="flex items-center gap-4">
+                <label className="text-sm text-gray-600">上傳音樂檔案:</label>
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={async (e) => {
+                    const file = e.target.files?.[0];
+                    if (!file || !id) return;
+                    setActionLoading(true);
+                    try {
+                      const result = await api.uploadSessionMusic(id, file);
+                      setSession({ ...session, ...result });
+                    } catch (err) {
+                      alert("音樂分析失敗: " + (err instanceof Error ? err.message : String(err)));
+                    } finally {
+                      setActionLoading(false);
+                    }
+                  }}
+                  className="text-sm text-gray-600"
+                />
+                {actionLoading && <span className="text-xs text-gray-400">分析中…</span>}
+              </div>
+              <div className="flex items-center gap-3">
+                <span className="text-sm text-gray-400">或</span>
+                <label className="text-sm text-gray-600">手動輸入 BPM:</label>
+                <input
+                  type="number"
+                  min={40}
+                  max={220}
+                  placeholder="例: 120"
+                  className="w-24 border rounded px-2 py-1 text-sm"
+                  onKeyDown={async (e) => {
+                    if (e.key === "Enter") {
+                      const bpm = Number((e.target as HTMLInputElement).value);
+                      if (!id || bpm < 40 || bpm > 220) return;
+                      setActionLoading(true);
+                      try {
+                        const result = await api.setSessionBpm(id, bpm);
+                        setSession({ ...session, ...result });
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }
+                  }}
+                />
+              </div>
+            </div>
+          )}
+
+          {/* Template CD Tracks */}
+          {!session.music_bpm && !session.music_url && session.template_cd_tracks && session.template_cd_tracks.length > 0 && (
+            <div className="mt-4 pt-4 border-t border-gray-100">
+              <h3 className="text-sm font-semibold text-gray-500 mb-3">💿 教案 CD 曲目</h3>
+              <div className="space-y-2">
+                {session.template_cd_tracks.map((cd, i) => (
+                  <div
+                    key={i}
+                    onClick={async () => {
+                      if (!id || !cd.link || !canControl) return;
+                      setActionLoading(true);
+                      try {
+                        const result = await api.setSessionMusicUrl(id, cd.link, cd.track, cd.album);
+                        setSession({ ...session, music_url: result.music_url, music_element: result.music_element });
+                      } catch (err) {
+                        alert("設定失敗: " + (err instanceof Error ? err.message : String(err)));
+                      } finally {
+                        setActionLoading(false);
+                      }
+                    }}
+                    className={`flex items-center justify-between rounded-lg px-4 py-2.5 transition-colors ${
+                      canControl && cd.link
+                        ? "bg-gray-50 hover:bg-blue-50 cursor-pointer"
+                        : "bg-gray-50 opacity-60"
+                    }`}
+                  >
+                    <div className="min-w-0">
+                      <div className="text-sm font-medium text-gray-700 truncate">
+                        {cd.track}
+                      </div>
+                      <div className="text-xs text-gray-400 truncate">
+                        {cd.album}{cd.details ? ` — ${cd.details}` : ""}
+                      </div>
+                    </div>
+                    <div className="flex items-center gap-2 ml-3 flex-shrink-0">
+                      {cd.link ? (
+                        <span className="text-xs text-blue-500">
+                          {canControl ? "點擊選取" : "有連結"}
+                        </span>
+                      ) : (
+                        <span className="text-xs text-gray-300">無連結</span>
+                      )}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
+        </div>
+      )}
 
       {/* Device Assignment (active session only) */}
       {isActive && (
@@ -511,6 +717,50 @@ export default function SessionDetail() {
         </div>
       )}
 
+      {/* Report (completed sessions only) */}
+      {isCompleted && reportData && (
+        <>
+          {/* Summary cards */}
+          <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+            <h1 className="text-2xl font-bold text-gray-800">課程報告：{session.name}</h1>
+            {session.class_name && <p className="text-sm text-gray-500">班級：{session.class_name}</p>}
+            <div className="grid grid-cols-3 gap-4">
+              <div className="bg-blue-50 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-blue-700">{reportData.summary.imu_count.toLocaleString()}</div>
+                <div className="text-xs text-blue-600">IMU 資料筆數</div>
+              </div>
+              <div className="bg-green-50 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-green-700">{reportData.summary.device_count}</div>
+                <div className="text-xs text-green-600">使用裝置數</div>
+              </div>
+              <div className="bg-purple-50 rounded-lg p-4 text-center">
+                <div className="text-2xl font-bold text-purple-700">{session.started_at ? new Date(session.started_at).toLocaleDateString("zh-TW") : "—"}</div>
+                <div className="text-xs text-purple-600">課程日期</div>
+              </div>
+            </div>
+          </div>
+
+          {/* Assessment metrics */}
+          <div className="bg-white rounded-xl shadow-sm p-6">
+            <h2 className="text-lg font-bold text-gray-800 mb-4">評估指標</h2>
+            <div className="grid grid-cols-3 gap-4 text-sm">
+              <div className="text-center">
+                <div className="font-semibold text-gray-800">{formatNum(reportData.assessments.avg_activity_level)}</div>
+                <div className="text-xs text-gray-400">平均活動量</div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-gray-800">{formatNum(reportData.assessments.avg_smoothness)}</div>
+                <div className="text-xs text-gray-400">平均平穩度</div>
+              </div>
+              <div className="text-center">
+                <div className="font-semibold text-gray-800">{formatNum(reportData.assessments.avg_stability_index)}</div>
+                <div className="text-xs text-gray-400">平均穩定性</div>
+              </div>
+            </div>
+          </div>
+        </>
+      )}
+
       {/* Evaluations (only for completed sessions) */}
       {isCompleted && evalLoaded && canControl && (
         <div className="bg-white rounded-xl shadow-sm p-6">
@@ -522,38 +772,62 @@ export default function SessionDetail() {
               <thead>
                 <tr className="border-b text-left">
                   <th className="pb-2 font-medium">學生</th>
-                  <th className="pb-2 font-medium w-20">評分 (0-100)</th>
+                  <th className="pb-2 font-medium w-20">評分</th>
                   <th className="pb-2 font-medium">評語</th>
-                  <th className="pb-2 font-medium w-16">操作</th>
                 </tr>
               </thead>
               <tbody>
                 {evaluations.map((ev) => (
-                  <tr key={ev.child_id} className="border-b last:border-0">
+                  <tr key={ev.child_id} onClick={() => openEvalModal(ev.child_id)}
+                    className="border-b last:border-0 cursor-pointer hover:bg-gray-50 transition-colors">
                     <td className="py-2 font-medium">{ev.child_name}</td>
-                    <td className="py-2">
-                      <input type="number" min={0} max={100}
-                        value={ev.score ?? ""}
-                        onChange={(e) => handleEvalChange(ev.child_id, "score", e.target.value)}
-                        className="w-20 border rounded-lg px-2 py-1 text-xs" />
-                    </td>
-                    <td className="py-2">
-                      <input value={ev.comment ?? ""}
-                        onChange={(e) => handleEvalChange(ev.child_id, "comment", e.target.value)}
-                        placeholder="評語（選填）"
-                        className="w-full border rounded-lg px-2 py-1 text-xs" />
-                    </td>
-                    <td className="py-2">
-                      <button onClick={() => handleEvalSave(ev.child_id)} disabled={savingEval === ev.child_id}
-                        className="text-blue-600 hover:underline disabled:opacity-50">
-                        {savingEval === ev.child_id ? "儲存中" : "儲存"}
-                      </button>
-                    </td>
+                    <td className="py-2">{ev.score !== null ? `${ev.score}/100` : "—"}</td>
+                    <td className="py-2 text-gray-500">{ev.comment || "—"}</td>
                   </tr>
                 ))}
               </tbody>
             </table>
           )}
+        </div>
+      )}
+
+      {/* Evaluation Modal */}
+      {evalModalChildId && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md mx-4">
+            {(() => {
+              const ev = evaluations.find((e) => e.child_id === evalModalChildId);
+              return (
+                <>
+                  <h3 className="text-sm font-semibold text-gray-800 mb-4">
+                    評分：{ev?.child_name || ""}
+                  </h3>
+                  <label className="text-xs text-gray-500 block mb-1">評分 (0-100)</label>
+                  <input type="number" min={0} max={100}
+                    value={evalModalScore}
+                    onChange={(e) => setEvalModalScore(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm mb-4" />
+                  <label className="text-xs text-gray-500 block mb-1">評語</label>
+                  <textarea
+                    value={evalModalComment}
+                    onChange={(e) => setEvalModalComment(e.target.value)}
+                    placeholder="評語（選填）"
+                    rows={3}
+                    className="w-full border rounded-lg px-3 py-2 text-sm mb-4 resize-none" />
+                  <div className="flex gap-2 justify-end">
+                    <button onClick={() => setEvalModalChildId(null)}
+                      className="text-xs px-4 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+                      取消
+                    </button>
+                    <button onClick={handleEvalModalSave} disabled={evalModalSaving}
+                      className="text-xs px-4 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50">
+                      {evalModalSaving ? "儲存中…" : "儲存"}
+                    </button>
+                  </div>
+                </>
+              );
+            })()}
+          </div>
         </div>
       )}
     </div>

@@ -272,18 +272,27 @@ ESP32 開機時連線到 `/ws/default`，然後向 `GET /api/config/session?devi
 
 | 路徑 | 頁面 | 功能 |
 |------|------|------|
+| `/dashboard/login` | 登入 | Email + Password 登入 |
+| `/dashboard/register` | 註冊 | 建立新帳號 |
+| `/dashboard/accept-invite` | 接受邀請 | 完成 org invite 流程 |
 | `/dashboard/` | 首頁 | 導航卡片 + 課程統計 + 最近課程 |
-| `/dashboard/templates` | 教案模板 | 建立可重複使用的課程階段模板 |
 | `/dashboard/sessions` | 課程管理 | 排程、開課、管理課程生命週期 |
-| `/dashboard/sessions/:id` | 課程詳情 | 檢視課程階段、評估、開始/結束課程 |
+| `/dashboard/sessions/:id` | 課程詳情 | 檢視課程階段、評估、開始/結束課程、裝置配對、學生評分 |
 | `/dashboard/sessions/:id/report` | 課程報告 | 課程完整 AI 分析報告 |
-| `/dashboard/live/:sessionId` | 即時監控 | IMU 6 軸即時圖表 + WS 連線狀態 |
+| `/dashboard/templates` | 教案模板 | 建立可重複使用的課程階段模板 |
+| `/dashboard/live/:sessionId` | 即時監控 | IMU 6 軸即時圖表 + WS 連線狀態 + 節拍指示器 + 音樂資訊 |
 | `/dashboard/history` | 課程紀錄 | Session 列表 |
 | `/dashboard/assessment/:sessionId` | 評估指標 | 即時行為指標運算（IMU/CV） |
 | `/dashboard/devices` | 裝置管理 | ESP32 腰帶註冊、狀態檢視 |
-| `/dashboard/classes` | 班級管理 | 班級、教師、幼兒資料管理 |
-| `/dashboard/admin/users` | 帳號管理 | 建立與管理教師、家長帳號 |
+| `/dashboard/firmware` | 韌體更新 | 上傳與管理 ESP32 韌體版本 |
+| `/dashboard/wifi` | WiFi 設定 | 遠端設定裝置 WiFi SSID/密碼 |
+| `/dashboard/classes` | 班級管理 | 班級 CRUD + 教師/幼兒資料管理 |
+| `/dashboard/classes/:classId` | 班級詳情 | 幼兒列表、家長綁定/解綁 |
+| `/dashboard/classes/:classId/assessments` | 班級評估 | 跨 Session 班級評估彙整 |
+| `/dashboard/children/:childId/assessments` | 幼兒評估 | 跨 Session 個人分析趨勢圖 |
 | `/dashboard/admin` | 機構管理 | 組織列表（super_admin 專用） |
+| `/dashboard/admin/users` | 帳號管理 | 建立與管理教師、家長帳號 |
+| `/dashboard/parent` | 家長專區 | 唯讀檢視綁定幼兒的報告與發展歷程 |
 
 ### 5.2 首頁（Landing）
 
@@ -515,16 +524,56 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 |--------|------|------|
 | `GET` | `/health` | 健康檢查 |
 
-#### Sessions
+#### 認證（Auth）
 
 | Method | Path | 說明 |
 |--------|------|------|
-| `GET` | `/api/sessions` | 列出最近 100 筆 Session |
-| `POST` | `/api/sessions` | 建立新 Session（body: `course_type`） |
-| `GET` | `/api/sessions/{id}` | 單一 Session 詳情 |
+| `POST` | `/api/auth/login` | 登入（body: `email`, `password`）→ 回傳 JWT |
+| `POST` | `/api/auth/refresh` | 刷新 Token |
+| `GET` | `/api/auth/me` | 當前使用者資訊 |
+| `POST` | `/api/auth/register` | 註冊使用者（body: `email`, `password`, `display_name`, `role`, `org_id`） |
+| `POST` | `/api/auth/complete-invite` | 完成邀請流程（body: `token`, `password`） |
+
+#### Sessions（課程管理）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/sessions` | 列出課程（支援 `?status=`, `?class_id=` 篩選） |
+| `POST` | `/api/sessions` | 建立課程（body: `name`, `class_id?`, `template_id?`, `description?`, `scheduled_at?`） |
+| `GET` | `/api/sessions/{id}` | 課程詳情（含 template_activities, assignments） |
+| `PUT` | `/api/sessions/{id}` | 更新課程（body: `name?`, `description?`, `class_id?`, `template_id?`, `scheduled_at?`） |
+| `DELETE` | `/api/sessions/{id}` | 刪除課程（draft 狀態） |
+| `POST` | `/api/sessions/{id}/start` | 開始上課（status→active, start_time=now） |
+| `POST` | `/api/sessions/{id}/end` | 結束課程（status→completed, end_time=now） |
+| `PUT` | `/api/sessions/{id}/activity` | 更新活動進度（body: `current_activity_index`） |
+| `POST` | `/api/sessions/{id}/music` | 上傳音樂檔或設定 BPM（form: `file` 或 body: `bpm`）→ 自動分析 beat/stop times |
+| `DELETE` | `/api/sessions/{id}/music` | 移除音樂設定 |
+| `POST` | `/api/sessions/{id}/music-url` | 設定外部音樂連結（body: `url`, `track_name`, `album`） |
 | `GET` | `/api/sessions/{id}/analysis` | Session 分析結果 |
+| `GET` | `/api/sessions/{id}/evaluations` | 課程評分列表（含幼兒姓名） |
+| `PUT` | `/api/sessions/{id}/evaluations/{childId}` | 儲存評分（body: `score?`, `comment?`） |
+| `GET` | `/api/sessions/{id}/report` | 課程報告（sessions 彙整 + 評分） |
+| `GET` | `/api/sessions/{id}/sessions` | 子 Session 列表 |
 
+#### 教案模板（Templates）
 
+| Method | Path | 說明 |
+|--------|------|------|
+| `GET` | `/api/templates` | 列出所有模板 |
+| `POST` | `/api/templates` | 新增模板（body: `name`, `description?`, `duration_minutes?`, `stages?`, `metrics_config?`） |
+| `GET` | `/api/templates/{id}` | 模板詳情 |
+| `PUT` | `/api/templates/{id}` | 更新模板 |
+| `DELETE` | `/api/templates/{id}` | 刪除模板 |
+
+#### 評估計算（Assessments）
+
+| Method | Path | 說明 |
+|--------|------|------|
+| `POST` | `/api/sessions/{id}/assessments/compute` | 批次計算 IMU 指標（activity/smoothness/stability）+ 音樂元素分析 |
+| `GET` | `/api/sessions/{id}/assessments` | 取得 Session 評估結果 |
+| `GET` | `/api/children/{id}/assessments` | 幼兒跨 Session 評估歷史 |
+| `GET` | `/api/children/{id}/analysis/trends` | 幼兒逐音樂元素分析趨勢 |
+| `GET` | `/api/classes/{id}/assessments` | 班級評估彙整 |
 
 #### 系統設定
 
@@ -540,10 +589,17 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 |--------|------|------|
 | `GET` | `/api/devices` | 列出所有裝置 |
 | `POST` | `/api/devices` | 註冊/更新裝置（body: `device_id`, `name?`, `firmware_version?`） |
+| `PUT` | `/api/devices/{id}` | 更新裝置（body: `name?`, `org_id?`） |
 | `GET` | `/api/children` | 列出所有學員 |
-| `POST` | `/api/children` | 註冊學員（body: `name`, `student_id?`, `notes?`） |
+| `POST` | `/api/children` | 註冊學員（body: `name`, `student_id?`, `notes?`, `class_id?`） |
+| `PUT` | `/api/children/{id}` | 更新學員資料 |
+| `DELETE` | `/api/children/{id}` | 刪除學員 |
+| `GET` | `/api/children/assignments` | 學員配對總覽（含 device_name） |
+| `PUT` | `/api/children/{id}/assign` | 手動指定學員裝置（body: `device_id`） |
+| `DELETE` | `/api/assignments/{id}` | 刪除配對 |
 | `GET` | `/api/sessions/{id}/assignments` | 查詢配對結果 |
-| `POST` | `/api/sessions/{id}/assign` | 執行裝置-學員配對（body: `device_id`, `child_id`, `confidence?`） |
+| `POST` | `/api/sessions/{id}/assign` | 執行裝置-學員配對（body: `device_id`, `child_id`, `confidence?`），`method` 固定為 `manual` |
+| `POST` | `/api/sessions/{id}/auto-pair` | 跨模態自動配對（FFT 相位匹配 + Hungarian 指派） |
 
 #### 韌體 OTA
 
@@ -564,44 +620,46 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 | `GET` | `/api/analyze/tasks/{id}` | 任務狀態 |
 | `POST` | `/api/analyze/tasks/{id}/cancel` | 取消任務 |
 
-#### 認證（Auth）
+#### 報告（Reports）
 
 | Method | Path | 說明 |
 |--------|------|------|
-| `POST` | `/api/auth/login` | 登入（body: `email`, `password`）→ 回傳 JWT |
-| `POST` | `/api/auth/refresh` | 刷新 Token |
-| `GET` | `/api/auth/me` | 當前使用者資訊 |
-| `POST` | `/api/auth/register` | 註冊使用者（body: `email`, `password`, `display_name`, `role`, `org_id`） |
+| `GET` | `/api/reports/{id}` | 取得單一報告 |
 
 #### 組織管理（super_admin）
 
 | Method | Path | 說明 |
 |--------|------|------|
 | `GET` | `/api/admin/orgs` | 列出所有組織 |
-| `POST` | `/api/admin/orgs` | 新增組織（query: `name`, `code`, `contact_email?`） |
+| `POST` | `/api/admin/orgs` | 新增組織（body: `name`, `code`, `contact_email?`） |
+| `PUT` | `/api/admin/orgs/{id}` | 更新組織資訊 |
+| `DELETE` | `/api/admin/orgs/{id}` | 停用組織 |
 
-#### 班級管理（org_admin）
+#### 班級管理（org_admin / teacher）
 
 | Method | Path | 說明 |
 |--------|------|------|
 | `GET` | `/api/orgs/{orgId}/classes` | 班級列表 |
-| `POST` | `/api/orgs/{orgId}/classes` | 新增班級（query: `name`, `grade?`） |
-| `PUT` | `/api/classes/{id}` | 編輯班級（query: `name?`, `grade?`） |
+| `POST` | `/api/orgs/{orgId}/classes` | 新增班級（body: `name`, `grade?`） |
+| `PUT` | `/api/classes/{id}` | 編輯班級（body: `name?`, `grade?`） |
 | `DELETE` | `/api/classes/{id}` | 刪除班級 |
 | `GET` | `/api/classes/{id}/children` | 班級幼兒列表 |
+| `POST` | `/api/classes/{id}/children` | 新增幼兒到班級 |
 
 #### 使用者管理（org_admin）
 
 | Method | Path | 說明 |
 |--------|------|------|
 | `GET` | `/api/orgs/{orgId}/users` | 列出組織使用者 |
-| `POST` | `/api/orgs/{orgId}/users` | 新增使用者（body: `email`, `password`, `display_name`, `role`） |
+| `POST` | `/api/orgs/{orgId}/invite` | 邀請使用者加入組織（body: `email`, `role`） |
 | `PUT` | `/api/users/{id}` | 編輯使用者（body: `is_active?`, `display_name?`） |
 
 #### 家長綁定
 
 | Method | Path | 說明 |
 |--------|------|------|
+| `GET` | `/api/orgs/{orgId}/parents` | 列出組織家長 |
+| `GET` | `/api/children/{childId}/parents` | 查詢幼兒的家長 |
 | `POST` | `/api/children/{childId}/parents` | 綁定家長（body: `parent_id`） |
 | `GET` | `/api/parents/me/children` | 家長查看自己的幼兒 |
 | `DELETE` | `/api/parents/{parentId}/children/{childId}` | 解除綁定 |
@@ -613,7 +671,8 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 | `POST` | `/api/consent` | 上傳家長同意書（form: `child_id`, `parent_id`, `consented`, `file?`） |
 | `GET` | `/api/consent/{childId}` | 查詢幼兒同意書狀態 |
 | `GET` | `/api/admin/audit-logs` | 審計日誌列表 |
-| `GET` | `/api/admin/export/anonymized?format=json` | 匿名化資料匯出（CSV/JSON） |
+| `POST` | `/api/admin/export/anonymized` | 匿名化資料匯出（body: `format=json/csv`） |
+| `GET` | `/api/admin/export/anonymized` | 匿名化資料匯出（query: `format=json`） |
 | `GET` | `/api/admin/export/consent-report` | 同意書報表 CSV |
 
 #### WebSocket
@@ -654,7 +713,7 @@ curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
 
 ```bash
 cd backend && python3 -m pytest tests/test_basic.py -v
-# 預期：12 passed
+# 預期：22 passed
 ```
 
 測試項目：
@@ -664,7 +723,11 @@ cd backend && python3 -m pytest tests/test_basic.py -v
 - Freeze Dance 分析（2 項）
 - 臉部嵌入（2 項）
 - Gemini fallback（1 項）
-- 完整路由覆蓋（1 項，含所有 17 條路由）
+- API Key 驗證（3 項）
+- WiFi 設定路由與模型（3 項）
+- Session 模型與路由（3 項）
+- Report 模型欄位（1 項）
+- 完整路由覆蓋（1 項，含所有 19 條路由）
 
 ### 9.2 API 整合測試
 
@@ -672,7 +735,7 @@ cd backend && python3 -m pytest tests/test_basic.py -v
 bash field-testing/verify-device-management.sh
 ```
 
-15 項測試通過標準：
+17 項測試通過標準（第 16-17 項僅在 Dashboard 已啟動時執行）：
 1. ✅ 裝置列表（≥0 筆）
 2. ✅ 註冊腰帶（回傳 online）
 3. ✅ 註冊第二條腰帶
@@ -688,6 +751,8 @@ bash field-testing/verify-device-management.sh
 13. ✅ 覆寫配對（腰帶 A 改配小華）
 14. ✅ 不存在裝置回傳 404
 15. ✅ 不存在 Session 回傳 404
+16. ✅ Dashboard 裝置管理頁面回傳 200
+17. ✅ Dashboard 評估指標頁面回傳 200
 
 ### 9.3 ESP32 開機驗證
 

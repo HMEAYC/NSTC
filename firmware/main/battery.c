@@ -44,8 +44,9 @@ esp_err_t battery_read_mv(uint32_t *voltage_mv) {
 }
 
 uint8_t battery_level_percent(uint32_t voltage_mv) {
-    // LiPo: 4.2V = 100%, 3.3V = 0% (ME6211 dropout ~200mV, min input ~3.35V)
+    // 16500 Li-ion: 4.2V = 100%, 3.0V = 0% (discharge cutoff)
+    // ME6211 dropout ~100mV @ 100mA, min input ~3.4V for 3.3V output
     if (voltage_mv >= 4200) return 100;
-    if (voltage_mv <= 3300) return 0;
-    return (uint8_t)((voltage_mv - 3300) * 100 / (4200 - 3300));
+    if (voltage_mv <= 3000) return 0;
+    return (uint8_t)((voltage_mv - 3000) * 100 / (4200 - 3000));
 }

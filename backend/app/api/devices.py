@@ -23,14 +23,18 @@ class UpdateDeviceRequest(BaseModel):
 
 @router.get("/devices")
 def list_devices(
+    org_id: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
     is_super = current_user is not None and current_user.role == "super_admin"
     query = db.query(DeviceModel)
-    if not is_super:
-        org_id = effective_org_id(current_user)
+    if org_id:
         query = query.filter(DeviceModel.org_id == org_id)
+    elif not is_super:
+        resolved = effective_org_id(current_user)
+        if resolved:
+            query = query.filter(DeviceModel.org_id == resolved)
     devices = query.order_by(DeviceModel.created_at.desc()).all()
     return {"devices": [_device_dict(d) for d in devices]}
 
@@ -120,13 +124,15 @@ def update_device(
 
 @router.get("/children")
 def list_children(
+    org_id: str | None = Query(None),
     db: Session = Depends(get_db),
     current_user: User | None = Depends(get_current_user),
 ):
-    org_id = effective_org_id(current_user)
-    children = db.query(ChildModel).filter(
-        ChildModel.org_id == org_id
-    ).order_by(ChildModel.created_at.desc()).all()
+    resolved = org_id or effective_org_id(current_user) or None
+    query = db.query(ChildModel)
+    if resolved:
+        query = query.filter(ChildModel.org_id == resolved)
+    children = query.order_by(ChildModel.created_at.desc()).all()
     return {
         "children": [
             {
@@ -422,6 +428,16 @@ def get_device_session_config(
 
 
 def _device_dict(d: DeviceModel) -> dict:
+    # Compute online/offline status dynamically based on last_seen
+    if d.last_seen and d.status == "online":
+        elapsed = (datetime.utcnow() - d.last_seen).total_seconds()
+        if elapsed > 300:  # 5 minutes threshold
+            effective_status = "offline"
+        else:
+            effective_status = "online"
+    else:
+        effective_status = d.status or "offline"
+
     return {
         "id": d.id,
         "device_id": d.device_id,
@@ -433,7 +449,7 @@ def _device_dict(d: DeviceModel) -> dict:
         "ip_address": d.ip_address,
         "mac_address": d.mac_address,
         "org_id": d.org_id,
-        "status": d.status,
+        "status": effective_status,
         "active_session_id": d.active_session_id,
         "last_seen": d.last_seen.isoformat() if d.last_seen else None,
         "created_at": d.created_at.isoformat() if d.created_at else None,

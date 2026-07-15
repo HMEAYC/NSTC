@@ -100,10 +100,11 @@ curl -X POST http://localhost:8080/api/sessions/{SESSION_ID}/assign \
   -d '{"device_id":"{DEVICE_A_ID}","child_id":"{CHILD_A_ID}","confidence":0.95}'
 ```
 
-**自動配對（論文演算法）：**
+**自動配對（論文演算法，已實作）：**
 
-跨模態配對演算法（FFT 相位匹配 + Hungarian 指派）預計在後續版本中整合至 `POST /api/sessions/{id}/assign` 端點。  
-目前 method 參數為 `"manual"`。待攝影機 MediaPipe 資料串接完成後，演算法將以 `method: "cross_modal_fft"` 自動執行。
+跨模態配對演算法（FFT 相位匹配 + Hungarian 全域最優指派）已實作為獨立端點 `POST /api/sessions/{id}/auto-pair`，可在課程詳情頁的配對彈窗中點擊「🔗 跨模態自動配對」執行。系統會擷取每個裝置的 IMU 加速度 magnitude 做 FFT 取得主頻率與相位：若攝影機已上傳課程錄影並取得視覺髖部軌跡相位，會與 IMU 相位做交叉相關，回傳 `method: "fft_phase_cross_modal"`；若無攝影機資料，則僅以 IMU 頻譜相位排序配對，回傳 `method: "fft_phase_imu_only"`，信心分數計算方式不同（且普遍較低）。
+
+手動配對（`POST /api/sessions/{id}/assign`）仍是獨立端點，method 參數固定為 `"manual"`；自動配對一律走 `/auto-pair` 端點，不會混用同一支 API。
 
 ### Step 6: 開啟 Dashboard 管理
 

@@ -165,15 +165,15 @@ HMEAYC/
 │       │   ├── macro.py         # 巨觀分析
 │       │   ├── micro.py         # 微觀分析
 │       │   ├── metrics.py       # 指標計算
-│       │   ├── rhythm.py        # 節奏分析 stub
-│       │   ├── freeze_dance.py  # Freeze Dance stub
+│       │   ├── rhythm.py        # 節奏同步分析（IMU motion energy + beat matching）
+│       │   ├── freeze_dance.py  # Freeze Dance 分析（reaction time + stability）
 │       │   └── pose/            # 姿勢精化
 │       │       ├── common.py
 │       │       ├── estimator.py # MediaPipe Pose
 │       │       └── holistic.py  # MediaPipe Holistic
 │       ├── tracking/            # 身分辨識
 │       │   ├── identity.py      # 外觀嵌入 + 身分庫
-│       │   ├── face_insight.py  # ArcFace stub
+│       │   ├── face_insight.py  # HOG 特徵臉部嵌入（ lightweight fallback for ArcFace）
 │       │   ├── longitudinal.py  # 跨影片累積
 │       │   └── importer.py      # 批次匯入
 │       ├── report/              # 報告生成
@@ -457,6 +457,7 @@ backend/app/
 ├── paths.py                # 資料目錄管理
 ├── pipeline.py             # 完整分析管線（orchestrator）
 ├── cli.py                  # 命令列介面
+├── music.py                # 音樂分析工具（BPM/beat/stop detection）
 ├── viz.py                  # matploblib 圖表
 ├── timecode.py             # 時間碼工具
 │
@@ -472,11 +473,13 @@ backend/app/
 │   └── ws.py               # WebSocket /ws (IMU 即時流)
 │
 ├── analysis/
-│   ├── rhythm.py           # 節奏同步分析 (stub → 實作)
-│   ├── freeze_dance.py     # Freeze Dance 分析 (stub → 實作)
+│   ├── rhythm.py           # 節奏同步分析（已實作）
+│   ├── freeze_dance.py     # Freeze Dance 分析（已實作）
+│   ├── realtime.py         # 即時分析管線（RealtimeAnalyzer，整合 WS IMU 流）
 │   ├── macro.py            # 巨觀：隊形、熱區、參與度
 │   ├── micro.py            # 微觀：同步誤差、穩定度、jerk
 │   ├── metrics.py          # 指標燈號：綠/黃/紅
+│   ├── realtime.py         # 即時音樂分析管線（IMU 緩衝區 + 即時節奏/凍結）
 │   └── pose/
 │       ├── estimator.py    # MediaPipe Pose 精化
 │       ├── holistic.py     # MediaPipe Holistic 精化
@@ -484,7 +487,7 @@ backend/app/
 │
 ├── tracking/
 │   ├── identity.py         # 外觀嵌入（HSV histogram）+ 身分庫
-│   ├── face_insight.py     # ArcFace stub（待 insightface）
+│   ├── face_insight.py     # HOG 特徵臉部嵌入（ lightweight fallback，待整合 insightface）
 │   ├── longitudinal.py     # JSONL 跨影片累積
 │   └── importer.py         # 批次匯入既有 metrics
 │
@@ -587,7 +590,8 @@ dashboard/src/
 │
 ├── components/
 │   ├── ErrorBoundary.tsx   # 錯誤邊界
-│   └── LoadingSpinner.tsx  # 載入動畫
+│   ├── LoadingSpinner.tsx  # 載入動畫
+│   └── BeatIndicator.tsx   # BPM 脈衝指示器 + 節拍同步進度條
 │
 └── types/
     └── index.ts            # TypeScript 型別定義
@@ -669,6 +673,8 @@ dashboard/src/
 | `PUT` | `/api/courses/{id}/evaluations/{childId}` | 儲存學童評分 | teacher+ |
 | `GET` | `/api/courses/{id}/report` | 課程報告 | — |
 | `PUT` | `/api/sessions/{id}/activity` | 更新活動進度 | teacher+ |
+| `POST` | `/api/sessions/{id}/music` | 上傳音樂檔或設定 BPM | teacher+ |
+| `DELETE` | `/api/sessions/{id}/music` | 移除音樂設定 | teacher+ |
 | `GET` | `/api/classes/{id}/children` | 班級學童列表 | teacher+ |
 | `GET` | `/api/children/{id}/assessments` | 幼兒跨 session 評估 | — |
 | `GET` | `/api/children/{id}/analysis/trends` | 幼兒分析趨勢（逐音樂元素） | — |
@@ -698,6 +704,41 @@ dashboard/src/
   "timestamp": 1234567890.123,
   "rhythm_sync": { "ms": 45, "rating": "excellent" },
   "stability": { "cm": 3.2, "rating": "excellent" }
+}
+```
+
+**伺服器 → 用戶端（音樂資訊，Session 開始時廣播）：**
+
+```json
+{
+  "type": "music",
+  "bpm": 120.0,
+  "beat_times": [0.5, 1.0, 1.5, 2.0, ...],
+  "stop_times": [8.2, 15.7, ...],
+  "duration": 180.5,
+  "music_element": "節奏（Rhythm）"
+}
+```
+
+**伺服器 → 用戶端（即時節奏更新，每 5 秒）：**
+
+```json
+{
+  "type": "rhythm_update",
+  "rhythm_sync_rate": 0.82,
+  "bpm": 120.0,
+  "peak_count": 45,
+  "beat_count": 50
+}
+```
+
+**伺服器 → 用戶端（凍結偵測更新，stop_time 觸發時）：**
+
+```json
+{
+  "type": "freeze_update",
+  "reaction_time": 0.35,
+  "stability_score": 0.88
 }
 ```
 
@@ -1083,7 +1124,32 @@ Index: `(session_id, ts)` composite index for time-range queries.
 
 **輸出：** `avg_displacement_cm` + 評級（<5cm 優秀 / <15cm 良好 / ≥15cm 需加強）
 
-### 9.3 巨觀分析（macro.py）
+### 9.3 即時音樂整合（realtime.py）
+
+**架構：** Session 綁定音樂檔 → librosa 預分析 → WebSocket 廣播 → IMU 即時對齊
+
+**音樂分析流程（music.py）：**
+
+1. 教師上傳音樂檔（.mp3 / .wav / .m4a）或手動輸入 BPM
+2. 後端 `librosa.load()` 讀取音訊
+3. `librosa.beat.beat_track()` 偵測 BPM + beat onset timestamps
+4. RMS energy 急降偵測（> 35% 低於中位數）→ stop_times
+5. 結果存入 Session 欄位（music_bpm, music_beat_times, music_stop_times）
+
+**即時分析管線（RealtimeAnalyzer）：**
+
+- IMU 緩衝區（1500 筆，30 秒 @ 50Hz）
+- 每 250 幀（5 秒）呼叫 `analyze_rhythm_sync(buffer, bpm)` → rhythm_sync_rate
+- stop_time 觸發時呼叫 `analyze_freeze_response(buffer, stop_time)` → reaction_time + stability_score
+- 結果透過 WebSocket `{"type": "rhythm_update"}` / `{"type": "freeze_update"}` 廣播
+
+**時間對齊：**
+- Dashboard 記錄 `music_start_ts`（教師按下播放的時刻）
+- IMU timestamp 與 `music_start_ts` 做差，對齊音樂 beat_times / stop_times
+
+**輸出：** 即時 rhythm_sync_rate（0-1）+ reaction_time（秒）+ stability_score（0-1）
+
+### 9.4 巨觀分析（macro.py）
 
 **隊形分類：**
 - 計算人物中心點集合的 PCA + 距離統計
@@ -1098,7 +1164,7 @@ Index: `(session_id, ts)` composite index for time-range queries.
 - 逐幀人物框中心位移速度 > 0.5 cm/s 即標記為活躍
 - 全片活躍幀比例 = engagement_score
 
-### 9.4 微觀分析（micro.py）
+### 9.5 微觀分析（micro.py）
 
 **追蹤：**
 - ByteTrack（ultralytics 內建）以 track_id 關聯跨幀同人物
@@ -1111,7 +1177,7 @@ Index: `(session_id, ts)` composite index for time-range queries.
 - 對髖部軌跡三階差分：`jerk = d³x/dt³`
 - 平均 jerk 值愈低代表動作愈流暢
 
-### 9.5 身分辨識（tracking/identity.py）
+### 9.6 身分辨識（tracking/identity.py）
 
 **外觀嵌入：**
 - BGR → HSV 轉換
@@ -1124,9 +1190,9 @@ Index: `(session_id, ts)` composite index for time-range queries.
 
 **資料庫：**
 - `backend/memory/identity_features.db.json`
-- 支援 ArcFace embedding（需安裝 insightface，目前為 stub）
+- 目前使用 HOG 特徵（128 維向量）作為 lightweight fallback，待整合 insightface 實現 ArcFace embedding
 
-### 9.6 指標燈號（metrics.py）
+### 9.7 指標燈號（metrics.py）
 
 綜合五項指標加權：
 
@@ -1146,7 +1212,7 @@ Index: `(session_id, ts)` composite index for time-range queries.
 | ≥ 0.70 | 🟡 良好 |
 | < 0.70 | 🔴 需關注 |
 
-### 9.7 跨模態裝置配對（Cross-Modal Belt Assignment）
+### 9.8 跨模態裝置配對（Cross-Modal Belt Assignment）
 
 **論文參考：** *"A Cross-Modal Child Identification Framework for AI-Assisted Music Learning Using Wearable IMU Sensors and Vision-Based Pose Estimation"* (Lee, Chen & Chen, 2026)
 

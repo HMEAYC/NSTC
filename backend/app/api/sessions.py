@@ -1,7 +1,10 @@
 from __future__ import annotations
 
+import os
+import uuid
 from datetime import datetime
-from fastapi import APIRouter, Depends, HTTPException
+from pathlib import Path
+from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc, func
@@ -9,6 +12,7 @@ from sqlalchemy import desc, func
 from app.auth import require_api_key
 from app.auth.deps import get_current_user, require_role
 from app.auth.org import effective_org_id
+from app.config import settings
 from app.db.base import get_db
 from app.models.session import Session as SessionModel
 from app.models.session_template import SessionTemplate
@@ -47,6 +51,16 @@ class UpdateSessionRequest(BaseModel):
 
 class UpdateActivityRequest(BaseModel):
     current_activity_index: int
+
+
+class SetBpmRequest(BaseModel):
+    bpm: float
+
+
+class SetMusicUrlRequest(BaseModel):
+    url: str
+    track_name: str | None = None
+    album: str | None = None
 
 
 class UpsertEvaluationRequest(BaseModel):
@@ -94,6 +108,12 @@ def _serialize(s: SessionModel) -> dict:
         "scheduled_at": s.scheduled_at.isoformat() if s.scheduled_at else None,
         "started_at": s.start_time.isoformat() if s.start_time else None,
         "ended_at": s.end_time.isoformat() if s.end_time else None,
+        "music_bpm": s.music_bpm,
+        "music_beat_times": s.music_beat_times,
+        "music_stop_times": s.music_stop_times,
+        "music_duration": s.music_duration,
+        "music_element": s.music_element,
+        "music_url": s.music_url,
     }
 
 
@@ -194,8 +214,9 @@ def get_session(
         IMUData.session_id == session_id
     ).scalar() or 0
 
-    # Resolve template activities
+    # Resolve template activities and CD tracks
     template_activities = []
+    template_cd_tracks = []
     if session.template_id:
         tmpl = db.query(SessionTemplate).filter(
             SessionTemplate.id == session.template_id
@@ -204,9 +225,11 @@ def get_session(
             stages_data = tmpl.stages
             if isinstance(stages_data, list) and len(stages_data) > 0:
                 template_activities = stages_data[0].get("activities", []) or []
+                template_cd_tracks = stages_data[0].get("cd_tracks", []) or []
 
     result["current_activity_index"] = session.current_activity_index or 0
     result["template_activities"] = template_activities
+    result["template_cd_tracks"] = template_cd_tracks
     result["imu_count"] = imu_count
     result["device_count"] = device_count
 
@@ -277,6 +300,7 @@ def delete_session(
 @router.post("/{session_id}/start")
 def start_session(
     session_id: str,
+    background_tasks: BackgroundTasks,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
@@ -290,6 +314,24 @@ def start_session(
     session.start_time = datetime.utcnow()
     db.commit()
     db.refresh(session)
+
+    # Broadcast music info to connected WebSocket viewers
+    if session.music_bpm:
+        from app.api.ws import broadcast_to_session
+        background_tasks.add_task(
+            broadcast_to_session,
+            session_id,
+            {
+                "type": "music",
+                "session_id": session_id,
+                "music_bpm": session.music_bpm,
+                "music_beat_times": session.music_beat_times or [],
+                "music_stop_times": session.music_stop_times or [],
+                "music_duration": session.music_duration or 0,
+                "music_element": session.music_element,
+            },
+        )
+
     return {"session": _serialize(session)}
 
 
@@ -510,4 +552,139 @@ def get_session_report(
             "avg_stability_index": round(avg_stability, 4) if avg_stability else None,
         },
         "evaluations": evaluations_data,
+    }
+
+
+# ─── Music ────────────────────────────────────────────────────────
+
+MUSIC_UPLOAD_DIR = str(Path(__file__).resolve().parent.parent.parent / "uploads" / "music")
+
+
+@router.post("/{session_id}/music")
+async def set_session_music(
+    session_id: str,
+    file: UploadFile | None = File(default=None),
+    body: SetBpmRequest | None = None,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+):
+    """Upload a music file or set BPM manually for a session.
+
+    Accepts either a multipart file upload OR a JSON body with ``bpm``.
+    When a file is provided, the server analyzes it with librosa to extract
+    BPM, beat timestamps, and stop timestamps.
+    """
+    session = _session_query(db, session_id, current_user)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    from app.music import analyze_music, compute_beat_times_from_bpm
+
+    if file and file.filename:
+        # Save uploaded file
+        os.makedirs(MUSIC_UPLOAD_DIR, exist_ok=True)
+        ext = os.path.splitext(file.filename)[1] or ".mp3"
+        filename = f"{session_id}{ext}"
+        file_path = os.path.join(MUSIC_UPLOAD_DIR, filename)
+        content = await file.read()
+        with open(file_path, "wb") as f:
+            f.write(content)
+
+        # Analyze
+        try:
+            result = analyze_music(file_path)
+        except Exception as e:
+            os.remove(file_path)
+            raise HTTPException(422, f"Music analysis failed: {e}")
+
+        session.music_file = filename
+        session.music_bpm = result["bpm"]
+        session.music_beat_times = result["beat_times"]
+        session.music_stop_times = result["stop_times"]
+        session.music_duration = result["duration"]
+
+    elif body and body.bpm is not None:
+        # Manual BPM mode — compute synthetic beat times
+        duration = session.music_duration or 180.0
+        session.music_file = None
+        session.music_bpm = body.bpm
+        session.music_beat_times = compute_beat_times_from_bpm(body.bpm, duration)
+        session.music_stop_times = []
+
+    else:
+        raise HTTPException(400, "Provide either a music file or a bpm value")
+
+    # Copy music_element from template if not already set
+    if not session.music_element and session.template_id:
+        tmpl = db.query(SessionTemplate).filter(
+            SessionTemplate.id == session.template_id
+        ).first()
+        if tmpl and tmpl.stages and isinstance(tmpl.stages, list) and tmpl.stages:
+            session.music_element = tmpl.stages[0].get("music_element")
+
+    db.commit()
+    db.refresh(session)
+
+    return {
+        "music_bpm": session.music_bpm,
+        "music_beat_times": session.music_beat_times,
+        "music_stop_times": session.music_stop_times,
+        "music_duration": session.music_duration,
+        "music_element": session.music_element,
+    }
+
+
+@router.delete("/{session_id}/music")
+def remove_session_music(
+    session_id: str,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+):
+    """Remove music settings from a session."""
+    session = _session_query(db, session_id, current_user)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    # Remove uploaded file if exists
+    if session.music_file:
+        file_path = os.path.join(MUSIC_UPLOAD_DIR, session.music_file)
+        if os.path.exists(file_path):
+            os.remove(file_path)
+
+    session.music_file = None
+    session.music_bpm = None
+    session.music_beat_times = None
+    session.music_stop_times = None
+    session.music_duration = None
+    session.music_element = None
+    session.music_url = None
+    db.commit()
+
+    return {"status": "removed"}
+
+
+@router.post("/{session_id}/music-url")
+def set_session_music_url(
+    session_id: str,
+    body: SetMusicUrlRequest,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+):
+    """Set an external music URL (e.g. YouTube, Spotify) for a session."""
+    session = _session_query(db, session_id, current_user)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    session.music_url = body.url
+    if body.track_name:
+        session.music_element = body.track_name
+    if body.album:
+        # Store album info in description if not set
+        pass
+    db.commit()
+    db.refresh(session)
+
+    return {
+        "music_url": session.music_url,
+        "music_element": session.music_element,
     }

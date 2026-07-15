@@ -12,6 +12,7 @@ interface CdTrack {
   album: string;
   track: string;
   details: string;
+  link?: string;
 }
 
 interface Stage {
@@ -138,7 +139,7 @@ export default function Templates() {
       resources: Array.isArray(s.resources) ? s.resources : [],
       motivation: s.motivation || "",
       activities: Array.isArray(s.activities) ? s.activities : [],
-      cd_tracks: Array.isArray(s.cd_tracks) ? s.cd_tracks : [],
+      cd_tracks: Array.isArray(s.cd_tracks) ? s.cd_tracks.map((c: any) => ({ ...c, link: c.link || "" })) : [],
       supplementary: s.supplementary || "",
     };
   }
@@ -215,7 +216,7 @@ export default function Templates() {
   };
 
   const addCdTrack = () => {
-    updateStage("cd_tracks", [...(stage.cd_tracks || []), { album: "", track: "", details: "" }]);
+    updateStage("cd_tracks", [...(stage.cd_tracks || []), { album: "", track: "", details: "", link: "" }]);
   };
 
   const updateCdTrack = (i: number, field: keyof CdTrack, value: string) => {
@@ -340,15 +341,30 @@ export default function Templates() {
                   <p className="text-xs text-gray-400">尚未新增 CD 曲目</p>
                 )}
                 {(stage.cd_tracks || []).map((t, i) => (
-                  <div key={i} className="flex gap-2 items-start">
-                    <input value={t.album} onChange={(e) => updateCdTrack(i, "album", e.target.value)}
-                      placeholder="專輯 (e.g. CD-I)" className="w-20 border rounded px-2 py-1.5 text-xs" />
-                    <input value={t.track} onChange={(e) => updateCdTrack(i, "track", e.target.value)}
-                      placeholder="曲目 (e.g. 4. 旋轉木馬(Carousel)- 快慢(Fast & Slow))"
-                      className="flex-1 border rounded px-2 py-1.5 text-xs" />
-                    <input value={t.details} onChange={(e) => updateCdTrack(i, "details", e.target.value)}
-                      placeholder="說明 (e.g. 4個快慢4*8拍)" className="w-28 border rounded px-2 py-1.5 text-xs" />
-                    <button onClick={() => removeCdTrack(i)} className="text-red-500 hover:text-red-700 text-xs mt-1">✕</button>
+                  <div key={i} className="border rounded-lg p-2.5 space-y-2 bg-gray-50">
+                    <div className="flex gap-2 items-start">
+                      <input value={t.album} onChange={(e) => updateCdTrack(i, "album", e.target.value)}
+                        placeholder="專輯 (e.g. CD-I)" className="w-20 border rounded px-2 py-1.5 text-xs" />
+                      <input value={t.track} onChange={(e) => updateCdTrack(i, "track", e.target.value)}
+                        placeholder="曲目 (e.g. 4. 旋轉木馬(Carousel)- 快慢(Fast & Slow))"
+                        className="flex-1 border rounded px-2 py-1.5 text-xs" />
+                      <input value={t.details} onChange={(e) => updateCdTrack(i, "details", e.target.value)}
+                        placeholder="說明 (e.g. 4個快慢4*8拍)" className="w-28 border rounded px-2 py-1.5 text-xs" />
+                      <button onClick={() => removeCdTrack(i)} className="text-red-500 hover:text-red-700 text-xs mt-1">✕</button>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs text-gray-400 flex-shrink-0">🔗</span>
+                      <input value={t.link || ""} onChange={(e) => updateCdTrack(i, "link", e.target.value)}
+                        placeholder="歌曲連結 (YouTube / Spotify 連結)"
+                        className="flex-1 border rounded px-2 py-1 text-xs" />
+                      {t.link && (
+                        <a href={t.link} target="_blank" rel="noopener noreferrer"
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-xs text-blue-500 hover:underline flex-shrink-0">
+                          開啟
+                        </a>
+                      )}
+                    </div>
                   </div>
                 ))}
                 <button onClick={addCdTrack}

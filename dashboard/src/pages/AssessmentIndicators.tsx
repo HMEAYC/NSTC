@@ -138,7 +138,7 @@ export default function AssessmentIndicators() {
     setLastDeviceDataMs(Date.now());
     onMetricsMessage(frame);
   }, [onMetricsMessage]);
-  const { status: wsStatus } = useWebSocket(sid, onMessage);
+  const { status: wsStatus, rhythm, freeze } = useWebSocket(sid, onMessage);
   const [savedAssessments, setSavedAssessments] = useState<AssessmentResultInfo[]>([]);
   const [computing, setComputing] = useState(false);
   const [computeDone, setComputeDone] = useState(false);
@@ -264,11 +264,13 @@ export default function AssessmentIndicators() {
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <MetricCard
             icon="🎵" title="節奏同步誤差" desc="動作波峰 vs 音樂拍點"
-            value="--" placeholderText="需音樂拍點參考 (BPM + beat tracking)"
+            value={rhythm ? `${(rhythm.sync_rate * 100).toFixed(0)}%` : "--"}
+            placeholderText={rhythm ? `偵測 ${rhythm.peak_count} / ${rhythm.beat_count} 拍` : "需音樂拍點參考 (BPM + beat tracking)"}
           />
           <MetricCard
             icon="🧊" title="凍結反應/穩定度" desc="音樂停止後反應時間與穩定度"
-            value="--" placeholderText="需音樂停止訊號 (RMS energy drop)"
+            value={freeze ? `${freeze.reaction_time.toFixed(2)}s` : "--"}
+            placeholderText={freeze ? `穩定度 ${(freeze.stability_score * 100).toFixed(0)}%` : "需音樂停止訊號 (RMS energy drop)"}
           />
         </div>
       </section>

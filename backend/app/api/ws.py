@@ -1,5 +1,6 @@
 import asyncio
 import logging
+import time
 from datetime import datetime
 from typing import Any, Optional
 
@@ -12,10 +13,12 @@ from app.db.base import SessionLocal
 from app.models.session import Session as SessionModel
 from app.models.imu_data import IMUData
 from app.models.device import Device as DeviceModel
+from app.analysis.realtime import RealtimeAnalyzer
 
 router = APIRouter(tags=["websocket"])
 
 _viewers: dict[str, set[WebSocket]] = {}
+_analyzers: dict[str, RealtimeAnalyzer] = {}
 _cleanup_started = False
 
 
@@ -38,6 +41,16 @@ def _ensure_cleanup():
     if not _cleanup_started:
         _cleanup_started = True
         asyncio.create_task(_cleanup_loop())
+
+
+async def broadcast_to_session(session_id: str, message: dict) -> None:
+    """Broadcast a message to all viewers of a session (used by REST endpoints)."""
+    viewers = list(_viewers.get(session_id, set()))
+    for ws in viewers:
+        try:
+            await ws.send_json(message)
+        except Exception:
+            _viewers.get(session_id, set()).discard(ws)
 
 
 def _normalize_message(data: Any, device_id_default: str) -> Optional[dict[str, Any]]:
@@ -111,6 +124,26 @@ async def imu_data_ws(
             "status": "connected",
         })
 
+        # Initialize real-time analyzer if session has music data
+        analyzer: RealtimeAnalyzer | None = None
+        if session.music_bpm:
+            analyzer = RealtimeAnalyzer(
+                bpm=session.music_bpm,
+                beat_times=session.music_beat_times or [],
+                stop_times=session.music_stop_times or [],
+                music_duration=session.music_duration or 0,
+            )
+            _analyzers[session_id] = analyzer
+            await websocket.send_json({
+                "type": "music",
+                "session_id": session_id,
+                "music_bpm": session.music_bpm,
+                "music_beat_times": session.music_beat_times or [],
+                "music_stop_times": session.music_stop_times or [],
+                "music_duration": session.music_duration or 0,
+                "music_element": session.music_element,
+            })
+
         while True:
             raw = await websocket.receive_json()
             data = _normalize_message(raw, "esp32-c3")
@@ -146,6 +179,17 @@ async def imu_data_ws(
                         ).update({"active_session_id": session_id})
                     db.commit()
 
+                # Real-time music analysis
+                if analyzer is not None:
+                    result = analyzer.ingest(data)
+                    if result is not None:
+                        viewers = list(_viewers.get(session_id, set()))
+                        for viewer in viewers:
+                            try:
+                                await viewer.send_json(result)
+                            except Exception:
+                                _viewers.get(session_id, set()).discard(viewer)
+
                 # broadcast without waiting for DB write
                 viewers = list(_viewers.get(session_id, set()))
                 for viewer in viewers:
@@ -179,6 +223,28 @@ async def imu_data_ws(
                 })
                 continue
 
+            if data["type"] == "music_start":
+                # Teacher pressed play — record start timestamp for IMU alignment
+                if analyzer is not None:
+                    ts = float(data.get("ts", time.time() * 1000))
+                    analyzer.set_music_start(ts)
+                    viewers = list(_viewers.get(session_id, set()))
+                    for viewer in viewers:
+                        try:
+                            await viewer.send_json({
+                                "type": "music_start",
+                                "session_id": session_id,
+                                "ts": ts,
+                            })
+                        except Exception:
+                            _viewers.get(session_id, set()).discard(viewer)
+                await websocket.send_json({
+                    "type": "status",
+                    "session_id": session_id,
+                    "status": "ok",
+                })
+                continue
+
             await websocket.send_json({
                 "type": "status",
                 "session_id": session_id,
@@ -194,6 +260,8 @@ async def imu_data_ws(
         db.rollback()
     finally:
         _viewers.get(session_id, set()).discard(websocket)
+        if session_id in _analyzers and not _viewers.get(session_id, set()):
+            _analyzers.pop(session_id, None)
         try:
             db.commit()
         except Exception:
