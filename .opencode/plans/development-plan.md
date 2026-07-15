@@ -292,7 +292,7 @@ graph LR
 | 外部電池 | 14500 800mAh 1.5V（裝入擴充座） |
 | 充電 IC | IP2362A（R_PROG=12kΩ ⇒ ~100mA） |
 | 二極體 OR-ing | SS12 Schottky（D1/D2），自動選擇電壓較高者 |
-| LDO | ME6211C33M5G，dropout ~200mV@100mA |
+| LDO | ME6211C33M5G，dropout ~100mV@100mA |
 | 可運作電壓範圍 | 4.2V ~ 3.35V（約 80% 電量） |
 | 續航估算 | 內部電池：~1.5h；外部 14500：~6h |
 
