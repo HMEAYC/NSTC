@@ -16,7 +16,6 @@ const History = lazy(() => import("./pages/History"));
 const AssessmentIndicators = lazy(() => import("./pages/AssessmentIndicators"));
 const DeviceManagement = lazy(() => import("./pages/DeviceManagement"));
 const FirmwareUpload = lazy(() => import("./pages/FirmwareUpload"));
-const WiFiConfig = lazy(() => import("./pages/WiFiConfig"));
 const AdminOrgs = lazy(() => import("./pages/AdminOrgs"));
 const ClassManagement = lazy(() => import("./pages/ClassManagement"));
 const ClassDetail = lazy(() => import("./pages/ClassDetail"));
@@ -53,7 +52,6 @@ export default function App() {
                 <Route path="/dashboard/assessment/:sessionId" element={<ProtectedRoute><AssessmentIndicators /></ProtectedRoute>} />
                 <Route path="/dashboard/devices" element={<ProtectedRoute><DeviceManagement /></ProtectedRoute>} />
                 <Route path="/dashboard/firmware" element={<ProtectedRoute><FirmwareUpload /></ProtectedRoute>} />
-                <Route path="/dashboard/wifi" element={<ProtectedRoute><WiFiConfig /></ProtectedRoute>} />
                 <Route path="/dashboard/admin" element={<RoleRoute roles={["org_admin", "super_admin"]}><AdminOrgs /></RoleRoute>} />
                 <Route path="/dashboard/classes" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassManagement /></RoleRoute>} />
                 <Route path="/dashboard/classes/:classId" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassDetail /></RoleRoute>} />

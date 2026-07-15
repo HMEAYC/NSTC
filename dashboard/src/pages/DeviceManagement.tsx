@@ -32,6 +32,13 @@ export default function DeviceManagement() {
   const [editError, setEditError] = useState<string | null>(null);
   const isSuper = user?.role === "super_admin";
 
+  // WiFi fields
+  const [wifiSsid, setWifiSsid] = useState("");
+  const [wifiPassword, setWifiPassword] = useState("");
+  const [wifiSaving, setWifiSaving] = useState(false);
+  const [wifiMsg, setWifiMsg] = useState<string | null>(null);
+  const [showPassword, setShowPassword] = useState(false);
+
   const fetchData = () => {
     setLoading(true);
     setError(null);
@@ -53,6 +60,18 @@ export default function DeviceManagement() {
     setEditName(d.name);
     setEditOrgId(d.org_id);
     setEditError(null);
+    setWifiMsg(null);
+    setShowPassword(false);
+    // Load WiFi config for this device
+    api.getDeviceWifiConfig(d.id)
+      .then((cfg) => {
+        setWifiSsid(cfg.ssid || "");
+        setWifiPassword(cfg.password || "");
+      })
+      .catch(() => {
+        setWifiSsid("");
+        setWifiPassword("");
+      });
     if (isSuper) {
       const tok = localStorage.getItem("hmeayc_token");
       fetch(`${API_BASE}/api/admin/orgs`, {
@@ -80,6 +99,24 @@ export default function DeviceManagement() {
       setEditError(err instanceof Error ? err.message : "儲存失敗");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleWifiSave = async () => {
+    if (!editingDevice) return;
+    if (!wifiSsid.trim()) {
+      setWifiMsg("WiFi SSID 不可為空");
+      return;
+    }
+    setWifiSaving(true);
+    setWifiMsg(null);
+    try {
+      await api.setDeviceWifiConfig(editingDevice.id, wifiSsid.trim(), wifiPassword);
+      setWifiMsg("WiFi 設定已儲存");
+    } catch (err) {
+      setWifiMsg(err instanceof Error ? err.message : "儲存失敗");
+    } finally {
+      setWifiSaving(false);
     }
   };
 
@@ -200,62 +237,110 @@ export default function DeviceManagement() {
       {/* Edit Modal */}
       {editingDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
-          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md mx-4">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto">
             <div className="flex items-center justify-between mb-4">
               <h3 className="text-sm font-semibold text-gray-800">編輯裝置</h3>
               <button onClick={() => setEditingDevice(null)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
             </div>
 
-            <div className="space-y-3">
+            <div className="space-y-4">
               {editError && (
                 <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs">
                   {editError}
                 </div>
               )}
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">裝置名稱</label>
-                <input value={editName} onChange={(e) => setEditName(e.target.value)}
-                  className="w-full border rounded-lg px-3 py-2 text-sm" />
+
+              {/* Basic info */}
+              <div className="space-y-3">
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">裝置名稱</label>
+                  <input value={editName} onChange={(e) => setEditName(e.target.value)}
+                    className="w-full border rounded-lg px-3 py-2 text-sm" />
+                </div>
+                <div>
+                  <label className="text-xs text-gray-500 block mb-1">MAC 位址</label>
+                  <p className="text-sm font-mono text-gray-700">{editingDevice.device_id}</p>
+                </div>
+                {isSuper && (
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">所屬組織</label>
+                    <select value={editOrgId} onChange={(e) => setEditOrgId(e.target.value)}
+                      className="w-full border rounded-lg px-3 py-2 text-sm">
+                      {orgs.map((o) => (
+                        <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">韌體版本</label>
+                    <p className="text-sm">{editingDevice.firmware_version || "—"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">狀態</label>
+                    <p className="text-sm">{editingDevice.status === "online" ? "連線中" : "離線"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">目前連接 WiFi</label>
+                    <p className="text-sm">{editingDevice.wifi_ssid || "—"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">訊號強度</label>
+                    <p className="text-sm">{editingDevice.wifi_rssi != null ? `${editingDevice.wifi_rssi} dBm` : "—"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">IP 位址</label>
+                    <p className="text-sm">{editingDevice.ip_address || "—"}</p>
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">電量</label>
+                    <p className="text-sm">{batteryLevel(editingDevice.battery_level).label}</p>
+                  </div>
+                </div>
               </div>
-              <div>
-                <label className="text-xs text-gray-500 block mb-1">MAC 位址</label>
-                <p className="text-sm font-mono text-gray-700">{editingDevice.device_id}</p>
-              </div>
-              {isSuper && (
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">所屬組織</label>
-                  <select value={editOrgId} onChange={(e) => setEditOrgId(e.target.value)}
-                    className="w-full border rounded-lg px-3 py-2 text-sm">
-                    {orgs.map((o) => (
-                      <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
-                    ))}
-                  </select>
-                </div>
-              )}
-              <div className="grid grid-cols-2 gap-3">
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">韌體版本</label>
-                  <p className="text-sm">{editingDevice.firmware_version || "—"}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">狀態</label>
-                  <p className="text-sm">{editingDevice.status === "online" ? "連線中" : "離線"}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">WiFi SSID</label>
-                  <p className="text-sm">{editingDevice.wifi_ssid || "—"}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">訊號強度</label>
-                  <p className="text-sm">{editingDevice.wifi_rssi != null ? `${editingDevice.wifi_rssi} dBm` : "—"}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">IP 位址</label>
-                  <p className="text-sm">{editingDevice.ip_address || "—"}</p>
-                </div>
-                <div>
-                  <label className="text-xs text-gray-500 block mb-1">電量</label>
-                  <p className="text-sm">{batteryLevel(editingDevice.battery_level).label}</p>
+
+              {/* WiFi Config section */}
+              <div className="border-t pt-4">
+                <h4 className="text-xs font-semibold text-gray-600 mb-3">📶 WiFi 設定</h4>
+                <p className="text-[10px] text-gray-400 mb-3">設定此裝置的 WiFi 連線。儲存後裝置將在下次輪詢時套用新設定。</p>
+                <div className="space-y-3">
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">WiFi SSID</label>
+                    <input value={wifiSsid} onChange={(e) => setWifiSsid(e.target.value)}
+                      placeholder="請輸入 WiFi 名稱"
+                      className="w-full border rounded-lg px-3 py-2 text-sm" />
+                  </div>
+                  <div>
+                    <label className="text-xs text-gray-500 block mb-1">WiFi 密碼</label>
+                    <div className="relative">
+                      <input
+                        type={showPassword ? "text" : "password"}
+                        value={wifiPassword}
+                        onChange={(e) => setWifiPassword(e.target.value)}
+                        placeholder="請輸入 WiFi 密碼"
+                        className="w-full border rounded-lg px-3 py-2 text-sm pr-16"
+                      />
+                      <button
+                        type="button"
+                        onClick={() => setShowPassword(!showPassword)}
+                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 hover:text-gray-600"
+                      >
+                        {showPassword ? "隱藏" : "顯示"}
+                      </button>
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <button onClick={handleWifiSave} disabled={wifiSaving || !wifiSsid.trim()}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
+                      {wifiSaving ? "儲存中…" : "儲存 WiFi"}
+                    </button>
+                    {wifiMsg && (
+                      <span className={`text-xs ${wifiMsg.includes("失敗") || wifiMsg.includes("不可") ? "text-red-500" : "text-green-600"}`}>
+                        {wifiMsg}
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>

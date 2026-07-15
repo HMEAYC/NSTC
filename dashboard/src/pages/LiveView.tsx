@@ -201,7 +201,6 @@ export default function LiveView() {
               🎯 評估指標
             </a>
             <a href="/dashboard/firmware" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">韌體</a>
-            <a href="/dashboard/wifi" className="text-xs px-2 py-0.5 rounded bg-gray-100 text-gray-600 hover:bg-gray-200">WiFi</a>
           </div>
         </div>
       </div>

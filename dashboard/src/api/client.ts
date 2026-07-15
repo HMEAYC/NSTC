@@ -259,14 +259,16 @@ export const api = {
     return res.json();
   },
 
-  // WiFi Config
-  getWifiConfig: () =>
-    fetchJSON<{ ssid: string | null; updated_at: string | null; password?: string }>("/api/config/wifi"),
+  // WiFi Config (per-device)
+  getDeviceWifiConfig: (deviceId: string) =>
+    fetchJSON<{ ssid: string | null; updated_at: string | null; password?: string; device_id?: string | null }>(
+      `/api/config/wifi?device_id=${encodeURIComponent(deviceId)}`
+    ),
 
-  setWifiConfig: (ssid: string, password: string) =>
-    fetchJSON<{ ssid: string; updated_at: string }>(`/api/config/wifi`, {
+  setDeviceWifiConfig: (deviceId: string, ssid: string, password: string) =>
+    fetchJSON<{ ssid: string; updated_at: string; device_id?: string | null }>(`/api/config/wifi`, {
       method: "PUT",
-      body: JSON.stringify({ ssid, password: password || null }),
+      body: JSON.stringify({ ssid, password: password || null, device_id: deviceId }),
     }),
 
   // Assessments
