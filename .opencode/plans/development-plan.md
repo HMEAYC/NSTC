@@ -1124,7 +1124,7 @@ Index: `(session_id, ts)` composite index for time-range queries.
 
 **輸出：** `avg_displacement_cm` + 評級（<5cm 優秀 / <15cm 良好 / ≥15cm 需加強）
 
-### 9.3 即時音樂整合（realtime.py）
+### 9.3 即時音樂整合（realtime.py）✅ 已實作
 
 **架構：** Session 綁定音樂檔 → librosa 預分析 → WebSocket 廣播 → IMU 即時對齊
 
