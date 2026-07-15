@@ -18,6 +18,7 @@ export interface MusicInfo {
   stopTimes: number[];
   duration: number;
   element: string | null;
+  url: string | null;
 }
 
 export interface RhythmUpdate {
@@ -76,6 +77,7 @@ export function useWebSocket(
             stopTimes: m.stopTimes ?? (frame as any).music_stop_times ?? [],
             duration: m.duration ?? (frame as any).music_duration ?? 0,
             element: m.element ?? (frame as any).music_element ?? null,
+            url: m.url ?? (frame as any).music_url ?? null,
           });
         } else if (frame.type === "rhythm_update") {
           setRhythm(frame as unknown as RhythmUpdate);

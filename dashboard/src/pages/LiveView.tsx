@@ -301,6 +301,23 @@ export default function LiveView() {
               <span>穩定度: <span className="font-semibold text-green-600">{(freeze.stability_score * 100).toFixed(0)}%</span></span>
             </div>
           )}
+          {/* Music Player */}
+          {music.url && (
+            <div className="pt-2 border-t border-gray-100">
+              {music.url.includes("youtube.com") || music.url.includes("youtu.be") ? (
+                <div className="w-full aspect-video rounded-lg overflow-hidden max-h-48">
+                  <iframe
+                    src={`https://www.youtube.com/embed/${music.url.match(/(?:v=|youtu\.be\/)([a-zA-Z0-9_-]+)/)?.[1] || ""}`}
+                    className="w-full h-full"
+                    allow="autoplay; encrypted-media"
+                    allowFullScreen
+                  />
+                </div>
+              ) : (
+                <audio controls src={music.url} className="w-full" />
+              )}
+            </div>
+          )}
         </div>
       )}
 

@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import hashlib
+import json
 import logging
 from pathlib import Path
 
@@ -10,9 +12,24 @@ import numpy as np
 
 logger = logging.getLogger(__name__)
 
+# In-memory cache: file_hash -> analysis result
+_analysis_cache: dict[str, dict] = {}
+_CACHE_MAX_SIZE = 50
+
+
+def _file_hash(file_path: str | Path) -> str:
+    """Compute a fast hash of the file (first 64KB + size)."""
+    p = Path(file_path)
+    size = p.stat().st_size
+    with open(p, "rb") as f:
+        head = f.read(65536)
+    return hashlib.sha256(head + str(size).encode()).hexdigest()[:16]
+
 
 def analyze_music(file_path: str | Path) -> dict:
     """Analyze a music file and return BPM, beat times, and stop times.
+
+    Results are cached by file hash to avoid re-analysis of the same file.
 
     Args:
         file_path: Path to an audio file (mp3, wav, m4a, etc.).
@@ -20,6 +37,11 @@ def analyze_music(file_path: str | Path) -> dict:
     Returns:
         dict with keys: bpm, beat_times, stop_times, duration.
     """
+    fh = _file_hash(file_path)
+    if fh in _analysis_cache:
+        logger.info("Music analysis cache hit for %s", fh)
+        return _analysis_cache[fh]
+
     y, sr = librosa.load(str(file_path), sr=22050, mono=True)
 
     # BPM + beat onset detection
@@ -40,17 +62,25 @@ def analyze_music(file_path: str | Path) -> dict:
 
     duration = round(float(len(y) / sr), 2)
 
-    logger.info(
-        "Music analysis: bpm=%.1f, beats=%d, stops=%d, duration=%.1fs",
-        bpm, len(beat_times), len(stop_times), duration,
-    )
-
-    return {
+    result = {
         "bpm": round(bpm, 1),
         "beat_times": beat_times,
         "stop_times": stop_times,
         "duration": duration,
     }
+
+    # Cache the result
+    if len(_analysis_cache) >= _CACHE_MAX_SIZE:
+        # Remove oldest entry
+        _analysis_cache.pop(next(iter(_analysis_cache)))
+    _analysis_cache[fh] = result
+
+    logger.info(
+        "Music analysis: bpm=%.1f, beats=%d, stops=%d, duration=%.1fs (hash=%s)",
+        bpm, len(beat_times), len(stop_times), duration, fh,
+    )
+
+    return result
 
 
 def compute_beat_times_from_bpm(bpm: float, duration: float) -> list[float]:

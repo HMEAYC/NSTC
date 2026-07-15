@@ -329,6 +329,7 @@ def start_session(
                 "music_stop_times": session.music_stop_times or [],
                 "music_duration": session.music_duration or 0,
                 "music_element": session.music_element,
+                "music_url": session.music_url,
             },
         )
 

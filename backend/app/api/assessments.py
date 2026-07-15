@@ -15,6 +15,8 @@ from app.models.device_assignment import DeviceAssignment
 from app.models.device import Device
 from app.models.child import Child
 from app.models.user import User
+from app.analysis.rhythm import analyze_rhythm_sync
+from app.analysis.freeze_dance import analyze_freeze_response
 from datetime import datetime
 from uuid import uuid4
 
@@ -162,7 +164,9 @@ def compute_session_assessment(
         if not raw_id:
             continue
         imu_rows = (
-            db.query(IMUData.accel_x, IMUData.accel_y, IMUData.accel_z)
+            db.query(IMUData.accel_x, IMUData.accel_y, IMUData.accel_z,
+                     IMUData.gyro_x, IMUData.gyro_y, IMUData.gyro_z,
+                     IMUData.timestamp)
             .filter(
                 IMUData.session_id == session_id,
                 IMUData.device_id == raw_id,
@@ -170,37 +174,57 @@ def compute_session_assessment(
             .order_by(IMUData.id)
             .all()
         )
-        mags = [sqrt(x*x + y*y + z*z) for x, y, z in imu_rows]
+        imu_data = [
+            {"ax": x, "ay": y, "az": z, "gx": gx, "gy": gy, "gz": gz,
+             "ts": ts.timestamp() * 1000 if ts else i}
+            for i, (x, y, z, gx, gy, gz, ts) in enumerate(imu_rows)
+        ]
 
-        if "節奏" in music_element or "拍子" in music_element:
-            # Rough rhythm sync: zero-crossing rate of detrended magnitude
-            if len(mags) > 50:
-                mean_mag = sum(mags) / len(mags)
-                detrended = [m - mean_mag for m in mags]
-                crossings = sum(
-                    1 for i in range(1, len(detrended))
-                    if (detrended[i-1] > 0) != (detrended[i] > 0)
-                )
-                rhythm_sync = round(min(1.0, crossings / (len(detrended) * 0.5)), 4)
+        # Use actual analysis when session has music data
+        if session.music_bpm and session.music_bpm > 0:
+            rhythm_result = analyze_rhythm_sync(imu_data, session.music_bpm)
+            rhythm_sync = rhythm_result.get("sync_rate")
 
-        if "走停" in music_element:
-            # Rough freeze detection: look for sudden drops below a threshold
-            if len(mags) > 100:
-                window = 20
-                ratios = []
-                for i in range(window, len(mags)):
-                    pre = sum(mags[i-window:i]) / window
-                    post = sum(mags[i:min(i+window, len(mags))]) / window
-                    if pre > 0.5:
-                        ratios.append(post / pre)
-                if ratios:
-                    min_ratio = min(ratios)
-                    freeze_time = round(float(min_ratio), 4) if min_ratio < 0.5 else None
-                    # stability during quiet periods
-                    quiet = [m for m in mags if m < 1.0]
-                    if quiet:
-                        cv = (sum((m - (sum(quiet)/len(quiet)))**2 for m in quiet) / len(quiet))**0.5 / (sum(quiet)/len(quiet))
-                        freeze_stability = round(max(0.0, min(1.0, 1.0 - cv)), 4)
+            if session.music_stop_times:
+                # Analyze the last stop time that occurred during this session
+                session_start = session.start_time.timestamp() if session.start_time else 0
+                for stop_t in reversed(session.music_stop_times):
+                    if stop_t > 0:
+                        freeze_result = analyze_freeze_response(imu_data, stop_t)
+                        if freeze_result.get("reaction_time", 0) > 0:
+                            freeze_time = freeze_result["reaction_time"]
+                            freeze_stability = freeze_result.get("stability_score")
+                            break
+        else:
+            # Fallback: rough approximation when no music data
+            mags = [sqrt(d["ax"]**2 + d["ay"]**2 + d["az"]**2) for d in imu_data]
+
+            if "節奏" in music_element or "拍子" in music_element:
+                if len(mags) > 50:
+                    mean_mag = sum(mags) / len(mags)
+                    detrended = [m - mean_mag for m in mags]
+                    crossings = sum(
+                        1 for i in range(1, len(detrended))
+                        if (detrended[i-1] > 0) != (detrended[i] > 0)
+                    )
+                    rhythm_sync = round(min(1.0, crossings / (len(detrended) * 0.5)), 4)
+
+            if "走停" in music_element:
+                if len(mags) > 100:
+                    window = 20
+                    ratios = []
+                    for i in range(window, len(mags)):
+                        pre = sum(mags[i-window:i]) / window
+                        post = sum(mags[i:min(i+window, len(mags))]) / window
+                        if pre > 0.5:
+                            ratios.append(post / pre)
+                    if ratios:
+                        min_ratio = min(ratios)
+                        freeze_time = round(float(min_ratio), 4) if min_ratio < 0.5 else None
+                        quiet = [m for m in mags if m < 1.0]
+                        if quiet:
+                            cv = (sum((m - (sum(quiet)/len(quiet)))**2 for m in quiet) / len(quiet))**0.5 / (sum(quiet)/len(quiet))
+                            freeze_stability = round(max(0.0, min(1.0, 1.0 - cv)), 4)
 
         existing_analysis = db.query(AnalysisResult).filter(
             AnalysisResult.session_id == session_id,

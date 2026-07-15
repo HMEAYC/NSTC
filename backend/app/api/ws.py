@@ -3,6 +3,7 @@ import logging
 import time
 from datetime import datetime
 from typing import Any, Optional
+from uuid import uuid4
 
 logger = logging.getLogger(__name__)
 
@@ -13,6 +14,7 @@ from app.db.base import SessionLocal
 from app.models.session import Session as SessionModel
 from app.models.imu_data import IMUData
 from app.models.device import Device as DeviceModel
+from app.models.analysis_result import AnalysisResult
 from app.analysis.realtime import RealtimeAnalyzer
 
 router = APIRouter(tags=["websocket"])
@@ -142,6 +144,7 @@ async def imu_data_ws(
                 "music_stop_times": session.music_stop_times or [],
                 "music_duration": session.music_duration or 0,
                 "music_element": session.music_element,
+                "music_url": session.music_url,
             })
 
         while True:
@@ -183,6 +186,35 @@ async def imu_data_ws(
                 if analyzer is not None:
                     result = analyzer.ingest(data)
                     if result is not None:
+                        # Persist analysis result to DB
+                        try:
+                            device_id = str(data.get("device_id", ""))
+                            if result["type"] == "rhythm_update":
+                                ar = AnalysisResult(
+                                    id=str(uuid4()),
+                                    session_id=session_id,
+                                    child_id=None,
+                                    rhythm_sync_rate=result.get("sync_rate"),
+                                    raw_data={"bpm": result.get("bpm"), "peak_count": result.get("peak_count"), "beat_count": result.get("beat_count")},
+                                )
+                                db.add(ar)
+                                db.commit()
+                            elif result["type"] == "freeze_update":
+                                ar = AnalysisResult(
+                                    id=str(uuid4()),
+                                    session_id=session_id,
+                                    child_id=None,
+                                    freeze_reaction_time=result.get("reaction_time"),
+                                    freeze_stability_score=result.get("stability_score"),
+                                    raw_data={"stop_time": result.get("stop_time")},
+                                )
+                                db.add(ar)
+                                db.commit()
+                        except Exception:
+                            db.rollback()
+                            logger.exception("Failed to persist analysis result")
+
+                        # Broadcast to viewers
                         viewers = list(_viewers.get(session_id, set()))
                         for viewer in viewers:
                             try:
