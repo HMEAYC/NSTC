@@ -23,7 +23,7 @@ static const char *TAG = "HMEAYC";
 #define PIN_SCL   GPIO_NUM_7
 
 #define SAMPLE_RATE_HZ      CONFIG_HMEAYC_SAMPLE_RATE_HZ
-#define OTA_CHECK_INTERVAL  (SAMPLE_RATE_HZ * 3600)  // check once per hour
+#define OTA_CHECK_INTERVAL  (SAMPLE_RATE_HZ * 86400) // check once per 24 hours
 #define DEVICE_REGISTER_INTERVAL (SAMPLE_RATE_HZ * 1800) // register every 30 min
 #define WIFI_CONFIG_INTERVAL (SAMPLE_RATE_HZ * 1800) // check WiFi config every 30 min
 #define SESSION_CONFIG_INTERVAL (SAMPLE_RATE_HZ * 1800) // check session config every 30 min
