@@ -77,10 +77,11 @@ def _resolve_org_id(user: User | None, override: str | None = None) -> str | Non
 
 
 def _session_filter(session_model, user: User | None, org_override: str | None = None):
-    org_id = _resolve_org_id(user, org_override)
     filters = []
-    if org_id:
-        filters.append(session_model.org_id == org_id)
+    if user and user.role != "super_admin":
+        org_id = _resolve_org_id(user, org_override)
+        if org_id:
+            filters.append(session_model.org_id == org_id)
     if user is not None and user.role == "teacher":
         filters.append(session_model.teacher_id == user.id)
     return filters
@@ -88,10 +89,11 @@ def _session_filter(session_model, user: User | None, org_override: str | None =
 
 def _session_query(db: DBSession, session_id: str, user: User | None, org_override: str | None = None):
     """Query a session by id, scoped by org unless super_admin."""
-    org_id = _resolve_org_id(user, org_override)
     filters = [SessionModel.id == session_id]
-    if org_id:
-        filters.append(SessionModel.org_id == org_id)
+    if user and user.role != "super_admin":
+        org_id = _resolve_org_id(user, org_override)
+        if org_id:
+            filters.append(SessionModel.org_id == org_id)
     return db.query(SessionModel).filter(*filters).first()
 
 

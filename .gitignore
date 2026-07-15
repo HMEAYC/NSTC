@@ -12,6 +12,9 @@ venv/
 .env
 tmp/
 
+# Local SQLite (dev/test DB — production uses PostgreSQL, see docker-compose.yml)
+*.db
+
 # Node
 node_modules/
 dist/

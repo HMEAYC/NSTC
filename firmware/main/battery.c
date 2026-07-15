@@ -14,10 +14,13 @@ static adc_oneshot_unit_handle_t adc_handle = NULL;
 #define ADC_BITS       12
 #define ADC_MAX        ((1 << ADC_BITS) - 1)
 
-// Voltage thresholds for 16500 Li-ion battery
+// Voltage thresholds for 16500 Li-ion battery.
+// Actual ESP32-C3 hardware brownout is ~2.50V (see hardware/schematic.md); BATTERY_EMPTY_MV is
+// set ~300mV above that on purpose so the displayed 0% still leaves a safety margin before the
+// device actually cuts out.
 #define BATTERY_FULL_MV    4200
 #define BATTERY_LOW_MV     3200   // Low battery warning threshold
-#define BATTERY_EMPTY_MV   2800   // Critical - system may brownout
+#define BATTERY_EMPTY_MV   2800   // 0% display floor (safety margin above ~2.50V hardware brownout)
 
 esp_err_t battery_init(void) {
     adc_oneshot_unit_init_cfg_t unit_cfg = {
@@ -49,7 +52,7 @@ esp_err_t battery_read_mv(uint32_t *voltage_mv) {
 }
 
 uint8_t battery_level_percent(uint32_t voltage_mv) {
-    // 16500 Li-ion: 4.2V = 100%, 2.8V = 0% (critical brownout level)
+    // 16500 Li-ion: 4.2V = 100%, 2.8V = 0% (see BATTERY_EMPTY_MV note above)
     if (voltage_mv >= BATTERY_FULL_MV) return 100;
     if (voltage_mv <= BATTERY_EMPTY_MV) return 0;
     return (uint8_t)((voltage_mv - BATTERY_EMPTY_MV) * 100 / (BATTERY_FULL_MV - BATTERY_EMPTY_MV));

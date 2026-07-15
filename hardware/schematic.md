@@ -157,11 +157,16 @@ GPIO19 ◄─────┤ A6(D+)    │  A7(D-) ──► GPIO20
   旁路電容：GPIO0 ── 0.1µF ── GND (濾波)
 
   量測範圍：
-    電池      V_BAT    V_ADC
-    充滿      4.20V    1.34V
-    標稱      3.70V    1.18V
-    低電量    3.05V    0.97V  ← 建議軟體低電量警告
-    截止      2.50V    0.80V  ← ESP32 brownout
+    電池       V_BAT    V_ADC
+    充滿       4.20V    1.34V   ← 韌體 battery_level_percent() 100%（BATTERY_FULL_MV）
+    標稱       3.70V    1.18V
+    低電量警告  3.20V    1.02V   ← 韌體低電量警告（BATTERY_LOW_MV，battery_is_low()）
+    0% 顯示    2.80V    0.90V   ← 韌體 battery_level_percent() 0% 下限（BATTERY_EMPTY_MV）
+    硬體截止    2.50V    0.80V   ← ESP32-C3 實際 brownout 電壓
+
+  韌體的 0% 顯示門檻（2.80V）刻意設在硬體實際 brownout（2.50V）之上，預留約 300mV 安全餘裕，
+  避免電量顯示 0% 之後裝置還能繼續運作一段時間才斷電、造成使用者誤判。
+  對照程式碼：firmware/main/battery.c
 
   ADC 轉換 (12-bit, 11dB attenuation)：
     v_adc = adc_raw × 3.3V / 4096

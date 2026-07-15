@@ -2,6 +2,11 @@ services:
   backend:
     restart: always
     volumes: []
+    environment:
+      # Fail the deploy loudly instead of silently falling back to the dev-only default in
+      # docker-compose.yml. Set JWT_SECRET in the shell env or a repo-root .env file before
+      # running `docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up`.
+      JWT_SECRET: ${JWT_SECRET:?JWT_SECRET must be set for production — see backend/.env.example}
     deploy:
       resources:
         limits:

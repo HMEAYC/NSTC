@@ -23,6 +23,17 @@ services:
       DATABASE_URL: postgresql+psycopg2://hmeayc:hmeayc@db:5432/hmeayc
       GEMINI_API_KEY: ${GEMINI_API_KEY:-}
       CORS_ORIGINS: ${CORS_ORIGINS:-http://localhost:5173,http://127.0.0.1:5173}
+      # Dev-only fallback so `make dev` works out of the box. Production MUST override this
+      # via a real JWT_SECRET env var / .env file — see deploy/docker-compose.prod.yml, which
+      # fails the deploy if it isn't set.
+      JWT_SECRET: ${JWT_SECRET:-dev-only-insecure-secret-change-in-prod}
+      # Org-invite emails — leave SMTP_HOST unset to just log the email instead of sending it.
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASSWORD: ${SMTP_PASSWORD:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@hmeayc.local}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:5173}
     healthcheck:
       test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://localhost:8000/health')"]
       interval: 30s

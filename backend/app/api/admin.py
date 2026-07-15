@@ -1,8 +1,9 @@
 from __future__ import annotations
 import uuid
+from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user, require_role, same_org
@@ -25,7 +26,7 @@ class OrgResponse(BaseModel):
     code: str
     contact_email: str | None
     is_active: bool
-    created_at: str | None
+    created_at: datetime | None
 
     model_config = {"from_attributes": True}
 
@@ -35,7 +36,7 @@ class ClassResponse(BaseModel):
     org_id: str
     name: str
     grade: str | None
-    created_at: str | None
+    created_at: datetime | None
 
     model_config = {"from_attributes": True}
 
@@ -56,7 +57,7 @@ class ChildResponse(BaseModel):
     name: str
     student_id: str | None
     class_id: str | None
-    created_at: str | None
+    created_at: datetime | None
 
     model_config = {"from_attributes": True}
 

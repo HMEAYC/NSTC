@@ -41,6 +41,12 @@ class AnalyzeResponse(BaseModel):
     status: str
 
 
+# NOTE: task state lives in this process-local dict (JSON-persisted to _TASKS_DB_PATH so it
+# survives a restart of *this* process). It is NOT shared across multiple uvicorn workers or
+# container replicas — fine as long as the backend runs as a single process (current
+# Dockerfile CMD / `make dev-backend` don't pass --workers), but if this service is ever scaled
+# out horizontally, task status will only be visible on whichever worker picked up the request
+# and this needs to move to a DB-backed or Redis-backed queue instead.
 _TASKS_LOCK = threading.Lock()
 _TASKS: dict[str, dict[str, Any]] = {}
 _TASK_TTL_SEC = max(60, int((os.environ.get("HMEAYC_TASK_TTL_SEC") or "86400").strip() or "86400"))
