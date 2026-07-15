@@ -34,7 +34,7 @@
 │          │ WS JSON                   │ REST (keypoints)    │
 │          ▼                           ▼                     │
 │  ┌──────────────────────────────────────────────┐          │
-│  │           FastAPI 後端 (:8080)                 │          │
+│  │           FastAPI 後端 (:8000)                 │          │
 │  │                                                │          │
 │  │  ┌─────────┐ ┌──────────┐ ┌────────────────┐ │          │
 │  │  │ Session │ │ Analysis │ │ Device/Child   │ │          │
@@ -107,7 +107,7 @@
 | 連接埠 | 用途 |
 |--------|------|
 | 5432 | PostgreSQL |
-| 8080 | FastAPI 後端 |
+| 8000 | FastAPI 後端 |
 | 5173 | Vite Dashboard |
 
 ---
@@ -123,7 +123,7 @@ make install-dashboard  # npm install
 
 # 背景啟動全部服務
 make start              # 等同 bash start.sh
-# PostgreSQL + Backend(:8080) + Dashboard(:5173) 全部在背景執行
+# PostgreSQL + Backend(:8000) + Dashboard(:5173) 全部在背景執行
 
 # 停止全部服務
 make stop               # 等同 bash stop.sh
@@ -140,7 +140,7 @@ make dev                # docker compose up --build
 docker compose up -d db
 
 # Terminal 2 — 後端
-make dev-backend        # uvicorn app.main:app --reload --port 8080
+make dev-backend        # uvicorn app.main:app --reload --port 8000
 
 # Terminal 3 — Dashboard
 make dev-dashboard      # npm run dev
@@ -162,10 +162,10 @@ psql -h localhost -U hmeayc -d hmeayc -c "\dt"
 
 ```bash
 cd backend
-python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8080
+python3 -m uvicorn app.main:app --reload --host 0.0.0.0 --port 8000
 
 # 驗證
-curl http://localhost:8080/health
+curl http://localhost:8000/health
 # → {"status":"ok"}
 ```
 
@@ -194,7 +194,7 @@ open http://localhost:5173/dashboard/
 ```bash
 # 全部服務運行檢查
 echo "DB:      $(psql -h localhost -U hmeayc -d hmeayc -c 'SELECT 1' 2>&1 | tail -1)"
-echo "Backend: $(curl -s http://localhost:8080/health)"
+echo "Backend: $(curl -s http://localhost:8000/health)"
 echo "Dash:    $(curl -s -o /dev/null -w '%{http_code}' http://localhost:5173/dashboard/)"
 ```
 
@@ -240,7 +240,7 @@ ESP32 會在連線後定期向 `/api/config/wifi?include_password=true&device_id
 ```
 CONFIG_HMEAYC_WIFI_SSID="chen"
 CONFIG_HMEAYC_WIFI_PASSWORD="12345678"
-CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8080/ws/default"
+CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8000/ws/default"
 ```
 
 > 提示：Dashboard 端讀取 `/api/config/wifi` 時不會顯示密碼；韌體端則透過 `include_password=true` 取回完整設定以便更新 NVS。
@@ -416,7 +416,7 @@ ESP32 開機 → 自動註冊裝置（POST /api/devices）
 **手動註冊（測試）：**
 
 ```bash
-curl -X POST http://localhost:8080/api/devices \
+curl -X POST http://localhost:8000/api/devices \
   -H "Content-Type: application/json" \
   -d '{"device_id":"esp32-c3-001","name":"腰帶 A","firmware_version":"v0.1.0"}'
 ```
@@ -431,7 +431,7 @@ curl -X POST http://localhost:8080/api/devices \
 **API：**
 
 ```bash
-curl -X POST http://localhost:8080/api/children \
+curl -X POST http://localhost:8000/api/children \
   -H "Content-Type: application/json" \
   -d '{"name":"小明","student_id":"S001","notes":"3歲"}'
 ```
@@ -442,17 +442,17 @@ curl -X POST http://localhost:8080/api/children \
 
 ```bash
 # 1. 建立課程
-curl -X POST http://localhost:8080/api/sessions \
+curl -X POST http://localhost:8000/api/sessions \
   -H "Content-Type: application/json" \
   -d '{"name":"測試課程","class_id":"...","template_id":"..."}'
 
 # 2. 配對腰帶 → 學員
-curl -X POST http://localhost:8080/api/sessions/{SESSION_ID}/assign \
+curl -X POST http://localhost:8000/api/sessions/{SESSION_ID}/assign \
   -H "Content-Type: application/json" \
   -d '{"device_id":"{DEVICE_UUID}","child_id":"{CHILD_ID}","confidence":0.95}'
 
 # 3. 查詢配對結果
-curl -s http://localhost:8080/api/sessions/{SESSION_ID}/assignments \
+curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
   | python3 -m json.tool
 ```
 
@@ -788,7 +788,7 @@ open http://localhost:5173/dashboard/devices
 # 4. 資料庫有 IMU 資料
 psql -h localhost -U hmeayc -d hmeayc -c "SELECT COUNT(*) FROM imu_data;"
 # 5. 裝置自動註冊
-curl -s http://localhost:8080/api/devices | python3 -m json.tool
+curl -s http://localhost:8000/api/devices | python3 -m json.tool
 ```
 
 ---
@@ -802,8 +802,8 @@ Error: That port is already in use
 ```
 
 ```bash
-# 釋放 8080 連接埠
-lsof -ti:8080 | xargs kill
+# 釋放 8000 連接埠
+lsof -ti:8000 | xargs kill
 ```
 
 ### 10.2 PostgreSQL 連線失敗
@@ -846,14 +846,14 @@ E (2000) HMEAYC: WebSocket connection failed
 
 ```bash
 # 確認後端正執行中
-curl http://localhost:8080/health
+curl http://localhost:8000/health
 
 # 確認 ESP32 設定的 WS URI 正確
-# sdkconfig.defaults 中：CONFIG_HMEAYC_WS_URI="ws://{BACKEND_IP}:8080/ws/default"
+# sdkconfig.defaults 中：CONFIG_HMEAYC_WS_URI="ws://{BACKEND_IP}:8000/ws/default"
 # 韌體會自動替換 session 路徑（透過 GET /api/config/session 查詢）
 
 # 確認裝置已被指派到某個 session
-curl -s "http://localhost:8080/api/config/session?device_id=hmeayc-001"
+curl -s "http://localhost:8000/api/config/session?device_id=hmeayc-001"
 
 # 從 ESP32 ping 後端 IP
 ping 192.168.1.105
@@ -880,7 +880,7 @@ I (100) MPU6xxx: MPU6500 not found (WHO_AM_I=0x00)
 # 常見原因：API 回傳非 JSON 格式
 
 # 確認後端 API 正常
-curl http://localhost:8080/api/sessions
+curl http://localhost:8000/api/sessions
 
 # 清除 node_modules 重新安裝
 cd dashboard && rm -rf node_modules && npm install
@@ -905,10 +905,10 @@ idf.py -p /dev/cu.usbmodem1101 flash
 
 ```bash
 # 手動檢查 API
-curl -s http://localhost:8080/api/devices
+curl -s http://localhost:8000/api/devices
 
 # 如果列表為空，手動註冊
-curl -X POST http://localhost:8080/api/devices \
+curl -X POST http://localhost:8000/api/devices \
   -H "Content-Type: application/json" \
   -d '{"device_id":"esp32-c3-001","name":"腰帶測試","firmware_version":"v0.1.0"}'
 
@@ -920,7 +920,7 @@ curl -X POST http://localhost:8080/api/devices \
 ```bash
 # 檢查進程是否在運行
 lsof -ti:5173    # Dashboard
-lsof -ti:8080    # Backend
+lsof -ti:8000    # Backend
 
 # 重啟背景服務
 make stop && make start
@@ -1033,10 +1033,10 @@ make lint-dashboard                     # tsc
 bash field-testing/verify-device-management.sh  # API 整合測試
 
 # === API 操作 ===
-curl http://localhost:8080/health                   # 健康檢查
-curl http://localhost:8080/api/devices               # 裝置列表
-curl http://localhost:8080/api/children              # 學員列表
-curl http://localhost:8080/api/sessions              # 課程列表
+curl http://localhost:8000/health                   # 健康檢查
+curl http://localhost:8000/api/devices               # 裝置列表
+curl http://localhost:8000/api/children              # 學員列表
+curl http://localhost:8000/api/sessions              # 課程列表
 
 # === 資料庫 ===
 psql -h localhost -U hmeayc -d hmeayc -c "SELECT count(*) FROM imu_data;"

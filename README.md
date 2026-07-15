@@ -39,13 +39,13 @@ make install-backend
 make install-dashboard
 
 # 快速背景啟動全部服務
-make start            # PostgreSQL + Backend(:8080) + Dashboard(:5173)
+make start            # PostgreSQL + Backend(:8000) + Dashboard(:5173)
 # 停止
 make stop
 
 # 或分別啟動（前景，推薦開發除錯用）
 make dev              # docker compose
-make dev-backend      # Terminal 1 — http://localhost:8080
+make dev-backend      # Terminal 1 — http://localhost:8000
 make dev-dashboard    # Terminal 2 — http://localhost:5173/dashboard/
 ```
 

@@ -427,10 +427,10 @@ firmware/
 | `HMEAYC_FIRMWARE_VERSION` | `1.0.0` | 韌體版本號（semver） |
 | `HMEAYC_WIFI_SSID` | `HMEAYC` | WiFi SSID |
 | `HMEAYC_WIFI_PASSWORD` | — | WiFi 密碼 |
-| `HMEAYC_WS_URI` | `ws://192.168.1.105:8080/ws/default` | WebSocket URI |
+| `HMEAYC_WS_URI` | `ws://192.168.1.105:8000/ws/default` | WebSocket URI |
 | `HMEAYC_SAMPLE_RATE_HZ` | `50` | IMU 取樣頻率（5–200 Hz 可調） |
-| `HMEAYC_API_BASE_URL` | `http://192.168.1.105:8080/api` | REST API 基礎 URL |
-| `HMEAYC_OTA_BASE_URL` | `http://192.168.1.105:8080/api/firmware` | OTA 伺服器 URL |
+| `HMEAYC_API_BASE_URL` | `http://192.168.1.105:8000/api` | REST API 基礎 URL |
+| `HMEAYC_OTA_BASE_URL` | `http://192.168.1.105:8000/api/firmware` | OTA 伺服器 URL |
 
 ---
 
@@ -624,7 +624,7 @@ dashboard/src/
   - "status"    → 連線/分析狀態
 - 清理：unmount 時 close()
 
-// Vite proxy: /ws → ws://backend:8080/ws
+// Vite proxy: /ws → ws://backend:8000/ws
 ```
 
 ---
@@ -1338,7 +1338,7 @@ services:
   backend:
     build: ./backend
     ports:
-      - "8080:8080"
+      - "8000:8000"
     depends_on:
       - db
     environment:
@@ -1364,7 +1364,7 @@ graph LR
     end
 
     subgraph Server["伺服器"]
-        AP --> BACKEND[Backend<br/>FastAPI :8080]
+        AP --> BACKEND[Backend<br/>FastAPI :8000]
         BACKEND --> DB[(PostgreSQL)]
     end
 
@@ -1507,7 +1507,7 @@ idf.py build
 # output: build/hmeayc_firmware.bin
 
 # 3. 上傳到後端
-curl -X POST http://localhost:8080/api/firmware/upload \
+curl -X POST http://localhost:8000/api/firmware/upload \
   -F "version=0.2.0" \
   -F "description=fix IMU drift + add battery ADC" \
   -F "file=@build/hmeayc_firmware.bin"
@@ -1518,7 +1518,7 @@ curl -X POST http://localhost:8080/api/firmware/upload \
 # （需另建 console task，目前未實作）
 
 # 5. 確認 OTA 成功：查詢 firmware 版本
-curl http://localhost:8080/api/firmware/list
+curl http://localhost:8000/api/firmware/list
 ```
 
 ### 12.6 安全注意事項

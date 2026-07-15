@@ -48,7 +48,7 @@ Create one markdown file per session using the template above.
 ### 快速驗證
 
 ```bash
-# 完整 API 流程測試（需後端在 :8080 執行）
+# 完整 API 流程測試（需後端在 :8000 執行）
 bash field-testing/verify-device-management.sh
 ```
 
