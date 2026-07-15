@@ -108,7 +108,9 @@ gantt
 * **節奏分析**：偵測幼兒動作與音樂節奏的互動（支援即時 BPM 對齊）。
 * **Freeze Dance 分析**：評估幼兒在音樂停止時的反應與身體控制（即時停止信號偵測）。
 * **即時音樂源整合**：教師上傳音樂檔 → 後端預分析 BPM/beat/stop times → WebSocket 廣播 → IMU 即時對齊。
-* **Dashboard 視覺化面板**：提供教師及研究人員即時觀看分析結果 + 節拍指示器。
+* **即時攝影機管線**：教師端攝影機 → WebSocket binary → 後端 YOLO + MediaPipe Pose → 即時姿勢估計 + 6 項 CV 指標。
+* **ArcFace 人臉辨識**：InsightFace ArcFace R100（512 維）深度學習嵌入，自動降級 HOG（128 維）。
+* **Dashboard 視覺化面板**：提供教師及研究人員即時觀看分析結果 + 節拍指示器 + 攝影機預覽。
 * **Gemini 報告生成**：運用大型語言模型自動生成幼兒學習發展成效評估報告。
 
 > [!IMPORTANT]
@@ -201,10 +203,10 @@ gantt
 | `/dashboard/sessions` | 課程管理 | 排程、開課、管理課程生命週期 |
 | `/dashboard/sessions/:id` | 課程詳情 | 檢視課程階段、評估、開始/結束課程 |
 | `/dashboard/sessions/:id/report` | 課程報告 | 課程完整 AI 分析報告 |
-| `/dashboard/live/:sessionId` | 即時監控 | 即時 IMU 6 軸圖表 |
+| `/dashboard/live/:sessionId` | 即時監控 | 即時 IMU 6 軸圖表 + 攝影機預覽 + 姿勢骨架疊加 |
 | `/dashboard/history` | 課程紀錄 | Session 列表 |
 | `/dashboard/devices` | 裝置管理 | ESP32 穿戴式裝置列表（狀態/電量/韌體/WiFi） |
-| `/dashboard/assessment/default` | 評估指標 | 即時 IMU 指標運算（活動量/平穩度/穩定指數） |
+| `/dashboard/assessment/:sessionId` | 評估指標 | 即時 IMU + CV 指標運算（活動量/平穩度/穩定指數/投入度/隊形/空間/步態/平衡/協調） |
 
 ### 資料庫模型
 
@@ -240,11 +242,13 @@ ESP32 透過 AB 分割區支援 OTA，不須 USB 即可更新韌體。
 | # | 項目 | 狀態 | 說明 |
 |---|------|------|------|
 | 1 | 即時音樂源整合實作 | ✅ **已完成** | Session 綁定音樂檔 + BPM 分析 + WebSocket 廣播 + CD 曲目連結 + 即時節拍同步 |
-| 2 | 硬體採購下單 → 打樣 PCB + 焊接測試 | ⏳ 待 Rover | ESP32-C3 + MPU6500 腰帶硬體 |
-| 3 | 場域測試（IRB 核准後進場） | ⏳ 待 Liza | IRB 送審 → 核准後進場 |
-| 4 | 跨模態配對演算法真實場域驗證 | ⏳ 待場域測試 | 需真實場域數據 |
-| 5 | 正式版系統迭代（場域回饋整合） | ⏳ 待場域測試 | 場域回饋後迭代 |
-| 6 | MVP 里程碑追蹤 | 📋 進行中 | 2026/12 目標完成 |
+| 2 | 即時攝影機管線 | ✅ **已完成** | YOLO + MediaPipe Pose + Centroid 追蹤 + 6 項 CV 指標 |
+| 3 | ArcFace 人臉辨識 | ✅ **已完成** | InsightFace ArcFace R100（512 維）+ HOG 降級 |
+| 4 | 硬體採購下單 → 打樣 PCB + 焊接測試 | ⏳ 待 Rover | ESP32-C3 + MPU6500 腰帶硬體 |
+| 5 | 場域測試（IRB 核准後進場） | ⏳ 待 Liza | IRB 送審 → 核准後進場 |
+| 6 | 跨模態配對演算法真實場域驗證 | ⏳ 待場域測試 | 需真實場域數據 |
+| 7 | 正式版系統迭代（場域回饋整合） | ⏳ 待場域測試 | 場域回饋後迭代 |
+| 8 | MVP 里程碑追蹤 | 📋 進行中 | 2026/12 目標完成 |
 
 ---
 
