@@ -90,7 +90,10 @@ def display_label_for_child(student_id: str | None, child_id: Any) -> str:
 
 
 def assign_identity(embedding: np.ndarray, match_threshold: float = 0.85) -> IdentityAssignment:
+    from app.tracking.face_insight import embedding_dim
+
     db = ensure_identity_db()
+    current_dim = embedding_dim()
     best_sim = -1.0
     best: dict[str, Any] | None = None
     q = np.asarray(embedding, dtype=np.float64).ravel()
@@ -99,7 +102,9 @@ def assign_identity(embedding: np.ndarray, match_threshold: float = 0.85) -> Ide
         if feat is None:
             continue
         ref = np.asarray(feat, dtype=np.float64).ravel()
-        if ref.size != q.size:
+        # Only compare embeddings of the same dimension
+        stored_dim = row.get("features", {}).get("face_embedding_dim", ref.size)
+        if ref.size != q.size or stored_dim != current_dim:
             continue
         sim = cosine_similarity(q, ref)
         if sim > best_sim:
@@ -121,12 +126,17 @@ def assign_identity(embedding: np.ndarray, match_threshold: float = 0.85) -> Ide
 
 
 def register_new_identity(student_id: str, display_name: str, embedding: list[float]) -> None:
+    from app.tracking.face_insight import embedding_dim
+
     db = ensure_identity_db()
     db.setdefault("identities", []).append(
         {
             "student_id": student_id,
             "display_name": display_name,
-            "features": {"face_embedding_sample": embedding},
+            "features": {
+                "face_embedding_sample": embedding,
+                "face_embedding_dim": embedding_dim(),
+            },
         }
     )
     save_identity_db(db)

@@ -63,11 +63,14 @@ def test_face_insight_basic():
 
 def test_face_insight_embedding():
     import numpy as np
-    from app.tracking.face_insight import embed_face_optional
+    from app.tracking.face_insight import embed_face_optional, embedding_dim, is_arcface_available
     patch = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
     fe = embed_face_optional(patch)
     assert fe is not None
-    assert fe.shape == (128,)
+    # Random noise has no face → ArcFace falls back to HOG (128)
+    # With a real face image, ArcFace would return 512
+    assert fe.shape[0] in (128, 512)
+    assert embedding_dim() in (128, 512)
 
 
 def test_gemini_client_fallback():
