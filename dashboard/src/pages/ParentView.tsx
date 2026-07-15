@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { useAuth } from "../auth/context";
+import { api } from "../api/client";
 
 interface ParentChild {
   id: string;
@@ -17,12 +18,8 @@ export default function ParentView() {
   const [children, setChildren] = useState<ParentChild[]>([]);
   const [loading, setLoading] = useState(true);
 
-  const token = localStorage.getItem("hmeayc_token");
-  const authHeaders = { Authorization: `Bearer ${token}` };
-
   useEffect(() => {
-    fetch("/api/parents/me/children", { headers: authHeaders })
-      .then((r) => r.json())
+    api.listMyChildren()
       .then((data) => { setChildren(data.children || []); })
       .catch(() => {})
       .finally(() => setLoading(false));

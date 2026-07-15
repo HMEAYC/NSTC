@@ -12,7 +12,7 @@
 ├── dashboard/                 # 前端視覺化面板 (React + Vite + TypeScript)
 ├── backend/                   # 後端 AI Engine (FastAPI + PostgreSQL)
 ├── firmware/                  # ESP32-C3 + MPU6500 韌體 (ESP-IDF)
-│   ├── main/ota_client.[ch]   # OTA 遠端韌體更新 (版本檢查/下載/ack)
+│   ├── main/ota_client.[ch]   # OTA 遠端韌體更新 (GitHub Pages 靜態版本檢查)
 │   ├── main/device_registry.[ch]  # 裝置註冊
 │   ├── main/wifi_config_nvs.[ch]  # 遠端 WiFi 設定管理
 │   ├── main/session_config_nvs.[ch]  # 遠端 Session 指派查詢（動態 WS 連線）
@@ -144,7 +144,6 @@ gantt
 |------|------|------|
 | ESP32-C3-MINI-1 模組 | 10 | 穿戴式感測器主控 |
 | MPU6500 IMU 感測器 | 10 | 6 軸動作偵測 |
-| ME6211 3.3V LDO | 10 | 穩壓 |
 | 16500 Li-ion 電池 (800mAh) | 10 | 外部電源 |
 | 16500 電池盒 (含 JST 2.0 線) | 10 | 電池座 |
 | USB-C 連接器 | 10 | 程式燒錄 |

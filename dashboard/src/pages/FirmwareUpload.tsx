@@ -127,7 +127,7 @@ export default function FirmwareUpload() {
         <p className="font-semibold mb-1">💡 OTA 更新流程</p>
         <ol className="list-decimal list-inside space-y-1 text-xs">
           <li>在「上傳新韌體」區塊中選擇 .bin 檔並填寫版本號</li>
-          <li>ESP32 會每小時自動檢查新版本（via <code className="bg-blue-100 px-1 rounded">GET /api/firmware/version</code>）</li>
+          <li>ESP32 會每 24 小時自動檢查新版本（via <code className="bg-blue-100 px-1 rounded">GitHub Pages OTA</code>）</li>
           <li>發現新版本時自動下載、寫入 inactive partition、重啟</li>
           <li>啟動成功後標記為 valid，失敗則自動回滾到前一個版本</li>
         </ol>

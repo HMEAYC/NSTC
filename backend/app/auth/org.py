@@ -31,7 +31,7 @@ def ensure_default_org() -> str:
 def effective_org_id(user: User | None, provided_org_id: str | None = None) -> str:
     """Resolve org_id from user JWT, explicit param, or default."""
     if user is not None:
-        return user.org_id if user.org_id is not None else ""
+        return user.org_id or DEFAULT_ORG_ID
     if provided_org_id:
         return provided_org_id
     return DEFAULT_ORG_ID

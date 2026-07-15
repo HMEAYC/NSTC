@@ -1,5 +1,4 @@
 import uuid
-from datetime import datetime
 from pathlib import Path
 
 from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File, Form
@@ -117,16 +116,3 @@ def list_firmware(
             for v in versions
         ]
     }
-
-
-@router.post("/ack")
-def ack_update(
-    version: str = Form(""),
-    device_id: str = Form(""),
-):
-    today = datetime.utcnow().isoformat()
-    log_line = f"{today} | device={device_id} | version={version} | OK\n"
-    log_path = _FIRMWARE_DIR / "ota_ack.log"
-    with open(log_path, "a") as f:
-        f.write(log_line)
-    return {"status": "acknowledged"}

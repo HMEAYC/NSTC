@@ -256,13 +256,15 @@ ESP32 開機時連線到 `/ws/default`，然後向 `GET /api/config/session?devi
 
 若想立即觸發重連，可在 Dashboard 重新指派裝置，或在裝置管理彈窗中更新 WiFi 設定後儲存。
 
-### 4.4 OTA 更新（Dashboard）
+### 4.4 OTA 更新
 
-1. 開啟 `http://localhost:5173/dashboard/firmware`
-2. 上傳新版 firmware binary
-3. ESP32 會自動檢查更新版本
-4. 下載並寫入 inactive partition
-5. 重啟後從新 partition 啟動
+OTA 版本檢查改用 GitHub Pages 靜態檔案，ESP32 每 24 小時自動檢查：
+
+1. 韌體建置：`cd firmware && idf.py build`
+2. 複製到 OTA 目錄：`cp build/hmeayc_firmware.bin ../docs/ota/hmeayc-firmware-{version}.bin`
+3. 更新 `docs/ota/version.json` 中的版本號與下載 URL
+4. Commit 並 push 至 GitHub → GitHub Pages 自動更新
+5. ESP32 自動檢查 → 下載新版 → 重啟
 
 ---
 
@@ -607,7 +609,7 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 | `POST` | `/api/firmware/upload` | 上傳新韌體（form: `version`, `description?`, `file`） |
 | `GET` | `/api/firmware/list` | 列出所有版本 |
 
-> **註**：OTA 版本檢查已改用 GitHub Pages 靜態檔案（`https://HMEAYC.github.io/NSTC/ota/version.json`），後端僅保留上傳與列表功能。
+> **註**：OTA 版本檢查已改用 GitHub Pages 靜態檔案（`https://HMEAYC.github.io/NSTC/ota/version.json`），ESP32 每 24 小時自動檢查。後端僅保留上傳與列表功能。
 
 #### 影片分析
 

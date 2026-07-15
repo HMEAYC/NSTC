@@ -39,14 +39,17 @@ describe("api client", () => {
     expect(mockFetch).toHaveBeenCalledWith("/api/firmware/list", expect.any(Object));
   });
 
-  it("getWifiConfig calls /api/config/wifi", async () => {
+  it("getDeviceWifiConfig calls /api/config/wifi", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
       json: () => Promise.resolve({ ssid: "test", updated_at: "2024-01-01" }),
     });
-    const res = await api.getWifiConfig();
+    const res = await api.getDeviceWifiConfig("test-device-1");
     expect(res.ssid).toBe("test");
-    expect(mockFetch).toHaveBeenCalledWith("/api/config/wifi", expect.any(Object));
+    expect(mockFetch).toHaveBeenCalledWith(
+      "/api/config/wifi?device_id=test-device-1",
+      expect.any(Object),
+    );
   });
 
   it("endSession calls POST /api/sessions/{id}/end", async () => {

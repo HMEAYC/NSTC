@@ -1,6 +1,6 @@
 import uuid
 from datetime import datetime
-from sqlalchemy import Column, String, DateTime, Enum, Integer, JSON, ForeignKey, Text
+from sqlalchemy import Column, String, DateTime, Enum, Integer, JSON, ForeignKey, Text, Float
 from app.db.base import Base
 
 
@@ -27,9 +27,9 @@ class Session(Base):
     start_time = Column(DateTime, nullable=True)
     end_time = Column(DateTime, nullable=True)
     music_file = Column(String(500), nullable=True)
-    music_bpm = Column(Integer, nullable=True)
+    music_bpm = Column(Float, nullable=True)
     music_beat_times = Column(JSON, nullable=True)
     music_stop_times = Column(JSON, nullable=True)
-    music_duration = Column(Integer, nullable=True)
+    music_duration = Column(Float, nullable=True)
     music_element = Column(String(100), nullable=True)
     music_url = Column(String(1000), nullable=True)

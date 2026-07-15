@@ -3,6 +3,7 @@ import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/context";
 import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { api } from "../api/client";
 
 interface ClassItem {
   id: string;
@@ -10,16 +11,6 @@ interface ClassItem {
   name: string;
   grade: string | null;
   created_at: string | null;
-}
-
-const API_BASE = import.meta.env.VITE_API_BASE || "";
-
-function authFetch(url: string, init?: RequestInit) {
-  const tok = localStorage.getItem("hmeayc_token");
-  return fetch(`${API_BASE}${url}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}`, ...init?.headers },
-  });
 }
 
 export default function ClassManagement() {
@@ -39,11 +30,8 @@ export default function ClassManagement() {
     setLoading(true);
     setError(null);
     try {
-      const res = await authFetch(`/api/orgs/${orgId}/classes`);
-      if (res.ok) {
-        const data = await res.json();
-        setClasses(data.classes || []);
-      }
+      const data = await api.listOrgClasses(orgId);
+      setClasses(data.classes || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "載入失敗");
     } finally {
@@ -58,14 +46,10 @@ export default function ClassManagement() {
   const handleCreate = async () => {
     if (!form.name.trim() || !effectiveOrgId) return;
     try {
-      const res = await authFetch(`/api/orgs/${effectiveOrgId}/classes?name=${encodeURIComponent(form.name)}&grade=${encodeURIComponent(form.grade)}`, {
-        method: "POST",
-      });
-      if (res.ok) {
-        setForm({ name: "", grade: "" });
-        setShowCreate(false);
-        fetchClasses(effectiveOrgId);
-      }
+      await api.createOrgClass(effectiveOrgId, form.name, form.grade || undefined);
+      setForm({ name: "", grade: "" });
+      setShowCreate(false);
+      fetchClasses(effectiveOrgId);
     } catch { /* ignore */ }
   };
 

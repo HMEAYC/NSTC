@@ -1,13 +1,5 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react";
-
-export interface UserInfo {
-  id: string;
-  email: string;
-  display_name: string;
-  role: string;
-  org_id: string;
-  is_active: boolean;
-}
+import type { UserInfo } from "../api/client";
 
 interface AuthState {
   user: UserInfo | null;

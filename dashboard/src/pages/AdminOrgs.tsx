@@ -2,8 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuth } from "../auth/context";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { getActiveOrgId, setActiveOrgId } from "../lib/activeOrg";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+import { api } from "../api/client";
 
 interface Org {
   id: string;
@@ -12,18 +11,6 @@ interface Org {
   contact_email: string | null;
   is_active: boolean;
   created_at: string | null;
-}
-
-function getToken(): string | null {
-  return localStorage.getItem("hmeayc_token");
-}
-
-function authFetch(url: string, init?: RequestInit) {
-  const tok = getToken();
-  return fetch(`${API_BASE}${url}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}`, ...init?.headers },
-  });
 }
 
 export default function AdminOrgs() {
@@ -45,11 +32,10 @@ export default function AdminOrgs() {
   const fetchOrgs = () => {
     setLoading(true);
     setError(null);
-    authFetch("/api/admin/orgs")
-      .then((r) => { if (!r.ok) throw new Error(`HTTP ${r.status}`); return r.json(); })
+    api.listOrgs()
       .then((data) => {
         const list = data.orgs || [];
-        setOrgs(list);
+        setOrgs(list as Org[]);
         if (!getActiveOrgId() && list.length > 0) {
           setActiveOrgId_(list[0].id);
           setActiveOrgId(list[0].id);
@@ -88,17 +74,9 @@ export default function AdminOrgs() {
     setFormError(null);
     try {
       if (editOrg) {
-        const res = await authFetch(`/api/admin/orgs/${editOrg.id}`, {
-          method: "PUT",
-          body: JSON.stringify({ name: formName, code: formCode, contact_email: formEmail || null }),
-        });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || `HTTP ${res.status}`); }
+        await api.updateOrg(editOrg.id, { name: formName, code: formCode, contact_email: formEmail || undefined });
       } else {
-        const res = await authFetch("/api/admin/orgs", {
-          method: "POST",
-          body: JSON.stringify({ name: formName, code: formCode, contact_email: formEmail || null }),
-        });
-        if (!res.ok) { const d = await res.json(); throw new Error(d.detail || `HTTP ${res.status}`); }
+        await api.createOrg({ name: formName, code: formCode, contact_email: formEmail || undefined });
       }
       setShowModal(false);
       fetchOrgs();
@@ -113,8 +91,7 @@ export default function AdminOrgs() {
     if (!confirm(`確定刪除「${o.name}」？此操作不可回復。`)) return;
     setSaving(true);
     try {
-      const res = await authFetch(`/api/admin/orgs/${o.id}`, { method: "DELETE" });
-      if (!res.ok) { const d = await res.json(); throw new Error(d.detail || `HTTP ${res.status}`); }
+      await api.deleteOrg(o.id);
       setShowModal(false);
       fetchOrgs();
     } catch (err) {

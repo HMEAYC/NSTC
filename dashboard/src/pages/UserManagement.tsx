@@ -3,8 +3,7 @@ import { useAuth } from "../auth/context";
 import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
 import Modal from "../components/Modal";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+import { api } from "../api/client";
 
 interface ManagedUser {
   id: string;
@@ -14,18 +13,6 @@ interface ManagedUser {
   org_id: string;
   is_active: boolean;
   invite_token: string | null;
-}
-
-function getToken(): string | null {
-  return localStorage.getItem("hmeayc_token");
-}
-
-function authFetch(url: string, init?: RequestInit) {
-  const tok = getToken();
-  return fetch(`${API_BASE}${url}`, {
-    ...init,
-    headers: { "Content-Type": "application/json", Authorization: `Bearer ${tok}`, ...init?.headers },
-  });
 }
 
 const roleLabel: Record<string, string> = {
@@ -62,11 +49,8 @@ export default function UserManagement() {
     setLoading(true);
     try {
       const targetOrg = orgId || effectiveOrgId;
-      const res = await authFetch(`/api/orgs/${targetOrg}/users`);
-      if (res.ok) {
-        const data = await res.json();
-        setUsers(data.users || []);
-      }
+      const data = await api.listOrgUsers(targetOrg);
+      setUsers((data.users || []) as ManagedUser[]);
     } catch { /* ignore */ }
     setLoading(false);
   };
@@ -82,14 +66,7 @@ export default function UserManagement() {
     setInvError(null);
     setInvOk(null);
     try {
-      const res = await authFetch(`/api/orgs/${effectiveOrgId}/invite`, {
-        method: "POST",
-        body: JSON.stringify({ email: invEmail, role: invRole }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || `HTTP ${res.status}`);
-      }
+      await api.inviteUser(effectiveOrgId, { email: invEmail, role: invRole });
       setInvOk(`邀請已發送至 ${invEmail}`);
       setInvEmail("");
       fetchUsers();
@@ -106,16 +83,9 @@ export default function UserManagement() {
     setEditSaving(true);
     setEditError(null);
     try {
-      const body: Record<string, unknown> = { display_name: editDisplayName };
+      const body: { display_name: string; role?: string } = { display_name: editDisplayName };
       if (isSuper) body.role = editRole;
-      const res = await authFetch(`/api/users/${editUser.id}`, {
-        method: "PUT",
-        body: JSON.stringify(body),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || `HTTP ${res.status}`);
-      }
+      await api.updateUser(editUser.id, body);
       setEditUser(null);
       fetchUsers();
     } catch (err) {
@@ -127,10 +97,7 @@ export default function UserManagement() {
 
   const toggleActive = async (uid: string, current: boolean) => {
     try {
-      await authFetch(`/api/users/${uid}`, {
-        method: "PUT",
-        body: JSON.stringify({ is_active: !current }),
-      });
+      await api.updateUser(uid, { is_active: !current });
       fetchUsers(effectiveOrgId);
     } catch { /* ignore */ }
   };

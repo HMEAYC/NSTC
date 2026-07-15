@@ -1,5 +1,6 @@
 import { useState } from "react";
 import { Link, useNavigate } from "react-router-dom";
+import { api } from "../api/client";
 
 export default function Register() {
   const navigate = useNavigate();
@@ -15,20 +16,11 @@ export default function Register() {
     setError("");
     setSubmitting(true);
     try {
-      const res = await fetch("/api/auth/register", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          email,
-          password,
-          display_name: displayName,
-          org_code: orgCode,
-        }),
+      await api.register({
+        email,
+        password,
+        display_name: displayName,
       });
-      if (!res.ok) {
-        const detail = (await res.json().catch(() => ({}))).detail || "註冊失敗";
-        throw new Error(detail);
-      }
       navigate("/dashboard/login?registered=1");
     } catch (err) {
       setError(err instanceof Error ? err.message : "註冊失敗");

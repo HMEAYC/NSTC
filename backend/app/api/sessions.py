@@ -12,7 +12,6 @@ from sqlalchemy import desc, func
 from app.auth import require_api_key
 from app.auth.deps import get_current_user, require_role
 from app.auth.org import effective_org_id
-from app.config import settings
 from app.db.base import get_db
 from app.models.session import Session as SessionModel
 from app.models.session_template import SessionTemplate
@@ -278,6 +277,12 @@ def delete_session(
     if session.status not in ("draft", "cancelled"):
         raise HTTPException(400, "Only draft or cancelled sessions can be deleted")
 
+    db.query(AssessmentResult).filter(
+        AssessmentResult.session_id == session_id
+    ).delete(synchronize_session=False)
+    db.query(SessionEvaluation).filter(
+        SessionEvaluation.session_id == session_id
+    ).delete(synchronize_session=False)
     db.query(DeviceAssignment).filter(
         DeviceAssignment.session_id == session_id
     ).delete(synchronize_session=False)
@@ -680,8 +685,7 @@ def set_session_music_url(
     if body.track_name:
         session.music_element = body.track_name
     if body.album:
-        # Store album info in description if not set
-        pass
+        session.description = body.album or session.description
     db.commit()
     db.refresh(session)
 

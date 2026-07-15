@@ -9,24 +9,13 @@ dependencies:
       registry_url: https://components.espressif.com/
       type: service
     version: 1.7.0
-  espressif/led_strip:
-    component_hash: 28621486f77229aaf81c71f5e15d6fbf36c2949cf11094e07090593e659e7639
-    dependencies:
-    - name: idf
-      require: private
-      version: '>=5.0'
-    source:
-      registry_url: https://components.espressif.com/
-      type: service
-    version: 3.0.3
   idf:
     source:
       type: idf
     version: 5.4.0
 direct_dependencies:
 - espressif/esp_websocket_client
-- espressif/led_strip
 - idf
-manifest_hash: 5009e4047eb4d9c501f01701bfeaf3d4479bb8dfcf7ce6073940b2c2bc1cdca7
+manifest_hash: 2fb4992d521016c7affe2fae530115b8189213162c87375a7b6e50cd90804a3b
 target: esp32c3
 version: 2.0.0

@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { useAuth } from "../auth/context";
 import LoadingSpinner from "../components/LoadingSpinner";
+import { api } from "../api/client";
 
 interface ChildItem {
   id: string;
@@ -38,8 +39,6 @@ export default function ClassDetail() {
   const [parentQ, setParentQ] = useState("");
   const [editTab, setEditTab] = useState<"edit" | "parent">("edit");
 
-  const token = localStorage.getItem("hmeayc_token");
-  const authHeaders = { Authorization: `Bearer ${token}` };
   const orgId = user?.org_id;
 
   useEffect(() => {
@@ -51,8 +50,7 @@ export default function ClassDetail() {
 
   const fetchChildren = () => {
     if (!classId) return;
-    fetch(`/api/classes/${classId}/children`, { headers: authHeaders })
-      .then((r) => r.json())
+    api.getClassChildren(classId)
       .then((data) => { setChildren(data.children || []); })
       .catch(() => {})
       .finally(() => setLoading(false));
@@ -68,14 +66,7 @@ export default function ClassDetail() {
     setSaving(true);
     setError("");
     try {
-      const res = await fetch(`/api/classes/${classId}/children?name=${encodeURIComponent(newName.trim())}${newSid ? `&student_id=${encodeURIComponent(newSid)}` : ""}`, {
-        method: "POST",
-        headers: authHeaders,
-      });
-      if (!res.ok) {
-        const detail = (await res.json().catch(() => ({}))).detail || "新增失敗";
-        throw new Error(detail);
-      }
+      await api.createClassChild(classId, newName.trim(), newSid || undefined);
       setNewName("");
       setNewSid("");
       setShowAdd(false);
@@ -101,15 +92,13 @@ export default function ClassDetail() {
 
   const fetchParents = () => {
     if (!orgId) return;
-    fetch(`/api/orgs/${orgId}/parents?q=${encodeURIComponent(parentQ)}`, { headers: authHeaders })
-      .then((r) => r.json())
+    api.searchParents(orgId, parentQ)
       .then((data) => setParents(data.parents || []))
       .catch(() => {});
   };
 
   const fetchBoundParents = (childId: string) => {
-    fetch(`/api/children/${childId}/parents`, { headers: authHeaders })
-      .then((r) => r.json())
+    api.listChildParents(childId)
       .then((data) => setBoundParents(data.parents || []))
       .catch(() => {});
   };
@@ -118,15 +107,12 @@ export default function ClassDetail() {
     if (!selectedChild) return;
     setSaving(true);
     try {
-      const params = new URLSearchParams();
-      if (editName !== selectedChild.name) params.set("name", editName);
-      if (editSid !== (selectedChild.student_id || "")) params.set("student_id", editSid);
-      if (editNotes !== (selectedChild.notes || "")) params.set("notes", editNotes);
-      if (!params.toString()) { setSaving(false); return; }
-      const res = await fetch(`/api/children/${selectedChild.id}?${params}`, {
-        method: "PUT", headers: authHeaders,
-      });
-      if (!res.ok) throw new Error("更新失敗");
+      const data: { name?: string; student_id?: string; notes?: string } = {};
+      if (editName !== selectedChild.name) data.name = editName;
+      if (editSid !== (selectedChild.student_id || "")) data.student_id = editSid;
+      if (editNotes !== (selectedChild.notes || "")) data.notes = editNotes;
+      if (Object.keys(data).length === 0) { setSaving(false); return; }
+      await api.updateChild(selectedChild.id, data);
       setSelectedChild(null);
       fetchChildren();
     } catch (err) {
@@ -139,10 +125,7 @@ export default function ClassDetail() {
   const handleDelete = async () => {
     if (!selectedChild || !confirm(`確定刪除 ${selectedChild.name}？`)) return;
     try {
-      const res = await fetch(`/api/children/${selectedChild.id}`, {
-        method: "DELETE", headers: authHeaders,
-      });
-      if (!res.ok) throw new Error("刪除失敗");
+      await api.deleteChild(selectedChild.id);
       setSelectedChild(null);
       fetchChildren();
     } catch (err) {
@@ -153,10 +136,7 @@ export default function ClassDetail() {
   const bindParent = async (parentId: string) => {
     if (!selectedChild) return;
     try {
-      const res = await fetch(`/api/children/${selectedChild.id}/parents?parent_id=${parentId}`, {
-        method: "POST", headers: authHeaders,
-      });
-      if (!res.ok) throw new Error("綁定失敗");
+      await api.bindParent(selectedChild.id, parentId);
       fetchBoundParents(selectedChild.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "綁定失敗");
@@ -166,10 +146,7 @@ export default function ClassDetail() {
   const unbindParent = async (parentId: string) => {
     if (!selectedChild) return;
     try {
-      const res = await fetch(`/api/parents/${parentId}/children/${selectedChild.id}`, {
-        method: "DELETE", headers: authHeaders,
-      });
-      if (!res.ok) throw new Error("解除綁定失敗");
+      await api.unbindParent(selectedChild.id, parentId);
       fetchBoundParents(selectedChild.id);
     } catch (err) {
       setError(err instanceof Error ? err.message : "解除綁定失敗");

@@ -29,14 +29,13 @@ export default function Sessions() {
     setError(null);
     try {
       const token = localStorage.getItem("hmeayc_token");
-      const headers: Record<string, string> = token ? { Authorization: `Bearer ${token}` } : {};
       const orgOverride = user?.org_id ? undefined : getActiveOrgId() || undefined;
       const effectiveOrgId = orgOverride || user?.org_id;
       const [sessionsRes, templatesRes, classRes] = await Promise.all([
         api.listSessions({ org_id: orgOverride }),
         api.listTemplates(),
         effectiveOrgId
-          ? fetch(`/api/orgs/${effectiveOrgId}/classes`, { headers }).then(r => r.ok ? r.json() : { classes: [] })
+          ? api.listOrgClasses(effectiveOrgId).catch(() => ({ classes: [] }))
           : Promise.resolve({ classes: [] }),
       ]);
       setSessions(sessionsRes.sessions);

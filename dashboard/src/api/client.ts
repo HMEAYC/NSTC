@@ -360,15 +360,19 @@ export const api = {
   uploadSessionMusic: (sessionId: string, file: File) => {
     const form = new FormData();
     form.append("file", file);
-    return fetchJSON<{
-      music_bpm: number;
-      music_beat_times: number[];
-      music_stop_times: number[];
-      music_duration: number;
-      music_element: string | null;
-    }>(`/api/sessions/${sessionId}/music`, {
+    return fetch(`${API_BASE}/api/sessions/${sessionId}/music`, {
       method: "POST",
+      headers: authHeader(),
       body: form,
+    }).then((res) => {
+      if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+      return res.json() as Promise<{
+        music_bpm: number;
+        music_beat_times: number[];
+        music_stop_times: number[];
+        music_duration: number;
+        music_element: string | null;
+      }>;
     });
   },
 
@@ -460,4 +464,101 @@ export const api = {
       assessments: { avg_activity_level: number | null; avg_smoothness: number | null; avg_stability_index: number | null };
       evaluations: { child_id: string; child_name: string; score: number | null; comment: string | null }[];
     }>(`/api/sessions/${sessionId}/report`),
+
+  // Admin Orgs
+  listOrgs: () =>
+    fetchJSON<{ orgs: { id: string; name: string; code: string; contact_email: string | null; is_active: boolean }[] }>("/api/admin/orgs"),
+
+  createOrg: (data: { name: string; code: string; contact_email?: string }) =>
+    fetchJSON<{ org: { id: string; name: string; code: string } }>("/api/admin/orgs", {
+      method: "POST", body: JSON.stringify(data),
+    }),
+
+  updateOrg: (orgId: string, data: { name?: string; code?: string; contact_email?: string }) =>
+    fetchJSON<{ org: { id: string; name: string; code: string } }>(`/api/admin/orgs/${orgId}`, {
+      method: "PUT", body: JSON.stringify(data),
+    }),
+
+  deleteOrg: (orgId: string) =>
+    fetchJSON<{ status: string }>(`/api/admin/orgs/${orgId}`, { method: "DELETE" }),
+
+  // Admin Users
+  listOrgUsers: (orgId: string) =>
+    fetchJSON<{ users: UserInfo[] }>(`/api/orgs/${orgId}/users`),
+
+  inviteUser: (orgId: string, data: { email: string; role?: string }) =>
+    fetchJSON<{ user: { id: string; email: string; role: string; org_id: string } }>(`/api/orgs/${orgId}/invite`, {
+      method: "POST", body: JSON.stringify(data),
+    }),
+
+  updateUser: (userId: string, data: { is_active?: boolean; display_name?: string; password?: string; role?: string }) =>
+    fetchJSON<{ user: UserInfo }>(`/api/users/${userId}`, {
+      method: "PUT", body: JSON.stringify(data),
+    }),
+
+  // Class children
+  createClassChild: (classId: string, name: string, studentId?: string, notes?: string) => {
+    const params = new URLSearchParams({ name });
+    if (studentId) params.set("student_id", studentId);
+    if (notes) params.set("notes", notes);
+    return fetchJSON<{ child: ChildInfo }>(`/api/classes/${classId}/children?${params}`, { method: "POST" });
+  },
+
+  updateChild: (childId: string, data: { name?: string; student_id?: string; notes?: string }) => {
+    const params = new URLSearchParams();
+    if (data.name !== undefined) params.set("name", data.name);
+    if (data.student_id !== undefined) params.set("student_id", data.student_id);
+    if (data.notes !== undefined) params.set("notes", data.notes);
+    return fetchJSON<{ child: ChildInfo }>(`/api/children/${childId}?${params}`, { method: "PUT" });
+  },
+
+  deleteChild: (childId: string) =>
+    fetchJSON<{ status: string }>(`/api/children/${childId}`, { method: "DELETE" }),
+
+  // Parents
+  searchParents: (orgId: string, q: string = "") =>
+    fetchJSON<{ parents: { id: string; email: string; display_name: string }[] }>(
+      `/api/orgs/${orgId}/parents?q=${encodeURIComponent(q)}`
+    ),
+
+  listChildParents: (childId: string) =>
+    fetchJSON<{ parents: { id: string; email: string; display_name: string }[] }>(
+      `/api/children/${childId}/parents`
+    ),
+
+  bindParent: (childId: string, parentId: string) =>
+    fetchJSON<{ status: string }>(`/api/children/${childId}/parents?parent_id=${parentId}`, { method: "POST" }),
+
+  unbindParent: (childId: string, parentId: string) =>
+    fetchJSON<{ status: string }>(`/api/parents/${parentId}/children/${childId}`, { method: "DELETE" }),
+
+  listMyChildren: () =>
+    fetchJSON<{ children: ChildInfo[] }>("/api/parents/me/children"),
+
+  // Auth
+  register: (data: { email: string; password: string; display_name: string; role?: string; org_id?: string }) =>
+    fetchJSON<{ user: UserInfo }>("/api/auth/register", {
+      method: "POST", body: JSON.stringify(data),
+    }),
+
+  completeInvite: (data: { token: string; password: string; display_name: string }) =>
+    fetchJSON<{ user: UserInfo }>("/api/auth/complete-invite", {
+      method: "POST", body: JSON.stringify(data),
+    }),
+
+  // Org classes
+  listOrgClasses: (orgId: string) =>
+    fetchJSON<{ classes: { id: string; name: string; grade: string | null }[] }>(`/api/orgs/${orgId}/classes`),
+
+  createOrgClass: (orgId: string, name: string, grade?: string) => {
+    const params = new URLSearchParams({ name });
+    if (grade) params.set("grade", grade);
+    return fetchJSON<{ class: { id: string; name: string } }>(`/api/orgs/${orgId}/classes?${params}`, { method: "POST" });
+  },
+
+  // Org parents (for search)
+  searchOrgParents: (orgId: string, q: string = "") =>
+    fetchJSON<{ parents: { id: string; email: string; display_name: string }[] }>(
+      `/api/orgs/${orgId}/parents?q=${encodeURIComponent(q)}`
+    ),
 };

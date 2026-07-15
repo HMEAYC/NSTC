@@ -104,9 +104,13 @@ def compute_session_assessment(
         device_uuid = devices_map.get(raw_device_id)
         child_id = assignments.get(raw_device_id)
 
-        ts = rows[0][0] if rows else 0
-        ts_last = rows[-1][0] if rows else 0
-        window_sec = abs(ts_last - ts) if hasattr(rows[-1], "__getitem__") else 0
+        ts_row = (
+            db.query(func.min(IMUData.timestamp), func.max(IMUData.timestamp))
+            .filter(IMUData.session_id == session_id, IMUData.device_id == raw_device_id)
+            .first()
+        )
+        min_ts, max_ts = ts_row if ts_row else (None, None)
+        window_sec = (max_ts - min_ts).total_seconds() if min_ts and max_ts else 0
 
         existing = db.query(AssessmentResult).filter(
             AssessmentResult.session_id == session_id,
@@ -416,9 +420,6 @@ def get_class_assessments(
     current_user: User | None = Depends(get_current_user),
 ):
     org_id = effective_org_id(current_user)
-    class_obj = db.query(SessionModel).filter(
-        SessionModel.id == class_id,
-    ).first()
 
     sessions = (
         db.query(SessionModel)

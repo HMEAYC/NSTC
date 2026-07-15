@@ -158,8 +158,8 @@ export default function AssessmentIndicators() {
   useEffect(() => {
     if (sid && sid !== "default") {
       api.getSessionAssessments(sid).then((r) => {
-        setSavedAssessments(r.results || []);
-        setComputeDone((r.results || []).length > 0);
+        setSavedAssessments(r.assessments || []);
+        setComputeDone((r.assessments || []).length > 0);
       }).catch(() => {});
     }
   }, [sid]);
@@ -170,7 +170,7 @@ export default function AssessmentIndicators() {
     try {
       await api.computeSessionAssessment(sid);
       const r = await api.getSessionAssessments(sid);
-      setSavedAssessments(r.results || []);
+      setSavedAssessments(r.assessments || []);
       setComputeDone(true);
     } catch (err: any) {
       alert("計算失敗：" + (err.message || "請稍後再試"));

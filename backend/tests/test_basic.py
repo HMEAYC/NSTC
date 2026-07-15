@@ -20,7 +20,6 @@ def test_firmware_routes():
     assert "/api/firmware/upload" in paths
     assert "/api/firmware/download/{fw_id}" in paths
     assert "/api/firmware/list" in paths
-    assert "/api/firmware/ack" in paths
 
 
 def test_analysis_rhythm_returns_dict():
@@ -215,7 +214,6 @@ def test_all_routes():
         "/api/firmware/upload",
         "/api/firmware/download/{fw_id}",
         "/api/firmware/list",
-        "/api/firmware/ack",
         "/api/analyze/tasks/{task_id}",
         "/api/config/wifi",
         "/ws/{session_id}",

@@ -15,8 +15,6 @@ function batteryLevel(v: number | null): { color: string; label: string } {
   return { color: "bg-red-500", label: `${Math.round(v * 100)}%` };
 }
 
-const API_BASE = import.meta.env.VITE_API_BASE || "";
-
 interface Org { id: string; name: string; code: string; }
 
 export default function DeviceManagement() {
@@ -73,11 +71,7 @@ export default function DeviceManagement() {
         setWifiPassword("");
       });
     if (isSuper) {
-      const tok = localStorage.getItem("hmeayc_token");
-      fetch(`${API_BASE}/api/admin/orgs`, {
-        headers: { Authorization: `Bearer ${tok}` },
-      })
-        .then((r) => r.json())
+      api.listOrgs()
         .then((data) => setOrgs(data.orgs || []))
         .catch(() => {});
     }

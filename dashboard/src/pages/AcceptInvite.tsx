@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useSearchParams, useNavigate, Link } from "react-router-dom";
-
-const API_BASE = import.meta.env.VITE_API_BASE || "";
+import { api } from "../api/client";
 
 export default function AcceptInvite() {
   const [searchParams] = useSearchParams();
@@ -26,17 +25,8 @@ export default function AcceptInvite() {
     setSubmitting(true);
     setError(null);
     try {
-      const res = await fetch(`${API_BASE}/api/auth/complete-invite`, {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ token, password, display_name: displayName }),
-      });
-      if (!res.ok) {
-        const d = await res.json();
-        throw new Error(d.detail || `HTTP ${res.status}`);
-      }
-      const data = await res.json();
-      localStorage.setItem("hmeayc_token", data.access_token);
+      const data = await api.completeInvite({ token, password, display_name: displayName });
+      localStorage.setItem("hmeayc_token", (data as any).access_token || "");
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "設定失敗");

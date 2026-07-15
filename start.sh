@@ -11,9 +11,9 @@ docker compose up -d db
 sleep 1
 
 # 2. Backend
-echo "[2/3] Starting Backend (:8080)..."
+echo "[2/3] Starting Backend (:8000)..."
 cd backend
-nohup python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8080 \
+nohup python3 -m uvicorn app.main:app --host 127.0.0.1 --port 8000 \
   > /tmp/hmeayc-backend.log 2>&1 &
 echo "backend=$!" >> "$PID_FILE"
 cd ..
@@ -29,7 +29,7 @@ cd ..
 echo ""
 echo "=== All services started ==="
 echo "  PostgreSQL :5432"
-echo "  Backend    :8080  (log: /tmp/hmeayc-backend.log)"
+echo "  Backend    :8000  (log: /tmp/hmeayc-backend.log)"
 echo "  Dashboard  :5173  (log: /tmp/hmeayc-dashboard.log)"
 echo ""
 echo "Run ./stop.sh to stop all services."

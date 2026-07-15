@@ -72,7 +72,7 @@ def list_orgs(
         orgs = db.query(Organization).all()
     else:
         orgs = db.query(Organization).filter(Organization.id == current_user.org_id).all()
-    return {"orgs": orgs}
+    return {"orgs": [OrgResponse.model_validate(o) for o in orgs]}
 
 
 class CreateOrgRequest(BaseModel):
@@ -97,7 +97,7 @@ def create_org(
     db.add(org)
     db.commit()
     db.refresh(org)
-    return {"org": org}
+    return {"org": OrgResponse.model_validate(org)}
 
 
 class UpdateOrgRequest(BaseModel):
@@ -126,7 +126,7 @@ def update_org(
         org.contact_email = body.contact_email
     db.commit()
     db.refresh(org)
-    return {"org": org}
+    return {"org": OrgResponse.model_validate(org)}
 
 
 @router.delete("/api/admin/orgs/{org_id}")
@@ -153,7 +153,7 @@ def list_classes(
 ):
     same_org(org_id, current_user)
     classes = db.query(SchoolClass).filter(SchoolClass.org_id == org_id).all()
-    return {"classes": classes}
+    return {"classes": [ClassResponse.model_validate(c) for c in classes]}
 
 
 @router.post("/api/orgs/{org_id}/classes")
@@ -167,7 +167,7 @@ def create_class(
     db.add(cls)
     db.commit()
     db.refresh(cls)
-    return {"class": cls}
+    return {"class": ClassResponse.model_validate(cls)}
 
 
 @router.put("/api/classes/{class_id}")
@@ -186,7 +186,7 @@ def update_class(
         cls.grade = grade
     db.commit()
     db.refresh(cls)
-    return {"class": cls}
+    return {"class": ClassResponse.model_validate(cls)}
 
 
 @router.delete("/api/classes/{class_id}")
@@ -215,7 +215,7 @@ def list_class_children(
         raise HTTPException(404, "Class not found")
     same_org(cls.org_id, current_user)
     children = db.query(Child).filter(Child.class_id == class_id).all()
-    return {"children": children}
+    return {"children": [ChildResponse.model_validate(c) for c in children]}
 
 
 @router.post("/api/classes/{class_id}/children")
@@ -242,7 +242,7 @@ def create_class_child(
     db.add(child)
     db.commit()
     db.refresh(child)
-    return {"child": child}
+    return {"child": ChildResponse.model_validate(child)}
 
 
 @router.put("/api/children/{child_id}")
@@ -266,7 +266,7 @@ def update_child(
         child.notes = notes
     db.commit()
     db.refresh(child)
-    return {"child": child}
+    return {"child": ChildResponse.model_validate(child)}
 
 
 @router.delete("/api/children/{child_id}")
@@ -294,7 +294,7 @@ def list_org_users(
 ):
     same_org(org_id, current_user)
     users = db.query(User).filter(User.org_id == org_id).all()
-    return {"users": users}
+    return {"users": [UserResponse.model_validate(u) for u in users]}
 
 
 class InviteUserRequest(BaseModel):
@@ -358,7 +358,7 @@ def update_user(
         user.role = body.role
     db.commit()
     db.refresh(user)
-    return {"user": user}
+    return {"user": UserResponse.model_validate(user)}
 
 
 @router.get("/api/orgs/{org_id}/parents")

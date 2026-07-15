@@ -2,6 +2,7 @@ import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 import { useAuth } from "../auth/context";
 import { getActiveOrgId } from "../lib/activeOrg";
+import { api } from "../api/client";
 
 interface Stats {
   sessions: number;
@@ -54,19 +55,17 @@ export default function Landing() {
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    const token = localStorage.getItem("hmeayc_token");
-    const headers = token ? { Authorization: `Bearer ${token}` } : {};
     const isSuper = user?.role === "super_admin";
     const orgOverride = isSuper ? (getActiveOrgId() || undefined) : undefined;
-    const qs = orgOverride ? `?org_id=${orgOverride}` : "";
+    const params = orgOverride ? { org_id: orgOverride } : undefined;
     Promise.all([
-      fetch(`/api/sessions${qs}`, { headers }).then(r => r.ok ? r.json() : { sessions: [] }),
-      fetch(`/api/devices${qs}`, { headers }).then(r => r.ok ? r.json() : { devices: [] }),
-      fetch(`/api/children${qs}`, { headers }).then(r => r.ok ? r.json() : { children: [] }),
+      api.listSessions(params).catch(() => ({ sessions: [] })),
+      api.listDevices().catch(() => ({ devices: [] })),
+      api.listChildren().catch(() => ({ children: [] })),
     ]).then(([s, d, c]) => {
-      const sessions = s.sessions || [];
-      const devices = d.devices || [];
-      const children = c.children || [];
+      const sessions = (s as any).sessions || [];
+      const devices = (d as any).devices || [];
+      const children = (c as any).children || [];
       setStats({
         sessions: sessions.length,
         devices: devices.length,
