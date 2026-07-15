@@ -234,7 +234,7 @@ idf.py -p /dev/cu.usbmodem1101 monitor
 
 ### 4.3 WiFi 設定
 
-韌體初始值設定在 `firmware/sdkconfig.defaults`，實際場域可透過 Dashboard 的 `/dashboard/wifi` 頁面寫入後端。
+韌體初始值設定在 `firmware/sdkconfig.defaults`，實際場域可透過 Dashboard 的「裝置管理」頁面，點擊設備後在彈窗底部「📶 WiFi 設定」區塊寫入。
 ESP32 會在連線後定期向 `/api/config/wifi?include_password=true&device_id=...` 讀取設定，並在 NVS 中保留最新值。
 
 ```
@@ -243,7 +243,7 @@ CONFIG_HMEAYC_WIFI_PASSWORD="12345678"
 CONFIG_HMEAYC_WS_URI="ws://192.168.1.105:8000/ws/default"
 ```
 
-> 提示：Dashboard 端讀取 `/api/config/wifi` 時不會顯示密碼；韌體端則透過 `include_password=true` 取回完整設定以便更新 NVS。
+> 提示：裝置管理彈窗中會顯示密碼欄位（可顯示/隱藏）；韌體端則透過 `include_password=true` 取回完整設定以便更新 NVS。
 
 ### 4.5 動態 Session 指派
 
@@ -254,7 +254,7 @@ ESP32 開機時連線到 `/ws/default`，然後向 `GET /api/config/session?devi
 3. ESP32 定時輪詢（每 30 分鐘），發現 session 變更後自動重連 WebSocket
 4. 即時監控頁面即可收到來自正確 session 的 IMU 資料
 
-若想立即觸發重連，可在 Dashboard 重新指派裝置，或透過 `/dashboard/wifi` 頁面觸發。
+若想立即觸發重連，可在 Dashboard 重新指派裝置，或在裝置管理彈窗中更新 WiFi 設定後儲存。
 
 ### 4.4 OTA 更新（Dashboard）
 
@@ -283,9 +283,8 @@ ESP32 開機時連線到 `/ws/default`，然後向 `GET /api/config/session?devi
 | `/dashboard/live/:sessionId` | 即時監控 | IMU 6 軸即時圖表 + WS 連線狀態 + 節拍指示器 + 音樂資訊 |
 | `/dashboard/history` | 課程紀錄 | Session 列表 |
 | `/dashboard/assessment/:sessionId` | 評估指標 | 即時行為指標運算（IMU/CV） |
-| `/dashboard/devices` | 裝置管理 | ESP32 腰帶註冊、狀態檢視 |
+| `/dashboard/devices` | 裝置管理 | ESP32 腰帶註冊、狀態檢視、WiFi 設定 |
 | `/dashboard/firmware` | 韌體更新 | 上傳與管理 ESP32 韌體版本 |
-| `/dashboard/wifi` | WiFi 設定 | 遠端設定裝置 WiFi SSID/密碼 |
 | `/dashboard/classes` | 班級管理 | 班級 CRUD + 教師/幼兒資料管理 |
 | `/dashboard/classes/:classId` | 班級詳情 | 幼兒列表、家長綁定/解綁 |
 | `/dashboard/classes/:classId/assessments` | 班級評估 | 跨 Session 班級評估彙整 |
@@ -579,8 +578,8 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 
 | Method | Path | 說明 |
 |--------|------|------|
-| `GET` | `/api/config/wifi` | 讀取 WiFi 設定（預設只回傳 `ssid` 與 `updated_at`） |
-| `PUT` | `/api/config/wifi` | 更新 WiFi 設定（body: `ssid`, `password?`） |
+| `GET` | `/api/config/wifi` | 讀取 WiFi 設定（支援 `device_id` 參數，預設只回傳 `ssid` 與 `updated_at`） |
+| `PUT` | `/api/config/wifi` | 更新 WiFi 設定（body: `ssid`, `password?`, `device_id?`） |
 | `GET` | `/api/config/session?device_id=<device_id>` | 查詢裝置被指派到的 session（回傳 `{"session_id": "..."}` 或 `null`） |
 
 #### 裝置與學員管理

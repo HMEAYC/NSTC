@@ -1709,9 +1709,9 @@ HMEAYC/
 | 類別 | 變更 |
 |------|------|
 | 後端 | CORS 白名單、WebSocket 訊息正規化、Session API 回傳擴充、Report 模型加欄位、API key 驗證機制、WiFi Config endpoint |
-| 前端 | Lazy loading、新增韌體/WiFi 頁面、多裝置即時監控、Report 兩階段載入 |
+| 前端 | Lazy loading、新增韌體頁面、多裝置即時監控、Report 兩階段載入 |
 | 韌體 | Device registry、遠端 WiFi 設定、IMU type 標記 |
-| 全新 | `backend/app/auth.py`, `backend/app/api/config.py`, `backend/app/models/wifi_config.py`, `FirmwareUpload.tsx`, `WiFiConfig.tsx`, `start.sh`, `stop.sh` |
+| 全新 | `backend/app/auth.py`, `backend/app/api/config.py`, `backend/app/models/wifi_config.py`, `FirmwareUpload.tsx`, `start.sh`, `stop.sh` |
 
 ### 12.3 2026-07-02 第 2 輪變更
 

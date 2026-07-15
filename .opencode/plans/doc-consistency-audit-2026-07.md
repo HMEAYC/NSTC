@@ -26,7 +26,7 @@
 
 ## 3. 低優先（文件未跟上程式碼）
 
-- [ ] **Dashboard 頁面文件不全**：OPERATION.md §5.1 頁面表只列 12 個路徑，實際 `dashboard/src/App.tsx` 有 21 個路由，缺 `/dashboard/login`、`/register`、`/accept-invite`、`/firmware`、`/wifi`、`/classes/:classId`、`/classes/:classId/assessments`、`/children/:childId/assessments`、`/parent`。
+- [x] **Dashboard 頁面文件不全**：OPERATION.md §5.1 頁面表只列 12 個路徑，實際 `dashboard/src/App.tsx` 有 21 個路由，缺 `/dashboard/login`、`/register`、`/accept-invite`、`/firmware`、`/wifi`、`/classes/:classId`、`/classes/:classId/assessments`、`/children/:childId/assessments`、`/parent`。→ 已更新為 20 個路由（WiFi 頁面已移入設備管理）
 - [ ] **API 參考表不全**：實際後端已有 org 邀請流程（`/api/orgs/{orgId}/invite`、`/api/auth/complete-invite`）、`/{session_id}/start`、`/{session_id}/end`、`/{session_id}/activity`、評估相關端點等，OPERATION.md §8.1 都未收錄。
 - [ ] **電量計算基準沒對齊**：韌體 `battery.c` 以 3300mV=0%、4200mV=100% 算百分比；hardware 文件另定義「3.05V＝低電量警告」「2.80V＝brownout 截止」，兩套門檻沒有對應到韌體邏輯。
 
