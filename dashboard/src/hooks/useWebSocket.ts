@@ -1,7 +1,8 @@
 import { useEffect, useRef, useCallback, useState } from "react";
+import type { PoseUpdate, CvUpdate, PoseResult, CVMetrics } from "./useCamera";
 
 export interface IMUFrame {
-  type?: "imu" | "analysis" | "status" | "music" | "music_start" | "rhythm_update" | "freeze_update";
+  type?: "imu" | "analysis" | "status" | "music" | "music_start" | "rhythm_update" | "freeze_update" | "pose_update" | "cv_update" | "camera_status";
   ts: number;
   device_id?: string;
   ax: number;
@@ -49,6 +50,9 @@ export function useWebSocket(
   const [music, setMusic] = useState<MusicInfo | null>(null);
   const [rhythm, setRhythm] = useState<RhythmUpdate | null>(null);
   const [freeze, setFreeze] = useState<FreezeUpdate | null>(null);
+  const [poses, setPoses] = useState<PoseResult[]>([]);
+  const [cvMetrics, setCvMetrics] = useState<CVMetrics | null>(null);
+  const [cameraServerStatus, setCameraServerStatus] = useState<string>("inactive");
 
   const connect = useCallback(() => {
     if (wsRef.current?.readyState === WebSocket.OPEN) return;
@@ -83,6 +87,17 @@ export function useWebSocket(
           setRhythm(frame as unknown as RhythmUpdate);
         } else if (frame.type === "freeze_update") {
           setFreeze(frame as unknown as FreezeUpdate);
+        } else if (frame.type === "pose_update") {
+          const p = frame as unknown as PoseUpdate;
+          setPoses(p.poses || []);
+          if (p.cv_metrics) {
+            setCvMetrics(p.cv_metrics);
+          }
+        } else if (frame.type === "cv_update") {
+          const c = frame as unknown as CvUpdate;
+          if (c.metrics) setCvMetrics(c.metrics);
+        } else if (frame.type === "camera_status") {
+          setCameraServerStatus((frame as any).status || "inactive");
         }
       } catch {
         // ignore malformed frames
@@ -126,9 +141,15 @@ export function useWebSocket(
     }
   }, []);
 
+  const sendBinary = useCallback((data: ArrayBuffer) => {
+    if (wsRef.current?.readyState === WebSocket.OPEN) {
+      wsRef.current.send(data);
+    }
+  }, []);
+
   const sendMusicStart = useCallback(() => {
     send({ type: "music_start", ts: Date.now() });
   }, [send]);
 
-  return { status, send, music, rhythm, freeze, sendMusicStart };
+  return { status, send, sendBinary, music, rhythm, freeze, poses, cvMetrics, cameraServerStatus, sendMusicStart };
 }

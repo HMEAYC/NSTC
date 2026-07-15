@@ -1,4 +1,5 @@
 import asyncio
+import json
 import logging
 import time
 from datetime import datetime
@@ -16,11 +17,13 @@ from app.models.imu_data import IMUData
 from app.models.device import Device as DeviceModel
 from app.models.analysis_result import AnalysisResult
 from app.analysis.realtime import RealtimeAnalyzer
+from app.analysis.realtime_video import RealtimeVideoAnalyzer
 
 router = APIRouter(tags=["websocket"])
 
 _viewers: dict[str, set[WebSocket]] = {}
 _analyzers: dict[str, RealtimeAnalyzer] = {}
+_video_analyzers: dict[str, RealtimeVideoAnalyzer] = {}
 _cleanup_started = False
 
 
@@ -148,7 +151,54 @@ async def imu_data_ws(
             })
 
         while True:
-            raw = await websocket.receive_json()
+            raw_msg = await websocket.receive()
+
+            # Handle binary camera frames
+            if raw_msg.get("type") == "websocket.receive" and raw_msg.get("bytes"):
+                import cv2
+                import numpy as np
+                jpeg_bytes = raw_msg["bytes"]
+                if session_id in _video_analyzers:
+                    try:
+                        arr = np.frombuffer(jpeg_bytes, dtype=np.uint8)
+                        frame = cv2.imdecode(arr, cv2.IMREAD_COLOR)
+                        if frame is not None:
+                            result = _video_analyzers[session_id].ingest_frame(frame)
+                            if result is not None:
+                                # Persist CV metrics if present
+                                if "cv_metrics" in result:
+                                    try:
+                                        ar = AnalysisResult(
+                                            id=str(uuid4()),
+                                            session_id=session_id,
+                                            child_id=None,
+                                            raw_data={"cv_metrics": result["cv_metrics"], "person_count": result.get("person_count", 0)},
+                                        )
+                                        db.add(ar)
+                                        db.commit()
+                                    except Exception:
+                                        db.rollback()
+                                        logger.exception("Failed to persist CV metrics")
+                                # Broadcast to all viewers
+                                viewers = list(_viewers.get(session_id, set()))
+                                for viewer in viewers:
+                                    try:
+                                        await viewer.send_json(result)
+                                    except Exception:
+                                        _viewers.get(session_id, set()).discard(viewer)
+                    except Exception:
+                        logger.exception("Failed to process camera frame")
+                continue
+
+            # Handle text JSON messages
+            if raw_msg.get("type") != "websocket.receive" or not raw_msg.get("text"):
+                continue
+
+            try:
+                raw = json.loads(raw_msg["text"])
+            except Exception:
+                continue
+
             data = _normalize_message(raw, "esp32-c3")
             if data is None:
                 await websocket.send_json({
@@ -277,6 +327,37 @@ async def imu_data_ws(
                 })
                 continue
 
+            if data["type"] == "camera_start":
+                # Initialize real-time video analyzer
+                if session_id not in _video_analyzers:
+                    try:
+                        _video_analyzers[session_id] = RealtimeVideoAnalyzer()
+                        logger.info("RealtimeVideoAnalyzer initialized for session %s", session_id)
+                    except Exception:
+                        logger.exception("Failed to initialize RealtimeVideoAnalyzer")
+                        await websocket.send_json({
+                            "type": "status",
+                            "session_id": session_id,
+                            "status": "error",
+                            "reason": "video_analyzer_init_failed",
+                        })
+                        continue
+                await websocket.send_json({
+                    "type": "camera_status",
+                    "session_id": session_id,
+                    "status": "streaming",
+                })
+                continue
+
+            if data["type"] == "camera_stop":
+                _video_analyzers.pop(session_id, None)
+                await websocket.send_json({
+                    "type": "camera_status",
+                    "session_id": session_id,
+                    "status": "stopped",
+                })
+                continue
+
             await websocket.send_json({
                 "type": "status",
                 "session_id": session_id,
@@ -294,6 +375,8 @@ async def imu_data_ws(
         _viewers.get(session_id, set()).discard(websocket)
         if session_id in _analyzers and not _viewers.get(session_id, set()):
             _analyzers.pop(session_id, None)
+        if session_id in _video_analyzers and not _viewers.get(session_id, set()):
+            _video_analyzers.pop(session_id, None)
         try:
             db.commit()
         except Exception:

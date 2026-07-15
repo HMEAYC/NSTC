@@ -4,6 +4,7 @@ import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, Legend, ResponsiveContainer,
 } from "recharts";
 import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
+import { useCamera, type PoseResult } from "../hooks/useCamera";
 import { api, type SessionDetailInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 import BeatIndicator from "../components/BeatIndicator";
@@ -87,6 +88,68 @@ function IMUChart({
 
 const DEVICE_COLORS = ["#ef4444", "#22c55e", "#3b82f6", "#f97316", "#a855f7", "#06b6d4"];
 
+const COCO_SKELETON: [number, number][] = [
+  [0, 1], [0, 2], [1, 3], [2, 4], // head
+  [5, 6], // shoulders
+  [5, 7], [7, 9], // left arm
+  [6, 8], [8, 10], // right arm
+  [5, 11], [6, 12], // torso
+  [11, 12], // hips
+  [11, 13], [13, 15], // left leg
+  [12, 14], [14, 16], // right leg
+];
+
+const POSE_COLORS = ["#ef4444", "#22c55e", "#3b82f6", "#f97316", "#a855f7", "#06b6d4", "#ec4899", "#14b8a6"];
+
+function drawPoses(ctx: CanvasRenderingContext2D, poses: PoseResult[], w: number, h: number) {
+  ctx.clearRect(0, 0, w, h);
+  for (const pose of poses) {
+    const color = POSE_COLORS[pose.person_id % POSE_COLORS.length];
+    const kp = pose.keypoints;
+    if (!kp || kp.length < 17) continue;
+
+    // Draw skeleton
+    ctx.strokeStyle = color;
+    ctx.lineWidth = 2;
+    for (const [i, j] of COCO_SKELETON) {
+      const [x1, y1] = kp[i];
+      const [x2, y2] = kp[j];
+      if ((x1 === 0 && y1 === 0) || (x2 === 0 && y2 === 0)) continue;
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+    }
+
+    // Draw keypoints
+    for (let i = 0; i < kp.length; i++) {
+      const [x, y] = kp[i];
+      if (x === 0 && y === 0) continue;
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(x, y, 4, 0, 2 * Math.PI);
+      ctx.fill();
+    }
+
+    // Draw bounding box
+    if (pose.bbox) {
+      const [x1, y1, x2, y2] = pose.bbox;
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 1;
+      ctx.setLineDash([4, 4]);
+      ctx.strokeRect(x1, y1, x2 - x1, y2 - y1);
+      ctx.setLineDash([]);
+
+      // Draw person_id label
+      ctx.fillStyle = color;
+      ctx.fillRect(x1, y1 - 16, 24, 16);
+      ctx.fillStyle = "#fff";
+      ctx.font = "10px monospace";
+      ctx.fillText(`#${pose.person_id}`, x1 + 2, y1 - 4);
+    }
+  }
+}
+
 export default function LiveView() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -147,7 +210,19 @@ export default function LiveView() {
     setChannels(new Map(channelsRef.current));
   }, []);
 
-  const { status, music, rhythm, freeze, sendMusicStart } = useWebSocket(sid, onMessage);
+  const { status, send, sendBinary, music, rhythm, freeze, poses, cvMetrics, cameraServerStatus, sendMusicStart } = useWebSocket(sid, onMessage);
+
+  const { cameraStatus, startCamera, stopCamera, stream } = useCamera(send, sendBinary, status === "connected");
+
+  // Draw poses on canvas overlay
+  const poseCanvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = poseCanvasRef.current;
+    if (!canvas || !stream) return;
+    const ctx = canvas.getContext("2d");
+    if (!ctx) return;
+    drawPoses(ctx, poses, canvas.width, canvas.height);
+  }, [poses, stream]);
 
   // At least one device has sent data recently
   const deviceOnline = lastDeviceDataMs > 0 && Date.now() - lastDeviceDataMs < DEVICE_TIMEOUT_MS;
@@ -224,6 +299,92 @@ export default function LiveView() {
           ))}
         </div>
       )}
+
+      {/* Camera preview */}
+      <div className="bg-white rounded-xl shadow-sm p-4">
+        <div className="flex items-center justify-between mb-3">
+          <div className="flex items-center gap-2">
+            <h2 className="text-sm font-semibold text-gray-700">📷 攝影機</h2>
+            <span className={`w-2 h-2 rounded-full ${
+              cameraStatus === "streaming" ? "bg-green-500" :
+              cameraStatus === "requesting" ? "bg-yellow-500 animate-pulse" :
+              cameraStatus === "error" ? "bg-red-500" : "bg-gray-300"
+            }`} />
+            {cameraStatus === "streaming" && cvMetrics && (
+              <span className="text-xs text-gray-400">
+                {poses.length} 人 | {cvMetrics.engagement > 0.7 ? "🟢 高投入" : cvMetrics.engagement > 0.4 ? "🟡 中投入" : "🔴 低投入"}
+              </span>
+            )}
+          </div>
+          <div className="flex gap-2">
+            {cameraStatus !== "streaming" ? (
+              <button
+                onClick={startCamera}
+                disabled={cameraStatus === "requesting" || status !== "connected"}
+                className="text-xs px-3 py-1.5 rounded bg-blue-500 text-white hover:bg-blue-600 disabled:opacity-50 font-medium"
+              >
+                {cameraStatus === "requesting" ? "授權中..." : "開啟攝影機"}
+              </button>
+            ) : (
+              <button
+                onClick={stopCamera}
+                className="text-xs px-3 py-1.5 rounded bg-red-500 text-white hover:bg-red-600 font-medium"
+              >
+                停止
+              </button>
+            )}
+          </div>
+        </div>
+
+        {stream ? (
+          <div className="relative rounded-lg overflow-hidden bg-black" style={{ aspectRatio: "4/3" }}>
+            <video
+              ref={(el) => {
+                if (el && stream) {
+                  el.srcObject = stream;
+                  el.play().catch(() => {});
+                }
+              }}
+              className="w-full h-full object-cover"
+              autoPlay
+              muted
+              playsInline
+            />
+            <canvas
+              ref={poseCanvasRef}
+              width={640}
+              height={480}
+              className="absolute inset-0 w-full h-full"
+            />
+            {cvMetrics && (
+              <div className="absolute bottom-2 left-2 right-2 flex gap-2 flex-wrap">
+                {([
+                  { label: "投入", value: cvMetrics.engagement },
+                  { label: "隊形", value: cvMetrics.formation_stability },
+                  { label: "空間", value: cvMetrics.spatial_utilization },
+                  { label: "步態", value: cvMetrics.gait_symmetry },
+                  { label: "平衡", value: cvMetrics.balance_sway },
+                  { label: "協調", value: cvMetrics.limb_coordination },
+                ] as const).map((m) => (
+                  <span key={m.label} className={`text-[10px] px-1.5 py-0.5 rounded font-mono ${
+                    m.value >= 0.7 ? "bg-green-600/80 text-white" :
+                    m.value >= 0.4 ? "bg-yellow-600/80 text-white" :
+                    "bg-red-600/80 text-white"
+                  }`}>
+                    {m.label} {(m.value * 100).toFixed(0)}%
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-center h-32 bg-gray-50 rounded-lg text-gray-400 text-sm">
+            {cameraStatus === "error"
+              ? "攝影機授權失敗，請檢查瀏覽器設定"
+              : "點擊「開啟攝影機」以啟動即時視覺分析"}
+          </div>
+        )}
+      </div>
 
       {/* 6-axis cards */}
       {currentLatest && (

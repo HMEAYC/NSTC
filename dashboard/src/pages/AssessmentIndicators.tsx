@@ -4,6 +4,7 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
 import { useLiveMetrics } from "../hooks/useLiveMetrics";
 import { api, type AssessmentResultInfo } from "../api/client";
+import type { CVMetrics } from "../hooks/useCamera";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 function Badge({ status }: { status: "ready" | "partial" | "missing" }) {
@@ -113,17 +114,39 @@ function MetricCard({
   );
 }
 
-function CVMetricCard({ icon, title, desc }: { icon: string; title: string; desc: string }) {
+function CVMetricCard({ icon, title, desc, value }: { icon: string; title: string; desc: string; value?: number }) {
+  const hasValue = value !== undefined && value !== null;
   return (
-    <div className="bg-white rounded-xl shadow-sm p-4 border-l-4 border-gray-200 hover:shadow-md transition-shadow">
-      <div className="flex items-center gap-2 mb-1">
-        <span className="text-lg">{icon}</span>
-        <span className="text-sm font-semibold text-gray-700">{title}</span>
+    <div className={`bg-white rounded-xl shadow-sm p-4 border-l-4 hover:shadow-md transition-shadow ${
+      hasValue ? (value >= 0.7 ? "border-green-400" : value >= 0.4 ? "border-yellow-400" : "border-red-400") : "border-gray-200"
+    }`}>
+      <div className="flex items-center justify-between mb-1">
+        <div className="flex items-center gap-2">
+          <span className="text-lg">{icon}</span>
+          <span className="text-sm font-semibold text-gray-700">{title}</span>
+        </div>
+        {hasValue && (
+          <span className="text-lg font-bold font-mono text-gray-900">
+            {(value * 100).toFixed(0)}%
+          </span>
+        )}
       </div>
       <div className="text-xs text-gray-400 mb-2">{desc}</div>
-      <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-50 rounded-lg px-2 py-1">
-        <span>🚧</span> 需攝影機 + 影像分析
-      </div>
+      {!hasValue && (
+        <div className="flex items-center gap-1 text-xs text-gray-400 bg-gray-50 rounded-lg px-2 py-1">
+          <span>🚧</span> 需攝影機 + 影像分析
+        </div>
+      )}
+      {hasValue && (
+        <div className="mt-1 h-1.5 bg-gray-100 rounded-full overflow-hidden">
+          <div
+            className={`h-full rounded-full transition-all duration-500 ${
+              value >= 0.7 ? "bg-green-500" : value >= 0.4 ? "bg-yellow-500" : "bg-red-500"
+            }`}
+            style={{ width: `${value * 100}%` }}
+          />
+        </div>
+      )}
     </div>
   );
 }
@@ -138,7 +161,7 @@ export default function AssessmentIndicators() {
     setLastDeviceDataMs(Date.now());
     onMetricsMessage(frame);
   }, [onMetricsMessage]);
-  const { status: wsStatus, rhythm, freeze } = useWebSocket(sid, onMessage);
+  const { status: wsStatus, rhythm, freeze, poses, cvMetrics } = useWebSocket(sid, onMessage);
   const [savedAssessments, setSavedAssessments] = useState<AssessmentResultInfo[]>([]);
   const [computing, setComputing] = useState(false);
   const [computeDone, setComputeDone] = useState(false);
@@ -216,7 +239,7 @@ export default function AssessmentIndicators() {
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <SourceCard icon="📡" title="IMU 腰帶" desc="加速度計 + 陀螺儀" status={isConnected ? "ready" : "missing"} />
         <SourceCard icon="🎵" title="音樂分析" desc="拍點偵測 + 停止訊號" status="missing" />
-        <SourceCard icon="📹" title="攝影機" desc="姿勢估計 + 群體追蹤" status="missing" />
+        <SourceCard icon="📹" title="攝影機" desc="姿勢估計 + 群體追蹤" status={poses.length > 0 ? "ready" : "missing"} />
       </div>
 
       {/* Computed IMU Indicators */}
@@ -282,12 +305,12 @@ export default function AssessmentIndicators() {
           <span className="text-xs text-gray-400">需要 YOLO 姿勢估計 + 群體追蹤</span>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 gap-3">
-          <CVMetricCard icon="👥" title="團體投入度" desc="活躍比例 (>0.5cm/s)" />
-          <CVMetricCard icon="📐" title="隊形穩定度" desc="幾何分類信心均值" />
-          <CVMetricCard icon="🗺️" title="空間利用率" desc="3×3 熱區分布離散度" />
-          <CVMetricCard icon="🦶" title="步態對稱性" desc="左右腳支撐期比對" />
-          <CVMetricCard icon="🧘" title="平衡搖擺面積" desc="質心投影軌跡" />
-          <CVMetricCard icon="🤝" title="上下肢協調" desc="PLV 相位鎖定值" />
+          <CVMetricCard icon="👥" title="團體投入度" desc="活躍比例 (>0.5cm/s)" value={cvMetrics?.engagement} />
+          <CVMetricCard icon="📐" title="隊形穩定度" desc="幾何分類信心均值" value={cvMetrics?.formation_stability} />
+          <CVMetricCard icon="🗺️" title="空間利用率" desc="3×3 熱區分布離散度" value={cvMetrics?.spatial_utilization} />
+          <CVMetricCard icon="🦶" title="步態對稱性" desc="左右腳支撐期比對" value={cvMetrics?.gait_symmetry} />
+          <CVMetricCard icon="🧘" title="平衡搖擺面積" desc="質心投影軌跡" value={cvMetrics?.balance_sway} />
+          <CVMetricCard icon="🤝" title="上下肢協調" desc="PLV 相位鎖定值" value={cvMetrics?.limb_coordination} />
         </div>
       </section>
 
