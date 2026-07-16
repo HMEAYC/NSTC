@@ -21,6 +21,7 @@ from app.models.analysis_result import AnalysisResult
 from app.models.assessment_result import AssessmentResult
 from app.models.report import Report
 from app.models.device_assignment import DeviceAssignment
+from app.models.organization import Organization
 from app.models.user import User
 from app.models.child import Child
 
@@ -96,10 +97,11 @@ def _session_query(db: DBSession, session_id: str, user: User | None, org_overri
     return db.query(SessionModel).filter(*filters).first()
 
 
-def _serialize(s: SessionModel) -> dict:
+def _serialize(s: SessionModel, org_name: str | None = None) -> dict:
     return {
         "id": s.id,
         "org_id": s.org_id,
+        "org_name": org_name,
         "class_id": s.class_id,
         "template_id": s.template_id,
         "name": s.name,
@@ -148,7 +150,13 @@ def list_sessions(
         .order_by(desc(SessionModel.scheduled_at), desc(SessionModel.start_time))
         .all()
     )
-    return {"sessions": [_serialize(s) for s in sessions]}
+    # Build org name lookup for non-super_admin users who see mixed orgs
+    org_ids = {s.org_id for s in sessions if s.org_id}
+    org_names = {}
+    if org_ids:
+        orgs = db.query(Organization).filter(Organization.id.in_(org_ids)).all()
+        org_names = {o.id: o.name for o in orgs}
+    return {"sessions": [_serialize(s, org_names.get(s.org_id)) for s in sessions]}
 
 
 @router.post("")

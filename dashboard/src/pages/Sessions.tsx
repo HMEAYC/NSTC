@@ -23,12 +23,14 @@ export default function Sessions() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ class_id: "", template_id: "", scheduled_at: "", description: "" });
+  const [orgFilter, setOrgFilter] = useState<string>("");
+
+  const isSuperAdmin = user?.role === "super_admin";
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const token = localStorage.getItem("hmeayc_token");
       const orgOverride = user?.org_id ? undefined : getActiveOrgId() || undefined;
       const effectiveOrgId = orgOverride || user?.org_id;
       const [sessionsRes, templatesRes, classRes] = await Promise.all([
@@ -72,6 +74,15 @@ export default function Sessions() {
     } catch { /* ignore */ }
   };
 
+  // Unique orgs from sessions for the filter dropdown
+  const orgOptions = isSuperAdmin
+    ? Array.from(new Map(sessions.filter((s) => s.org_id).map((s) => [s.org_id, s.org_name || s.org_id])).entries())
+    : [];
+
+  const filteredSessions = orgFilter
+    ? sessions.filter((s) => s.org_id === orgFilter)
+    : sessions;
+
   if (loading) return <div className="p-6 max-w-4xl mx-auto"><LoadingSpinner text="載入課程…" /></div>;
 
   return (
@@ -85,6 +96,25 @@ export default function Sessions() {
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">{error}</div>}
+
+      {isSuperAdmin && orgOptions.length > 1 && (
+        <div className="flex items-center gap-2 text-sm">
+          <span className="text-gray-500">機構篩選：</span>
+          <select
+            value={orgFilter}
+            onChange={(e) => setOrgFilter(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm bg-white"
+          >
+            <option value="">全部機構</option>
+            {orgOptions.map(([id, name]) => (
+              <option key={id} value={id}>{name}</option>
+            ))}
+          </select>
+          {orgFilter && (
+            <button onClick={() => setOrgFilter("")} className="text-xs text-blue-600 hover:underline">清除</button>
+          )}
+        </div>
+      )}
 
       {showCreate && (
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
@@ -121,7 +151,7 @@ export default function Sessions() {
 
       <div className="space-y-2">
         {(() => {
-          const scheduled = sessions.filter((s) => s.scheduled_at);
+          const scheduled = filteredSessions.filter((s) => s.scheduled_at);
           return scheduled.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">尚無已排程課程</div>
           ) : scheduled.map((s) => {
@@ -133,6 +163,9 @@ export default function Sessions() {
                 <div>
                   <div className="font-semibold text-gray-800">{s.name}</div>
                   <div className="text-xs text-gray-400 mt-0.5">
+                    {isSuperAdmin && s.org_name && (
+                      <span className="inline-block bg-blue-50 text-blue-600 rounded px-1.5 py-0.5 mr-2 text-[11px]">{s.org_name}</span>
+                    )}
                     {new Date(s.scheduled_at!).toLocaleString("zh-TW")}
                   </div>
                 </div>

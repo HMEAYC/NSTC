@@ -77,6 +77,7 @@ export interface AssignmentInfo {
 export interface SessionInfo {
   id: string;
   org_id: string;
+  org_name: string | null;
   class_id: string | null;
   template_id: string | null;
   name: string;
