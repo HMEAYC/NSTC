@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Integer, DateTime, JSON, ForeignKey
 from app.db.base import Base
 
@@ -14,4 +14,4 @@ class SessionTemplate(Base):
     duration_minutes = Column(Integer, nullable=True)
     stages = Column(JSON, nullable=True)
     metrics_config = Column(JSON, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

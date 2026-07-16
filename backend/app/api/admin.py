@@ -3,10 +3,10 @@ import uuid
 from datetime import datetime
 
 from fastapi import APIRouter, Depends, HTTPException
-from pydantic import BaseModel, EmailStr, field_validator
+from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, require_role, same_org
+from app.auth.deps import require_role, same_org
 from app.auth.jwt import get_password_hash
 from app.db.base import get_db
 from app.email import send_invite_email
@@ -15,7 +15,6 @@ from app.models.school_class import SchoolClass
 from app.models.user import User
 from app.models.child import Child
 from app.models.parent_child import ParentChild
-from app.models.teacher_class import TeacherClass
 
 router = APIRouter(tags=["admin"])
 

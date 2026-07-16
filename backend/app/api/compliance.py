@@ -2,14 +2,13 @@ from __future__ import annotations
 
 import csv
 import io
-import json
-from datetime import datetime
+from datetime import datetime, timezone
 
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, Form
 from fastapi.responses import StreamingResponse
 from sqlalchemy.orm import Session
 
-from app.auth.deps import get_current_user, require_role, same_org
+from app.auth.deps import require_role, same_org
 from app.db.base import get_db
 from app.models.child import Child as ChildModel
 from app.models.audit_log import AuditLog
@@ -100,7 +99,7 @@ def export_anonymized(
         return StreamingResponse(
             iter([output.getvalue()]),
             media_type="text/csv",
-            headers={"Content-Disposition": f"attachment; filename=hmeayc-export-{datetime.utcnow().date()}.csv"},
+            headers={"Content-Disposition": f"attachment; filename=hmeayc-export-{datetime.now(timezone.utc).date()}.csv"},
         )
 
     return {"records": records, "count": len(records)}
@@ -138,7 +137,7 @@ def upload_consent(
         consent_dir = reports_dir() / "consents"
         consent_dir.mkdir(parents=True, exist_ok=True)
         ext = file.filename.split(".")[-1] if file.filename else "pdf"
-        fname = f"consent_{child_id}_{datetime.utcnow().date()}.{ext}"
+        fname = f"consent_{child_id}_{datetime.now(timezone.utc).date()}.{ext}"
         file_path = str(consent_dir / fname)
         content = file.file.read()
         (consent_dir / fname).write_bytes(content)
@@ -151,8 +150,8 @@ def upload_consent(
     if existing:
         existing.consented = consented
         existing.consent_file_path = file_path or existing.consent_file_path
-        existing.consented_at = datetime.utcnow() if consented else None
-        existing.revoked_at = datetime.utcnow() if not consented else None
+        existing.consented_at = datetime.now(timezone.utc) if consented else None
+        existing.revoked_at = datetime.now(timezone.utc) if not consented else None
         db.commit()
         db.refresh(existing)
         record = existing
@@ -162,7 +161,7 @@ def upload_consent(
             parent_id=parent_id,
             consented=consented,
             consent_file_path=file_path,
-            consented_at=datetime.utcnow() if consented else None,
+            consented_at=datetime.now(timezone.utc) if consented else None,
         )
         db.add(record)
         db.commit()
@@ -244,5 +243,5 @@ def consent_report(
     return StreamingResponse(
         iter([output.getvalue()]),
         media_type="text/csv",
-        headers={"Content-Disposition": f"attachment; filename=hmeayc-consent-report-{datetime.utcnow().date()}.csv"},
+        headers={"Content-Disposition": f"attachment; filename=hmeayc-consent-report-{datetime.now(timezone.utc).date()}.csv"},
     )

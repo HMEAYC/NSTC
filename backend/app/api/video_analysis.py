@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import json
-import os
 import threading
 import uuid
 from datetime import datetime, timedelta, timezone
@@ -13,6 +12,7 @@ from pydantic import BaseModel, Field
 
 from app.auth import require_api_key
 from app.auth.deps import get_current_user
+from app.config import settings
 from app.paths import tmp_dir
 from app.models.user import User
 
@@ -49,7 +49,7 @@ class AnalyzeResponse(BaseModel):
 # and this needs to move to a DB-backed or Redis-backed queue instead.
 _TASKS_LOCK = threading.Lock()
 _TASKS: dict[str, dict[str, Any]] = {}
-_TASK_TTL_SEC = max(60, int((os.environ.get("HMEAYC_TASK_TTL_SEC") or "86400").strip() or "86400"))
+_TASK_TTL_SEC = max(60, settings.hmeayc_task_ttl_sec)
 _TASKS_DB_PATH = tmp_dir() / "hmeayc-api-tasks.json"
 
 

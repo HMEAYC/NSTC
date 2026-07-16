@@ -5,6 +5,7 @@ from fastapi import APIRouter, Depends, HTTPException, Request, UploadFile, File
 from sqlalchemy.orm import Session
 
 from app.auth.deps import get_current_user, require_role
+from app.auth import require_api_key
 from app.db.base import get_db
 from app.models.firmware import FirmwareVersion
 from app.models.user import User
@@ -19,6 +20,7 @@ _FIRMWARE_DIR.mkdir(exist_ok=True)
 def check_version(
     request: Request,
     current: str = "",
+    _: None = Depends(require_api_key),
     db: Session = Depends(get_db),
 ):
     latest = (
@@ -77,7 +79,7 @@ async def upload_firmware(
 
 
 @router.get("/download/{fw_id}")
-def download_firmware(fw_id: str, db: Session = Depends(get_db)):
+def download_firmware(fw_id: str, _: None = Depends(require_api_key), db: Session = Depends(get_db)):
     fw = db.query(FirmwareVersion).filter(FirmwareVersion.id == fw_id).first()
     if not fw:
         raise HTTPException(404, "Firmware not found")

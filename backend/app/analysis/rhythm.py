@@ -6,19 +6,7 @@ Detects motion peaks and compares against expected beat intervals.
 import numpy as np
 from scipy.signal import savgol_filter
 
-
-def calculate_motion_energy(ax: float, ay: float, az: float) -> float:
-    return float(np.sqrt(ax * ax + ay * ay + az * az))
-
-
-def _find_peaks(signal: np.ndarray, threshold: float) -> list[int]:
-    if len(signal) < 3:
-        return []
-    peaks = []
-    for i in range(1, len(signal) - 1):
-        if signal[i] > signal[i - 1] and signal[i] >= signal[i + 1] and signal[i] > threshold:
-            peaks.append(i)
-    return peaks
+from app.analysis.imu_utils import calculate_motion_energy, find_peaks
 
 
 def analyze_rhythm_sync(imu_data: list[dict], bpm: float) -> dict:
@@ -36,7 +24,7 @@ def analyze_rhythm_sync(imu_data: list[dict], bpm: float) -> dict:
     motion_smooth = savgol_filter(motion, min(11, len(motion) | 1), 2)
 
     threshold = float(np.mean(motion_smooth) + 0.5 * np.std(motion_smooth))
-    peak_indices = _find_peaks(motion_smooth, threshold)
+    peak_indices = find_peaks(motion_smooth, threshold)
 
     if not peak_indices:
         return {"sync_rate": 0.0, "bpm": bpm, "peak_count": 0, "beat_count": 0}

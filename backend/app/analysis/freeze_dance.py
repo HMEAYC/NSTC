@@ -5,9 +5,7 @@ Detects reaction time and body stability when music stops.
 
 import numpy as np
 
-
-def _motion_energy(ax: float, ay: float, az: float) -> float:
-    return float(np.sqrt(ax * ax + ay * ay + az * az))
+from app.analysis.imu_utils import calculate_motion_energy
 
 
 def analyze_freeze_response(imu_data: list[dict], music_stop_time: float) -> dict:
@@ -16,7 +14,7 @@ def analyze_freeze_response(imu_data: list[dict], music_stop_time: float) -> dic
 
     timestamps = np.array([d.get("ts", i) for i, d in enumerate(imu_data)])
     motion = np.array([
-        _motion_energy(d.get("ax", 0), d.get("ay", 0), d.get("az", 0))
+        calculate_motion_energy(d.get("ax", 0), d.get("ay", 0), d.get("az", 0))
         for d in imu_data
     ])
 

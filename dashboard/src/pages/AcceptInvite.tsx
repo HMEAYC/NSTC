@@ -1,10 +1,9 @@
 import { useEffect, useState } from "react";
-import { useSearchParams, useNavigate, Link } from "react-router-dom";
+import { useSearchParams, Link } from "react-router-dom";
 import { api } from "../api/client";
 
 export default function AcceptInvite() {
   const [searchParams] = useSearchParams();
-  const navigate = useNavigate();
   const token = searchParams.get("token") || "";
 
   const [displayName, setDisplayName] = useState("");
@@ -26,7 +25,7 @@ export default function AcceptInvite() {
     setError(null);
     try {
       const data = await api.completeInvite({ token, password, display_name: displayName });
-      localStorage.setItem("hmeayc_token", (data as any).access_token || "");
+      localStorage.setItem("hmeayc_token", data.access_token);
       setDone(true);
     } catch (err) {
       setError(err instanceof Error ? err.message : "設定失敗");

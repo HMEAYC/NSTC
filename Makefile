@@ -1,4 +1,4 @@
-.PHONY: dev dev-backend dev-dashboard start stop install-backend install-dashboard test lint
+.PHONY: dev dev-backend dev-dashboard start stop install-backend install-dashboard test-backend test-backend lint-backend lint-dashboard
 
 dev:
 	docker compose up --build

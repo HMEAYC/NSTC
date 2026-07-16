@@ -76,12 +76,12 @@ curl -X POST http://localhost:8000/api/children \
   -d '{"name":"小華","student_id":"S002","notes":"4歲"}'
 ```
 
-### Step 4: 建立課程
+### Step 4: 建立 Session
 
 ```bash
 curl -X POST http://localhost:8000/api/sessions \
   -H "Content-Type: application/json" \
-  -d '{"course_type":"march"}'
+  -d '{"name":"測試課程","template_id":null}'
 # 回傳 session_id (UUID)
 ```
 

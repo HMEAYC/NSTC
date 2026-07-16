@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Float, DateTime, Enum, ForeignKey
 from app.db.base import Base
 
@@ -20,4 +20,4 @@ class Device(Base):
     status = Column(Enum("online", "offline", name="device_status"), default="offline")
     last_seen = Column(DateTime, nullable=True)
     active_session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

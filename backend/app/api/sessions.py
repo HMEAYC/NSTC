@@ -1,8 +1,7 @@
 from __future__ import annotations
 
 import os
-import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from fastapi import APIRouter, Depends, HTTPException, UploadFile, File, BackgroundTasks
 from pydantic import BaseModel
@@ -10,7 +9,7 @@ from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc, func
 
 from app.auth import require_api_key
-from app.auth.deps import get_current_user, require_role
+from app.auth.deps import require_login, require_role
 from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.session import Session as SessionModel
@@ -136,7 +135,7 @@ def list_sessions(
     class_id: str | None = None,
     org_id: str | None = None,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     filters = _session_filter(SessionModel, current_user, org_id)
     if status:
@@ -188,7 +187,7 @@ def create_session(
 def get_session(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:
@@ -271,7 +270,7 @@ def delete_session(
     session_id: str,
     _: None = Depends(require_api_key),
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:
@@ -318,7 +317,7 @@ def start_session(
         raise HTTPException(400, f"Cannot start session with status '{session.status}'")
 
     session.status = "active"
-    session.start_time = datetime.utcnow()
+    session.start_time = datetime.now(timezone.utc)
     db.commit()
     db.refresh(session)
 
@@ -347,13 +346,13 @@ def start_session(
 def end_session(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
     session.status = "completed"
-    session.end_time = datetime.utcnow()
+    session.end_time = datetime.now(timezone.utc)
     db.commit()
     return {"session": _serialize(session)}
 
@@ -365,7 +364,7 @@ def update_activity(
     session_id: str,
     body: UpdateActivityRequest,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:
@@ -381,7 +380,7 @@ def update_activity(
 def get_analysis(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:
@@ -413,7 +412,7 @@ def get_analysis(
 def list_evaluations(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:
@@ -476,7 +475,7 @@ def upsert_evaluation(
         existing.score = body.score
         existing.comment = body.comment
         existing.teacher_id = current_user.id
-        existing.updated_at = datetime.utcnow()
+        existing.updated_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(existing)
         return {"evaluation": _serialize_evaluation(existing, child.name)}
@@ -500,7 +499,7 @@ def upsert_evaluation(
 def get_session_report(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:

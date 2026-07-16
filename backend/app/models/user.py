@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Boolean, Enum, ForeignKey
 from app.db.base import Base
 
@@ -15,4 +15,4 @@ class User(Base):
     role = Column(Enum("super_admin", "org_admin", "teacher", "parent", name="user_role"), nullable=False)
     is_active = Column(Boolean, default=True)
     invite_token = Column(String(36), unique=True, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

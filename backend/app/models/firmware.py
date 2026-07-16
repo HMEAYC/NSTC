@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Integer
 from app.db.base import Base
 
@@ -12,4 +12,4 @@ class FirmwareVersion(Base):
     description = Column(String(500), nullable=True)
     binary_path = Column(String(500), nullable=False)
     file_size = Column(Integer, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

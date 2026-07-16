@@ -14,6 +14,7 @@ from app.tracking import face_insight
 from app.tracking import identity
 from app.analysis.pose.holistic import try_create_holistic_refiner
 from app.analysis.pose.estimator import try_create_refiner
+from app.analysis.imu_utils import find_peaks
 from app.ingest.video import VideoMeta
 
 
@@ -27,14 +28,6 @@ def _wrist_signal(kp: np.ndarray) -> float:
     if kp.shape[0] < 11:
         return float(np.linalg.norm(kp[0]))
     return float(np.linalg.norm(kp[9]) + np.linalg.norm(kp[10]))
-
-
-def _find_peaks(sig: np.ndarray, thr: float) -> list[int]:
-    peaks = []
-    for i in range(1, len(sig) - 1):
-        if sig[i] > sig[i - 1] and sig[i] >= sig[i + 1] and sig[i] > thr:
-            peaks.append(i)
-    return peaks
 
 
 def _refine_landmarks(refiner, frame_bgr: np.ndarray, box: np.ndarray | None, kp: np.ndarray) -> np.ndarray:
@@ -113,7 +106,7 @@ def _series_to_children(
         else:
             sm = wrist_v
         thr = float(np.percentile(sm, 70))
-        peak_idx = _find_peaks(sm, thr)
+        peak_idx = find_peaks(sm, thr)
         errs = []
         for pi in peak_idx:
             pt = ts[pi]

@@ -20,7 +20,6 @@ import json
 import os
 import re
 import sys
-import uuid
 
 # ── known lesson plan element definitions ────────────────────────────
 

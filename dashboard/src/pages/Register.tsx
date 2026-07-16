@@ -20,6 +20,7 @@ export default function Register() {
         email,
         password,
         display_name: displayName,
+        org_code: orgCode,
       });
       navigate("/dashboard/login?registered=1");
     } catch (err) {

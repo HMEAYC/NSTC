@@ -1,3 +1,4 @@
+import { Link } from "react-router-dom";
 import { useAuth } from "../auth/context";
 
 export default function Navbar() {
@@ -13,32 +14,32 @@ export default function Navbar() {
   return (
     <nav className="bg-white shadow-sm px-4 py-3 flex items-center justify-between flex-wrap gap-y-2">
       <div className="flex items-center gap-4 flex-wrap">
-        <a href="/dashboard/" className="font-bold text-blue-700 text-sm mr-2">HMEAYC</a>
+        <Link to="/dashboard/" className="font-bold text-blue-700 text-sm mr-2">HMEAYC</Link>
 
         {user?.role === "parent" ? (
-          <a href="/dashboard/parent" className="text-blue-600 hover:underline text-sm">我的小孩</a>
+          <Link to="/dashboard/parent" className="text-blue-600 hover:underline text-sm">我的小孩</Link>
         ) : (
           <>
             {(user?.role === "org_admin" || user?.role === "super_admin" || user?.role === "teacher") && (
               <>
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider">課程教學</span>
-                <a href="/dashboard/templates" className="text-blue-600 hover:underline text-sm">教案模板</a>
-                <a href="/dashboard/sessions" className="text-blue-600 hover:underline text-sm">課程管理</a>
+                <Link to="/dashboard/templates" className="text-blue-600 hover:underline text-sm">教案模板</Link>
+                <Link to="/dashboard/sessions" className="text-blue-600 hover:underline text-sm">課程管理</Link>
               </>
             )}
             {(user?.role === "org_admin" || user?.role === "super_admin" || user?.role === "teacher") && (
               <>
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider ml-1">管理</span>
-                <a href="/dashboard/classes" className="text-blue-600 hover:underline text-sm">班級管理</a>
-                <a href="/dashboard/devices" className="text-blue-600 hover:underline text-sm">裝置管理</a>
+                <Link to="/dashboard/classes" className="text-blue-600 hover:underline text-sm">班級管理</Link>
+                <Link to="/dashboard/devices" className="text-blue-600 hover:underline text-sm">裝置管理</Link>
               </>
             )}
             {(user?.role === "org_admin" || user?.role === "super_admin") && (
               <>
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider ml-1">系統</span>
-                <a href="/dashboard/admin/users" className="text-blue-600 hover:underline text-sm">帳號管理</a>
+                <Link to="/dashboard/admin/users" className="text-blue-600 hover:underline text-sm">帳號管理</Link>
                 {user?.role === "super_admin" && (
-                  <a href="/dashboard/admin" className="text-blue-600 hover:underline text-sm">機構管理</a>
+                  <Link to="/dashboard/admin" className="text-blue-600 hover:underline text-sm">機構管理</Link>
                 )}
               </>
             )}
@@ -55,7 +56,7 @@ export default function Navbar() {
             <button onClick={logout} className="text-red-500 hover:underline text-xs">登出</button>
           </>
         ) : (
-          <a href="/dashboard/login" className="text-blue-600 hover:underline text-sm">登入</a>
+          <Link to="/dashboard/login" className="text-blue-600 hover:underline text-sm">登入</Link>
         )}
       </div>
     </nav>

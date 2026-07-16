@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, Float, DateTime, ForeignKey, UniqueConstraint
 from app.db.base import Base
 
@@ -13,7 +13,7 @@ class DeviceAssignment(Base):
     child_id = Column(String(36), ForeignKey("children.id"), nullable=False)
     confidence = Column(Float, nullable=True)
     method = Column(String(32), default="manual")
-    assigned_at = Column(DateTime, default=datetime.utcnow)
+    assigned_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("session_id", "device_id", name="uq_session_device"),

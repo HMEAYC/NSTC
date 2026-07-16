@@ -1,18 +1,7 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api } from "../api/client";
+import { api, SessionSummary } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
-
-export interface SessionSummary {
-  id: string;
-  course_type: string;
-  status: string;
-  started_at: string;
-  ended_at: string | null;
-  duration_sec: number | null;
-  imu_count: number;
-  device_count: number;
-}
 
 const courseLabel: Record<string, string> = {
   march: "行進",

@@ -1,9 +1,10 @@
+from datetime import datetime, timezone
 from math import sqrt
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import func
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_login
 from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.session import Session as SessionModel
@@ -17,7 +18,6 @@ from app.models.child import Child
 from app.models.user import User
 from app.analysis.rhythm import analyze_rhythm_sync
 from app.analysis.freeze_dance import analyze_freeze_response
-from datetime import datetime
 from uuid import uuid4
 
 router = APIRouter(prefix="/api", tags=["assessments"])
@@ -46,7 +46,7 @@ def _compute_metrics(accel_x: list[float], accel_y: list[float], accel_z: list[f
 def compute_session_assessment(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
     session = db.query(SessionModel).filter(
@@ -124,7 +124,7 @@ def compute_session_assessment(
             existing.stability_index = metrics["stability_index"]
             existing.sample_count = len(rows)
             existing.window_seconds = window_sec
-            existing.computed_at = datetime.utcnow()
+            existing.computed_at = datetime.now(timezone.utc)
             result = existing
         else:
             result = AssessmentResult(
@@ -242,7 +242,7 @@ def compute_session_assessment(
                 existing_analysis.freeze_reaction_time = freeze_time
             if freeze_stability is not None:
                 existing_analysis.freeze_stability_score = freeze_stability
-            existing_analysis.timestamp = datetime.utcnow()
+            existing_analysis.timestamp = datetime.now(timezone.utc)
         else:
             analysis_entries.append(AnalysisResult(
                 id=str(uuid4()),
@@ -251,7 +251,7 @@ def compute_session_assessment(
                 rhythm_sync_rate=rhythm_sync,
                 freeze_reaction_time=freeze_time,
                 freeze_stability_score=freeze_stability,
-                timestamp=datetime.utcnow(),
+                timestamp=datetime.now(timezone.utc),
             ))
 
     for a in analysis_entries:
@@ -281,7 +281,7 @@ def compute_session_assessment(
 def get_session_assessments(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
     session = db.query(SessionModel).filter(
@@ -349,7 +349,7 @@ def get_session_assessments(
 def get_child_assessments(
     child_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
     child = db.query(Child).filter(
@@ -417,7 +417,7 @@ def get_child_assessments(
 def get_class_assessments(
     class_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
 
@@ -468,7 +468,7 @@ def get_class_assessments(
 def get_child_analysis_trends(
     child_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
     child = db.query(Child).filter(

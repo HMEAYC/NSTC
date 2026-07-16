@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Boolean
 from app.db.base import Base
 
@@ -12,4 +12,4 @@ class Organization(Base):
     code = Column(String(50), unique=True, nullable=False)
     contact_email = Column(String(200), nullable=True)
     is_active = Column(Boolean, default=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

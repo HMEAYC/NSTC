@@ -536,13 +536,13 @@ export const api = {
     fetchJSON<{ children: ChildInfo[] }>("/api/parents/me/children"),
 
   // Auth
-  register: (data: { email: string; password: string; display_name: string; role?: string; org_id?: string }) =>
+  register: (data: { email: string; password: string; display_name: string; org_code: string }) =>
     fetchJSON<{ user: UserInfo }>("/api/auth/register", {
       method: "POST", body: JSON.stringify(data),
     }),
 
   completeInvite: (data: { token: string; password: string; display_name: string }) =>
-    fetchJSON<{ user: UserInfo }>("/api/auth/complete-invite", {
+    fetchJSON<{ access_token: string; token_type: string; user_id: string; org_id: string; role: string; display_name: string }>("/api/auth/complete-invite", {
       method: "POST", body: JSON.stringify(data),
     }),
 

@@ -537,8 +537,8 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 | `POST` | `/api/auth/login` | 登入（body: `email`, `password`）→ 回傳 JWT |
 | `POST` | `/api/auth/refresh` | 刷新 Token |
 | `GET` | `/api/auth/me` | 當前使用者資訊 |
-| `POST` | `/api/auth/register` | 註冊使用者（body: `email`, `password`, `display_name`, `role`, `org_id`） |
-| `POST` | `/api/auth/complete-invite` | 完成邀請流程（body: `token`, `password`） |
+| `POST` | `/api/auth/register` | 註冊使用者（body: `email`, `password`, `display_name`, `org_code`） |
+| `POST` | `/api/auth/complete-invite` | 完成邀請流程（body: `token`, `password`, `display_name`） |
 
 #### Sessions（課程管理）
 
@@ -559,7 +559,6 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 | `GET` | `/api/sessions/{id}/evaluations` | 課程評分列表（含幼兒姓名） |
 | `PUT` | `/api/sessions/{id}/evaluations/{childId}` | 儲存評分（body: `score?`, `comment?`） |
 | `GET` | `/api/sessions/{id}/report` | 課程報告（sessions 彙整 + 評分） |
-| `GET` | `/api/sessions/{id}/sessions` | 子 Session 列表 |
 
 #### 教案模板（Templates）
 
@@ -613,6 +612,8 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 |--------|------|------|
 | `POST` | `/api/firmware/upload` | 上傳新韌體（form: `version`, `description?`, `file`） |
 | `GET` | `/api/firmware/list` | 列出所有版本 |
+| `GET` | `/api/firmware/version` | 查詢最新韌體版本（需 API Key） |
+| `GET` | `/api/firmware/download/{id}` | 下載韌體 binary（需 API Key） |
 
 > **註**：OTA 版本檢查已改用 GitHub Pages 靜態檔案（`https://HMEAYC.github.io/NSTC/ota/version.json`），ESP32 每 24 小時自動檢查。後端僅保留上傳與列表功能。
 
@@ -638,7 +639,7 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 | `GET` | `/api/admin/orgs` | 列出所有組織 |
 | `POST` | `/api/admin/orgs` | 新增組織（body: `name`, `code`, `contact_email?`） |
 | `PUT` | `/api/admin/orgs/{id}` | 更新組織資訊 |
-| `DELETE` | `/api/admin/orgs/{id}` | 停用組織 |
+| `DELETE` | `/api/admin/orgs/{id}` | 刪除組織（不可復原） |
 
 #### 班級管理（org_admin / teacher）
 

@@ -4,7 +4,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
 from typing import Any
 
-from app.auth.deps import get_current_user
+from app.auth.deps import require_login
 from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.user import User
@@ -22,9 +22,9 @@ router = APIRouter(prefix="/api", tags=["pairing"])
 def auto_pair(
     session_id: str,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
-    is_super = current_user is not None and current_user.role == "super_admin"
+    is_super = current_user.role == "super_admin"
     filters = [SessionModel.id == session_id]
     if not is_super:
         filters.append(SessionModel.org_id == effective_org_id(current_user))

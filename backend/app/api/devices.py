@@ -1,9 +1,9 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
-from app.auth.deps import get_current_user
+from app.auth.deps import require_login
 from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.device import Device as DeviceModel
@@ -25,9 +25,9 @@ class UpdateDeviceRequest(BaseModel):
 def list_devices(
     org_id: str | None = Query(None),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
-    is_super = current_user is not None and current_user.role == "super_admin"
+    is_super = current_user.role == "super_admin"
     query = db.query(DeviceModel)
     if org_id:
         query = query.filter(DeviceModel.org_id == org_id)
@@ -50,14 +50,14 @@ def register_device(
     mac_address: Optional[str] = Body(None),
     org_id: Optional[str] = Body(None),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     resolved_org = effective_org_id(current_user, org_id)
     device_id = device_id.upper()
     existing = db.query(DeviceModel).filter(DeviceModel.device_id == device_id).first()
     if existing:
         existing.status = "online"
-        existing.last_seen = datetime.utcnow()
+        existing.last_seen = datetime.now(timezone.utc)
         if firmware_version is not None:
             existing.firmware_version = firmware_version
         if name is not None:
@@ -83,7 +83,7 @@ def register_device(
         mac_address=mac_address,
         org_id=resolved_org,
         status="online",
-        last_seen=datetime.utcnow(),
+        last_seen=datetime.now(timezone.utc),
     )
     db.add(device)
     db.commit()
@@ -96,9 +96,9 @@ def update_device(
     device_id: str,
     body: UpdateDeviceRequest,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
-    is_super = current_user is not None and current_user.role == "super_admin"
+    is_super = current_user.role == "super_admin"
 
     device = db.query(DeviceModel).filter(DeviceModel.id == device_id)
     if not is_super:
@@ -126,7 +126,7 @@ def update_device(
 def list_children(
     org_id: str | None = Query(None),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     resolved = org_id or effective_org_id(current_user) or None
     query = db.query(ChildModel)
@@ -151,7 +151,7 @@ def list_children(
 @router.get("/children/assignments")
 def list_child_assignments(
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
     children = db.query(ChildModel).filter(ChildModel.org_id == org_id).all()
@@ -184,10 +184,10 @@ def assign_child_device(
     child_id: str,
     body: dict = Body(...),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     device_id = body.get("device_id", "")
-    is_super = current_user is not None and current_user.role == "super_admin"
+    is_super = current_user.role == "super_admin"
     org_id = effective_org_id(current_user) if not is_super else None
 
     child = db.query(ChildModel).filter(ChildModel.id == child_id)
@@ -207,7 +207,7 @@ def assign_child_device(
         session = session.filter(SessionModel.org_id == org_id)
     session = session.order_by(SessionModel.start_time.desc()).first()
     if not session:
-        session = SessionModel(org_id=org_id, course_type="march", start_time=datetime.utcnow(), status="active")
+        session = SessionModel(org_id=org_id, course_type="march", start_time=datetime.now(timezone.utc), status="active")
         db.add(session)
         db.commit()
         db.refresh(session)
@@ -224,11 +224,11 @@ def assign_child_device(
     if existing:
         existing.device_id = device_id
         existing.confidence = 1.0
-        existing.assigned_at = datetime.utcnow()
+        existing.assigned_at = datetime.now(timezone.utc)
     elif existing_device:
         existing_device.child_id = child_id
         existing_device.confidence = 1.0
-        existing_device.assigned_at = datetime.utcnow()
+        existing_device.assigned_at = datetime.now(timezone.utc)
     else:
         a = DeviceAssignment(
             session_id=session.id,
@@ -236,7 +236,7 @@ def assign_child_device(
             child_id=child_id,
             confidence=1.0,
             method="manual",
-            assigned_at=datetime.utcnow(),
+            assigned_at=datetime.now(timezone.utc),
         )
         db.add(a)
     db.commit()
@@ -250,7 +250,7 @@ def register_child(
     notes: Optional[str] = Body(None),
     class_id: Optional[str] = Body(None),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
     child = ChildModel(
@@ -280,10 +280,10 @@ def register_child(
 def get_assignments(
     session_id: str,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     session = db.query(SessionModel).filter(SessionModel.id == session_id)
-    if not (current_user is not None and current_user.role == "super_admin"):
+    if not (current_user.role == "super_admin"):
         session = session.filter(SessionModel.org_id == effective_org_id(current_user))
     session = session.first()
     if not session:
@@ -317,9 +317,9 @@ def assign_device(
     child_id: str = Body(...),
     confidence: float = Body(1.0),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
-    is_super = current_user is not None and current_user.role == "super_admin"
+    is_super = current_user.role == "super_admin"
     org_id = effective_org_id(current_user) if not is_super else None
 
     filters = [SessionModel.id == session_id]
@@ -352,7 +352,7 @@ def assign_device(
     if existing:
         existing.child_id = child_id
         existing.confidence = confidence
-        existing.assigned_at = datetime.utcnow()
+        existing.assigned_at = datetime.now(timezone.utc)
         db.commit()
         db.refresh(existing)
         assignment = existing
@@ -389,9 +389,9 @@ def assign_device(
 def delete_assignment(
     assignment_id: str,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
-    is_super = current_user is not None and current_user.role == "super_admin"
+    is_super = current_user.role == "super_admin"
     assignment = db.query(DeviceAssignment).filter(DeviceAssignment.id == assignment_id).first()
     if not assignment:
         raise HTTPException(404, "Assignment not found")
@@ -415,7 +415,7 @@ def delete_assignment(
 def get_device_session_config(
     device_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     resolved_org = effective_org_id(current_user)
     dev = db.query(DeviceModel).filter(
@@ -430,7 +430,7 @@ def get_device_session_config(
 def _device_dict(d: DeviceModel) -> dict:
     # Compute online/offline status dynamically based on last_seen
     if d.last_seen and d.status == "online":
-        elapsed = (datetime.utcnow() - d.last_seen).total_seconds()
+        elapsed = (datetime.now(timezone.utc) - d.last_seen).total_seconds()
         if elapsed > 300:  # 5 minutes threshold
             effective_status = "offline"
         else:

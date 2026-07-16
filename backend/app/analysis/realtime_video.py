@@ -7,12 +7,10 @@ import time
 from collections import deque
 from typing import Any
 
-import cv2
 import numpy as np
 from ultralytics import YOLO
 
 from app.analysis.pose.estimator import MediaPipePoseRefiner, try_create_refiner
-from app.analysis.pose.common import crop_padded_xyxy
 
 logger = logging.getLogger(__name__)
 

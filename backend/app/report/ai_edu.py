@@ -1,8 +1,9 @@
 from __future__ import annotations
 
 import json
-import os
 from typing import Any
+
+from app.config import settings
 
 
 def _trim(obj: Any, max_chars: int) -> str:
@@ -22,7 +23,7 @@ def augment_edu_report(
     metrics: dict[str, Any],
 ) -> tuple[str, list[str], bool]:
     warnings: list[str] = []
-    key = os.environ.get("KINDER_AI_API_KEY") or os.environ.get("OPENAI_API_KEY")
+    key = settings.kinder_ai_api_key or settings.openai_api_key
     if not key or not str(key).strip():
         return base_markdown, warnings, False
 
@@ -32,8 +33,8 @@ def augment_edu_report(
         warnings.append("已設定 API Key 但未安裝 openai；略過 AI（pip install -r requirements-ai.txt）")
         return base_markdown, warnings, False
 
-    base_url = (os.environ.get("KINDER_AI_BASE_URL") or "https://api.openai.com/v1").rstrip("/")
-    model = os.environ.get("KINDER_AI_MODEL") or "gpt-4o-mini"
+    base_url = settings.kinder_ai_base_url.rstrip("/")
+    model = settings.kinder_ai_model
     ctx = (
         f"影片路徑: {video_path}\n片長秒: {duration_sec:.1f}\n\n"
         "macro:\n"

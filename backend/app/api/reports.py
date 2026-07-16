@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException
 from sqlalchemy.orm import Session
-from app.auth.deps import get_current_user
+from app.auth.deps import require_login
 from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.report import Report
@@ -14,7 +14,7 @@ router = APIRouter(prefix="/api/reports", tags=["reports"])
 def get_report(
     report_id: str,
     db: Session = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     report = db.query(Report).filter(Report.id == report_id).first()
     if not report:

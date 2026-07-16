@@ -5,7 +5,7 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc
 
-from app.auth.deps import get_current_user, require_role
+from app.auth.deps import require_login, require_role
 from app.db.base import get_db
 from app.models.session_template import SessionTemplate
 from app.models.user import User
@@ -44,7 +44,7 @@ def _serialize_template(t: SessionTemplate) -> dict:
 @router.get("")
 def list_templates(
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     templates = (
         db.query(SessionTemplate)
@@ -66,6 +66,7 @@ def create_template(
         duration_minutes=body.duration_minutes,
         stages=body.stages,
         metrics_config=body.metrics_config,
+        org_id=current_user.org_id,
     )
     db.add(tpl)
     db.commit()
@@ -77,7 +78,7 @@ def create_template(
 def get_template(
     template_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User | None = Depends(get_current_user),
+    current_user: User = Depends(require_login),
 ):
     tpl = db.query(SessionTemplate).filter(
         SessionTemplate.id == template_id,

@@ -2,15 +2,15 @@ import asyncio
 import json
 import logging
 import time
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Optional
 from uuid import uuid4
 
-logger = logging.getLogger(__name__)
-
+import cv2
+import numpy as np
 from fastapi import APIRouter, WebSocket, WebSocketDisconnect, Query
+
 from app.auth.jwt import decode_token
-from app.auth.org import effective_org_id
 from app.db.base import SessionLocal
 from app.models.session import Session as SessionModel
 from app.models.imu_data import IMUData
@@ -19,6 +19,7 @@ from app.models.analysis_result import AnalysisResult
 from app.analysis.realtime import RealtimeAnalyzer
 from app.analysis.realtime_video import RealtimeVideoAnalyzer
 
+logger = logging.getLogger(__name__)
 router = APIRouter(tags=["websocket"])
 
 _viewers: dict[str, set[WebSocket]] = {}
@@ -65,7 +66,7 @@ def _normalize_message(data: Any, device_id_default: str) -> Optional[dict[str, 
     if message_type == "imu" or "ax" in data:
         return {
             "type": "imu",
-            "ts": data.get("ts", datetime.utcnow().timestamp() * 1000),
+            "ts": data.get("ts", datetime.now(timezone.utc).timestamp() * 1000),
             "device_id": data.get("device_id", device_id_default),
             "ax": data.get("ax", 0.0),
             "ay": data.get("ay", 0.0),
@@ -95,7 +96,6 @@ async def imu_data_ws(
     _ensure_cleanup()
 
     client_host = websocket.client.host if websocket.client else "unknown"
-    print(f"WS CONNECTION: {client_host} session={session_id}", flush=True)
     logger.info("connection open from %s for session %s", client_host, session_id)
 
     if session_id not in _viewers:
@@ -155,8 +155,6 @@ async def imu_data_ws(
 
             # Handle binary camera frames
             if raw_msg.get("type") == "websocket.receive" and raw_msg.get("bytes"):
-                import cv2
-                import numpy as np
                 jpeg_bytes = raw_msg["bytes"]
                 if session_id in _video_analyzers:
                     try:
@@ -210,11 +208,11 @@ async def imu_data_ws(
                 continue
 
             if data["type"] == "imu":
-                ts = float(data.get("ts", datetime.utcnow().timestamp() * 1000))
+                ts = float(data.get("ts", datetime.now(timezone.utc).timestamp() * 1000))
                 frame = IMUData(
                     session_id=session_id,
                     device_id=str(data.get("device_id", "esp32-c3")),
-                    timestamp=datetime.utcfromtimestamp(ts / 1000.0),
+                    timestamp=datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc),
                     accel_x=float(data.get("ax", 0.0)),
                     accel_y=float(data.get("ay", 0.0)),
                     accel_z=float(data.get("az", 0.0)),
@@ -364,11 +362,8 @@ async def imu_data_ws(
                 "status": "ignored",
             })
     except WebSocketDisconnect:
-        print(f"WS DISCONNECT: {client_host}", flush=True)
         logger.info("WebSocket disconnected from %s", client_host)
     except Exception:
-        import traceback
-        traceback.print_exc()
         logger.exception("WebSocket error from %s", client_host)
         db.rollback()
     finally:

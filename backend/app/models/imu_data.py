@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, BigInteger, DateTime, Float, ForeignKey
 from app.db.base import Base
 
@@ -8,7 +8,7 @@ class IMUData(Base):
 
     id = Column(BigInteger, primary_key=True, autoincrement=True)
     session_id = Column(String(36), ForeignKey("sessions.id"), nullable=False)
-    timestamp = Column(DateTime, default=datetime.utcnow)
+    timestamp = Column(DateTime, default=lambda: datetime.now(timezone.utc))
     accel_x = Column(Float, nullable=False)
     accel_y = Column(Float, nullable=False)
     accel_z = Column(Float, nullable=False)

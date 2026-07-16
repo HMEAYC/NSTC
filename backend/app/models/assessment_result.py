@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Float, Integer, ForeignKey, UniqueConstraint
 from app.db.base import Base
 
@@ -18,7 +18,7 @@ class AssessmentResult(Base):
     sample_count = Column(Integer, nullable=True)
     window_seconds = Column(Float, nullable=True)
 
-    computed_at = Column(DateTime, default=datetime.utcnow)
+    computed_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
 
     __table_args__ = (
         UniqueConstraint("session_id", "device_id", "child_id",

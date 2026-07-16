@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from fastapi import APIRouter, Depends, HTTPException, status, Body
+from fastapi import APIRouter, Depends, HTTPException, status
 from pydantic import BaseModel, EmailStr
 from sqlalchemy.orm import Session
 
@@ -8,7 +8,7 @@ from app.db.base import get_db
 from app.models.user import User
 from app.models.organization import Organization
 from app.auth.jwt import create_access_token, verify_password, get_password_hash
-from app.auth.deps import get_current_user, require_login
+from app.auth.deps import require_login
 
 router = APIRouter(tags=["auth"])
 

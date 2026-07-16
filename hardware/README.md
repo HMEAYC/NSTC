@@ -60,32 +60,17 @@
 | VIN | 電池輸入 | 16500 電池 (3.0-4.2V) 經開關 |
 | 3V3 | 3.3V 輸出 | MPU6500 VCC + I2C pull-up |
 | EN | 重置 | RST 按鈕 → 10kΩ pull-up → 3.3V; 0.1µF → GND |
-| IO6 | GPIO6 | **SDA** → MPU6500 SDA + 4.7kΩ pull-up to 3.3V |
-| IO7 | GPIO7 | **SCL** → MPU6500 SCL + 4.7kΩ pull-up to 3.3V |
+| IO6 (Pin 6) | GPIO6 | **SDA** → MPU6500 SDA + 4.7kΩ pull-up to 3.3V |
+| IO7 (Pin 7) | GPIO7 | **SCL** → MPU6500 SCL + 4.7kΩ pull-up to 3.3V |
 | IO0 | ADC | 電池電壓分壓 (100kΩ/47kΩ) |
 | IO9 | BOOT | BOOT 按鈕 → GND (拉低進入下載模式) |
 | IO19 | USB D+ | USB-C D+ |
 | IO20 | USB D- | USB-C D- |
 | GND | 接地 | 共地 |
-| 4 | IO3 | (保留) |
-| 5 | IO4 | (保留) |
-| 6 | IO5 | (保留) |
-| 7 | IO6 | **SDA** → MPU6500 SDA + 4.7kΩ pull-up to 3.3V |
-| 8 | IO7 | **SCL** → MPU6500 SCL + 4.7kΩ pull-up to 3.3V |
-| 9 | IO8 | (保留) |
-| 10 | IO9 | BOOT 按鈕 → GND (拉低進入下載模式) |
-| 11 | IO10 | (保留) |
-| 12 | IO18 | (保留) |
-| 13 | IO19 | **USB D+** |
-| 14 | IO20 | **USB D-** |
-| 15 | IO21 | (保留) |
-| 16 | GND | GND |
-| 17~20 | NC | 未連接 |
-| 21~28 | NC/VDDA | 未連接 |
-| 29~33 | NC | 未連接 |
-| 34 | GND | GND |
-| 35 | 3V3 | 3.3V |
-| 36 | GND | GND |
+| IO8 | (保留) | — |
+| IO10 | (保留) | — |
+| IO18 | (保留) | — |
+| IO21 | (保留) | — |
 
 > 註：ESP32-C3-MINI-1 為 36-pin 封裝。若使用 ESP32-C3-WROOM-02 (38-pin)，腳位略有不同但 GPIO 編號一致。
 

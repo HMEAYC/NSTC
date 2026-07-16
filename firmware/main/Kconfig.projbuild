@@ -46,7 +46,7 @@ menu "HMEAYC Firmware Configuration"
 
     config HMEAYC_OTA_BASE_URL
         string "OTA Server Base URL"
-        default "http://192.168.0.129:8080/api/firmware"
+        default "http://192.168.0.129:8000/api/firmware"
         help
             Base URL for OTA version check and firmware download.
             Must NOT have a trailing slash.

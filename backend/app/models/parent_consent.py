@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Boolean, ForeignKey, Text
 from app.db.base import Base
 
@@ -15,4 +15,4 @@ class ParentConsent(Base):
     consented_at = Column(DateTime, nullable=True)
     revoked_at = Column(DateTime, nullable=True)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

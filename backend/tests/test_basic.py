@@ -63,7 +63,7 @@ def test_face_insight_basic():
 
 def test_face_insight_embedding():
     import numpy as np
-    from app.tracking.face_insight import embed_face_optional, embedding_dim, is_arcface_available
+    from app.tracking.face_insight import embed_face_optional, embedding_dim
     patch = np.random.randint(0, 255, (100, 100, 3), dtype=np.uint8)
     fe = embed_face_optional(patch)
     assert fe is not None
@@ -83,16 +83,16 @@ def test_gemini_client_fallback():
 
 
 def test_auth_no_key_set():
-    import os
+    from app.config import settings
     from app.auth import require_api_key
-    prev = os.environ.pop("HMEAYC_API_KEY", None)
+    prev = settings.hmeayc_api_key
+    settings.hmeayc_api_key = ""
     try:
         # When no API key is set, require_api_key should return None (pass through)
         result = require_api_key(x_api_key=None)
         assert result is None
     finally:
-        if prev is not None:
-            os.environ["HMEAYC_API_KEY"] = prev
+        settings.hmeayc_api_key = prev
 
 
 def _reload_auth():
@@ -104,27 +104,21 @@ def _reload_auth():
 
 
 def test_auth_with_key_valid():
-    import os
-    prev = os.environ.pop("HMEAYC_API_KEY", None)
-    os.environ["HMEAYC_API_KEY"] = "test-key-123"
-    _reload_auth()
+    from app.config import settings
+    prev = settings.hmeayc_api_key
+    settings.hmeayc_api_key = "test-key-123"
     try:
         from app.auth import require_api_key as rak
         result = rak(x_api_key="test-key-123")
         assert result is None
     finally:
-        if prev is not None:
-            os.environ["HMEAYC_API_KEY"] = prev
-        else:
-            os.environ.pop("HMEAYC_API_KEY", None)
-        _reload_auth()
+        settings.hmeayc_api_key = prev
 
 
 def test_auth_with_key_invalid():
-    import os
-    prev = os.environ.pop("HMEAYC_API_KEY", None)
-    os.environ["HMEAYC_API_KEY"] = "test-key-123"
-    _reload_auth()
+    from app.config import settings
+    prev = settings.hmeayc_api_key
+    settings.hmeayc_api_key = "test-key-123"
     try:
         from app.auth import require_api_key as rak
         from fastapi import HTTPException
@@ -134,11 +128,7 @@ def test_auth_with_key_invalid():
         except HTTPException as e:
             assert e.status_code == 401
     finally:
-        if prev is not None:
-            os.environ["HMEAYC_API_KEY"] = prev
-        else:
-            os.environ.pop("HMEAYC_API_KEY", None)
-        _reload_auth()
+        settings.hmeayc_api_key = prev
 
 
 def test_config_wifi_routes():

@@ -1,5 +1,5 @@
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 from sqlalchemy import Column, String, DateTime, Text, ForeignKey
 from app.db.base import Base
 
@@ -14,4 +14,4 @@ class Child(Base):
     name = Column(String(100), nullable=False)
     student_id = Column(String(50), unique=True, nullable=True)
     notes = Column(Text, nullable=True)
-    created_at = Column(DateTime, default=datetime.utcnow)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))
