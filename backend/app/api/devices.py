@@ -430,7 +430,8 @@ def get_device_session_config(
 def _device_dict(d: DeviceModel) -> dict:
     # Compute online/offline status dynamically based on last_seen
     if d.last_seen and d.status == "online":
-        elapsed = (datetime.now(timezone.utc) - d.last_seen).total_seconds()
+        last_seen = d.last_seen.replace(tzinfo=timezone.utc) if d.last_seen.tzinfo is None else d.last_seen
+        elapsed = (datetime.now(timezone.utc) - last_seen).total_seconds()
         if elapsed > 300:  # 5 minutes threshold
             effective_status = "offline"
         else:
