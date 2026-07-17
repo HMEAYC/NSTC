@@ -73,7 +73,7 @@
 
 | 元件 | 技術 | 用途 |
 |------|------|------|
-| ESP32-C3 腰帶 | ESP-IDF v5.4 + MPU6500 | 穿戴式 IMU 感測（加速度 ±16g / 陀螺儀 ±2000°/s @ 50Hz） |
+| IMU 腰帶 | ESP-IDF v5.4 + ESP32-C3 + MPU6500 | 穿戴式 IMU 感測（加速度 ±16g / 陀螺儀 ±2000°/s @ 50Hz） |
 | 後端伺服器 | FastAPI + PostgreSQL + SQLAlchemy | IMU 資料接收、分析運算、裝置管理、報告生成 |
 | 即時攝影機管線 | YOLOv8n-pose + MediaPipe Pose Landmarker + Centroid 追蹤 | 即時姿勢估計 + 6 項 CV 指標計算 |
 | 人臉辨識 | InsightFace ArcFace R100（512 維）+ HOG 降級（128 維） | 跨影片/跨課程人員辨識與身份指派 |
