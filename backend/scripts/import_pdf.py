@@ -6,7 +6,7 @@ Detects all 42 lesson plans organized by age group × music element,
 parses each one, and upserts into the template system.
 
 Usage:
-  python3 scripts/import_pdf.py path/to/book.pdf [--dry-run] [--one NAME] [--batch] [--list] [--api-url http://localhost:8080] [--token TOKEN]
+  python3 scripts/import_pdf.py path/to/book.pdf [--dry-run] [--one NAME] [--batch] [--list] [--api-url http://localhost:8000] [--token TOKEN]
 
 Options:
   --dry-run     Parse and preview only, don't save
@@ -649,7 +649,7 @@ def main():
     parser.add_argument("--one", help="Process only lessons matching this element name")
     parser.add_argument("--list", action="store_true", help="List detected lessons without parsing")
     parser.add_argument("--batch", action="store_true", help="Process all detected lesson plans")
-    parser.add_argument("--api-url", default="http://localhost:8080")
+    parser.add_argument("--api-url", default="http://localhost:8000")
     parser.add_argument("--token", help="JWT token (default: $HMEAYC_TOKEN)")
     parser.add_argument("--replace", action="store_true", help="Delete existing templates before importing")
     args = parser.parse_args()

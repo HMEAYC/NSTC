@@ -2,13 +2,28 @@
 # ===========================================================================
 # 驗證：多人系統裝置管理 — API 端點整合測試
 # 使用方式：bash field-testing/verify-device-management.sh
-# 前提：後端已在 http://localhost:8080 執行
+# 前提：後端已在 http://localhost:8000 執行
 # ===========================================================================
 
 set -uo pipefail
-API_BASE="http://localhost:8080"
+API_BASE="http://localhost:8000"
 PASS=0
 FAIL=0
+
+# 獲取 JWT Token 以便進行多租戶 RBAC 驗證
+TOKEN=$(command curl -s -X POST "$API_BASE/api/auth/login" \
+  -H "Content-Type: application/json" \
+  -d '{"email":"admin@test.com","password":"password123"}' \
+  | python3 -c "import sys,json; print(json.load(sys.stdin).get('access_token',''))" 2>/dev/null || echo "")
+
+curl() {
+  local args=("$@")
+  if [[ "${args[*]}" == *"/api/auth/login"* ]]; then
+    command curl "${args[@]}"
+  else
+    command curl -H "Authorization: Bearer $TOKEN" "${args[@]}"
+  fi
+}
 
 green() { echo "  ✅ $1"; ((PASS++)); }
 red() { echo "  ❌ $1"; ((FAIL++)); }
@@ -112,8 +127,8 @@ echo "3️⃣  Session 配對 (Assignment)"
 # -------------------------------------------------------------------
 
 echo "  3.1 建立課程"
-r=$(curl -s -X POST "$API_BASE/api/sessions" -H "Content-Type: application/json" -d '{"course_type":"march"}')
-SESSION_ID=$(echo "$r" | python3 -c "import sys,json; print(json.load(sys.stdin)['id'])")
+r=$(curl -s -X POST "$API_BASE/api/sessions" -H "Content-Type: application/json" -d '{"name":"測試課程","course_type":"march"}')
+SESSION_ID=$(echo "$r" | python3 -c "import sys,json; print(json.load(sys.stdin)['session']['id'])")
 if [ -n "$SESSION_ID" ]; then
   green "POST /api/sessions → session_id=$SESSION_ID"
 else

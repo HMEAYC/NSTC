@@ -23,7 +23,7 @@ menu "HMEAYC Firmware Configuration"
 
     config HMEAYC_WS_URI
         string "WebSocket URI"
-        default "ws://192.168.0.129:8080/ws/default"
+        default "ws://192.168.0.129:8000/ws/default"
         help
             Base WebSocket URI. The session path is dynamically updated at runtime
             via GET /api/config/session — the ESP32 will reconnect to the correct
@@ -39,7 +39,7 @@ menu "HMEAYC Firmware Configuration"
 
     config HMEAYC_API_BASE_URL
         string "API Server Base URL"
-        default "http://192.168.0.129:8080/api"
+        default "http://192.168.0.129:8000/api"
         help
             Base URL for REST API calls (device registration, WiFi config fetch).
             Must NOT have a trailing slash.

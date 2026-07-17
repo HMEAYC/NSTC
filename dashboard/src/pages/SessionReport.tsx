@@ -29,6 +29,12 @@ interface ReportData {
     score: number | null;
     comment: string | null;
   }[];
+  report: {
+    id: string | null;
+    status: string;
+    markdown: string | null;
+    generated_at: string | null;
+  } | null;
 }
 
 function formatNum(v: number | null | undefined, decimals = 2) {
@@ -41,6 +47,7 @@ export default function SessionReport() {
   const [data, setData] = useState<ReportData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [generating, setGenerating] = useState(false);
 
   useEffect(() => {
     if (!id) return;
@@ -50,6 +57,41 @@ export default function SessionReport() {
       .catch((e) => setError(e instanceof Error ? e.message : "載入失敗"))
       .finally(() => setLoading(false));
   }, [id]);
+
+  // Poll for report completion if status is pending
+  useEffect(() => {
+    if (!id || !data?.report || data.report.status !== "pending") return;
+    const timer = setInterval(() => {
+      api.getSessionReport(id)
+        .then(setData)
+        .catch((err) => console.error("Polling error:", err));
+    }, 5000);
+    return () => clearInterval(timer);
+  }, [id, data?.report?.status]);
+
+  const handleRegenerate = async () => {
+    if (!id) return;
+    setGenerating(true);
+    try {
+      await api.generateSessionReport(id);
+      setData((prev) => {
+        if (!prev) return null;
+        return {
+          ...prev,
+          report: {
+            id: prev.report?.id || null,
+            status: "pending",
+            markdown: null,
+            generated_at: null,
+          },
+        };
+      });
+    } catch (e) {
+      alert("生成失敗：" + (e instanceof Error ? e.message : String(e)));
+    } finally {
+      setGenerating(false);
+    }
+  };
 
   if (loading) return <div className="p-6 max-w-4xl mx-auto"><LoadingSpinner text="載入報告…" /></div>;
 
@@ -88,6 +130,47 @@ export default function SessionReport() {
           </div>
         </div>
       </div>
+
+      {/* AI development report section */}
+      {data.report && data.report.status === "done" && data.report.markdown && (
+        <div className="bg-white rounded-xl shadow-sm p-6 space-y-4">
+          <div className="flex justify-between items-center border-b pb-3">
+            <h2 className="text-lg font-bold text-gray-800 flex items-center gap-2">
+              <span>🤖</span> AI 發展評估與教學建議
+            </h2>
+            <button
+              onClick={handleRegenerate}
+              disabled={generating}
+              className="text-xs bg-blue-50 text-blue-600 hover:bg-blue-100 px-3 py-1.5 rounded-lg font-medium disabled:opacity-50 transition-colors"
+            >
+              {generating ? "重新生成中..." : "重新生成報告"}
+            </button>
+          </div>
+          <div className="text-sm text-gray-700 leading-relaxed whitespace-pre-wrap font-sans bg-gray-50 p-5 rounded-lg border border-gray-100">
+            {data.report.markdown}
+          </div>
+        </div>
+      )}
+
+      {data.report && data.report.status === "pending" && (
+        <div className="bg-white rounded-xl shadow-sm p-6 text-center py-10">
+          <LoadingSpinner text="AI 發展評估報告正在生成中，請稍候..." />
+        </div>
+      )}
+
+      {(!data.report || data.report.status === "failed") && (
+        <div className="bg-white rounded-xl shadow-sm p-6 text-center py-8 space-y-4">
+          <h2 className="text-lg font-bold text-gray-800">🤖 AI 發展評估報告</h2>
+          <p className="text-sm text-gray-500">此課程尚未產生 AI 發展評估與教學建議報告。</p>
+          <button
+            onClick={handleRegenerate}
+            disabled={generating}
+            className="bg-blue-600 hover:bg-blue-700 text-white text-sm px-4 py-2 rounded-lg font-medium disabled:opacity-50 transition-colors"
+          >
+            {generating ? "正在生成中..." : "開始生成 AI 報告"}
+          </button>
+        </div>
+      )}
 
       {/* Assessment metrics */}
       <div className="bg-white rounded-xl shadow-sm p-6">

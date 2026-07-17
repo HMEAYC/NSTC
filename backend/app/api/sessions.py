@@ -353,6 +353,7 @@ def start_session(
 @router.post("/{session_id}/end")
 def end_session(
     session_id: str,
+    background_tasks: BackgroundTasks,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
@@ -362,6 +363,14 @@ def end_session(
     session.status = "completed"
     session.end_time = datetime.now(timezone.utc)
     db.commit()
+
+    # Trigger background report generation
+    background_tasks.add_task(
+        generate_and_save_session_report,
+        session_id,
+        current_user.id
+    )
+
     return {"session": _serialize(session)}
 
 
@@ -506,6 +515,7 @@ def upsert_evaluation(
 @router.get("/{session_id}/report")
 def get_session_report(
     session_id: str,
+    background_tasks: BackgroundTasks,
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_login),
 ):
@@ -546,6 +556,28 @@ def get_session_report(
         child = db.query(Child).filter(Child.id == ev.child_id).first()
         evaluations_data.append(_serialize_evaluation(ev, child.name if child else None))
 
+    report_record = db.query(Report).filter(Report.session_id == session_id).order_by(Report.generated_at.desc()).first()
+    report_data = None
+    if report_record:
+        report_data = {
+            "id": report_record.id,
+            "status": report_record.status,
+            "markdown": report_record.markdown,
+            "generated_at": report_record.generated_at.isoformat() if report_record.generated_at else None
+        }
+    elif session.status == "completed" and background_tasks:
+        background_tasks.add_task(
+            generate_and_save_session_report,
+            session_id,
+            current_user.id
+        )
+        report_data = {
+            "id": None,
+            "status": "pending",
+            "markdown": None,
+            "generated_at": None
+        }
+
     return {
         "session": {
             "id": session.id,
@@ -567,6 +599,7 @@ def get_session_report(
             "avg_stability_index": round(avg_stability, 4) if avg_stability else None,
         },
         "evaluations": evaluations_data,
+        "report": report_data,
     }
 
 
@@ -702,3 +735,88 @@ def set_session_music_url(
         "music_url": session.music_url,
         "music_element": session.music_element,
     }
+
+
+# ─── AI Report Generation ─────────────────────────────────────────
+
+def generate_and_save_session_report(session_id: str, user_id: str):
+    from app.db.base import SessionLocal
+    from app.models.report import Report
+    from app.models.session import Session as SessionModel
+    from app.models.analysis_result import AnalysisResult
+    from app.gemini.client import GeminiClient
+    from app.config import settings
+    from uuid import uuid4
+
+    db = SessionLocal()
+    try:
+        session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
+        if not session:
+            return
+
+        existing = db.query(Report).filter(Report.session_id == session_id).first()
+        if not existing:
+            existing = Report(
+                id=str(uuid4()),
+                session_id=session_id,
+                status="pending",
+                generated_by=user_id
+            )
+            db.add(existing)
+            db.commit()
+            db.refresh(existing)
+        else:
+            existing.status = "pending"
+            existing.markdown = None
+            db.commit()
+
+        results = db.query(AnalysisResult).filter(AnalysisResult.session_id == session_id).all()
+
+        rhythm_sync_rates = [r.rhythm_sync_rate for r in results if r.rhythm_sync_rate is not None]
+        freeze_times = [r.freeze_reaction_time for r in results if r.freeze_reaction_time is not None]
+        freeze_stabilities = [r.freeze_stability_score for r in results if r.freeze_stability_score is not None]
+
+        avg_rhythm = sum(rhythm_sync_rates) / len(rhythm_sync_rates) if rhythm_sync_rates else None
+        avg_freeze_time = sum(freeze_times) / len(freeze_times) if freeze_times else None
+        avg_freeze_stability = sum(freeze_stabilities) / len(freeze_stabilities) if freeze_stabilities else None
+
+        analysis_data = {
+            "course_type": session.course_type or "general",
+            "rhythm_sync_rate": avg_rhythm,
+            "freeze_reaction_time": avg_freeze_time,
+            "freeze_stability_score": avg_freeze_stability
+        }
+
+        client = GeminiClient(api_key=settings.gemini_api_key)
+        report_text = client.generate_report(analysis_data)
+
+        existing.markdown = report_text
+        existing.status = "done"
+        db.commit()
+    except Exception:
+        db.rollback()
+        existing = db.query(Report).filter(Report.session_id == session_id).first()
+        if existing:
+            existing.status = "failed"
+            db.commit()
+    finally:
+        db.close()
+
+
+@router.post("/{session_id}/report/generate")
+def regenerate_session_report(
+    session_id: str,
+    background_tasks: BackgroundTasks,
+    db: DBSession = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+):
+    session = _session_query(db, session_id, current_user)
+    if not session:
+        raise HTTPException(404, "Session not found")
+
+    background_tasks.add_task(
+        generate_and_save_session_report,
+        session_id,
+        current_user.id
+    )
+    return {"status": "generation_triggered"}

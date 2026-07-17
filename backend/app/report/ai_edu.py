@@ -23,6 +23,36 @@ def augment_edu_report(
     metrics: dict[str, Any],
 ) -> tuple[str, list[str], bool]:
     warnings: list[str] = []
+
+    ctx = (
+        f"影片路徑: {video_path}\n片長秒: {duration_sec:.1f}\n\n"
+        "macro:\n"
+        + _trim(macro, 12000)
+        + "\n\nmicro:\n"
+        + _trim(micro, 12000)
+        + "\n\nmetrics:\n"
+        + _trim(metrics, 8000)
+    )
+
+    # 1. 優先採用 Gemini
+    if settings.gemini_api_key and str(settings.gemini_api_key).strip():
+        from app.gemini.client import GeminiClient
+        try:
+            client = GeminiClient(api_key=settings.gemini_api_key.strip())
+            choice = client.generate_educational_advice(ctx)
+            if choice and str(choice).strip():
+                block = (
+                    "\n\n---\n\n## 五、AI 教學補充建議\n\n"
+                    + str(choice).strip()
+                    + "\n\n*本段由 AI 依量化摘要生成，僅供參考。*\n"
+                )
+                return base_markdown.rstrip() + block, warnings, True
+            else:
+                warnings.append("Gemini 回傳空白，略過附加段落")
+        except Exception as e:
+            warnings.append(f"Gemini 呼叫失敗，將嘗試 OpenAI 備援：{e!s}")
+
+    # 2. 備援使用 OpenAI / GPT
     key = settings.kinder_ai_api_key or settings.openai_api_key
     if not key or not str(key).strip():
         return base_markdown, warnings, False
@@ -35,15 +65,6 @@ def augment_edu_report(
 
     base_url = settings.kinder_ai_base_url.rstrip("/")
     model = settings.kinder_ai_model
-    ctx = (
-        f"影片路徑: {video_path}\n片長秒: {duration_sec:.1f}\n\n"
-        "macro:\n"
-        + _trim(macro, 12000)
-        + "\n\nmicro:\n"
-        + _trim(micro, 12000)
-        + "\n\nmetrics:\n"
-        + _trim(metrics, 8000)
-    )
     client = OpenAI(api_key=key.strip(), base_url=base_url)
     try:
         resp = client.chat.completions.create(

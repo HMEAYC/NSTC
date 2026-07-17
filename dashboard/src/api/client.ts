@@ -464,7 +464,11 @@ export const api = {
       summary: { imu_count: number; device_count: number };
       assessments: { avg_activity_level: number | null; avg_smoothness: number | null; avg_stability_index: number | null };
       evaluations: { child_id: string; child_name: string; score: number | null; comment: string | null }[];
+      report: { id: string | null; status: string; markdown: string | null; generated_at: string | null } | null;
     }>(`/api/sessions/${sessionId}/report`),
+
+  generateSessionReport: (sessionId: string) =>
+    fetchJSON<{ status: string }>(`/api/sessions/${sessionId}/report/generate`, { method: "POST" }),
 
   // Admin Orgs
   listOrgs: () =>

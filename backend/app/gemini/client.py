@@ -10,7 +10,7 @@ class GeminiClient:
     def __init__(self, api_key: str):
         self.client = genai.Client(api_key=api_key) if api_key else None
 
-    async def generate_report(self, analysis_data: dict) -> str:
+    def generate_report(self, analysis_data: dict) -> str:
         if not self.client:
             return self._fallback_report(analysis_data)
 
@@ -29,6 +29,25 @@ class GeminiClient:
             return response.text if response and response.text else self._fallback_report(analysis_data)
         except Exception:
             return self._fallback_report(analysis_data)
+
+    def generate_educational_advice(self, ctx: str) -> str:
+        if not self.client:
+            return ""
+        try:
+            prompt = (
+                "你是幼教現場顧問，依據下列機讀量化結果，用繁體中文撰寫簡短教學建議。\n"
+                "避免醫療診斷或標籤化；語氣專業、具體、可執行。\n"
+                "輸出為 Markdown，勿重複報告前文；以條列為主，總長約 400–900 字。\n\n"
+                "以下為本支影片的分析摘要 JSON，請產出可插入教育報告的補充段落：\n\n"
+                f"{ctx}"
+            )
+            response = self.client.models.generate_content(
+                model="gemini-2.0-flash",
+                contents=prompt,
+            )
+            return response.text if response and response.text else ""
+        except Exception:
+            return ""
 
     def _fallback_report(self, data: dict) -> str:
         return f"""# 幼兒發展評估報告
