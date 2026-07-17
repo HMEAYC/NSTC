@@ -997,7 +997,7 @@ erDiagram
         float battery_level
         enum status
         datetime last_seen
-        string active_session_id FK  ← 目前指派的 session（動態更新）
+        string active_session_id FK
     }
 
     Child {
@@ -1022,8 +1022,12 @@ erDiagram
         bigint id PK
         string session_id FK
         datetime timestamp
-        float accel_x, accel_y, accel_z
-        float gyro_x, gyro_y, gyro_z
+        float accel_x
+        float accel_y
+        float accel_z
+        float gyro_x
+        float gyro_y
+        float gyro_z
         string device_id
     }
 
