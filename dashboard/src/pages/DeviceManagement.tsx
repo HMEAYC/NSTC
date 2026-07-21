@@ -1,6 +1,7 @@
 import { useEffect, useState } from "react";
 import { api, type DeviceInfo } from "../api/client";
 import { useAuth } from "../auth/context";
+import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const statusColor: Record<string, string> = {
@@ -29,18 +30,17 @@ export default function DeviceManagement() {
   const [saving, setSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
   const isSuper = user?.role === "super_admin";
+  const myOrgId = user?.org_id || "";
+  const effectiveOrgId = isSuper ? (getActiveOrgId() || myOrgId) : myOrgId;
 
-  // WiFi fields
-  const [wifiSsid, setWifiSsid] = useState("");
-  const [wifiPassword, setWifiPassword] = useState("");
-  const [wifiSaving, setWifiSaving] = useState(false);
-  const [wifiMsg, setWifiMsg] = useState<string | null>(null);
-  const [showPassword, setShowPassword] = useState(false);
+  const [scanning, setScanning] = useState(false);
+  const [scanResults, setScanResults] = useState<{ mac: string; ip: string }[] | null>(null);
+  const [scanError, setScanError] = useState<string | null>(null);
 
   const fetchData = () => {
     setLoading(true);
     setError(null);
-    api.listDevices()
+    api.listDevices(effectiveOrgId || undefined)
       .then((d) => {
         setDevices(d.devices);
         setLoading(false);
@@ -51,29 +51,41 @@ export default function DeviceManagement() {
       });
   };
 
-  useEffect(() => { fetchData(); }, []);
+  useEffect(() => { fetchData(); }, [effectiveOrgId]);
+
+  const handleScan = async () => {
+    setScanning(true);
+    setScanError(null);
+    setScanResults(null);
+    try {
+      const data = await api.scanDevices();
+      setScanResults(data.devices);
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "掃描失敗");
+    } finally {
+      setScanning(false);
+    }
+  };
+
+  const handleRegisterDevice = async (mac: string) => {
+    try {
+      await api.registerDevice(mac, mac);
+      setScanResults((prev) => prev ? prev.filter((d) => d.mac !== mac) : null);
+      fetchData();
+    } catch (err) {
+      setScanError(err instanceof Error ? err.message : "註冊失敗");
+    }
+  };
 
   const openModal = (d: DeviceInfo) => {
     setEditingDevice(d);
     setEditName(d.name);
     setEditOrgId(d.org_id);
     setEditError(null);
-    setWifiMsg(null);
-    setShowPassword(false);
-    // Load WiFi config for this device
-    api.getDeviceWifiConfig(d.id)
-      .then((cfg) => {
-        setWifiSsid(cfg.ssid || "");
-        setWifiPassword(cfg.password || "");
-      })
-      .catch(() => {
-        setWifiSsid("");
-        setWifiPassword("");
-      });
     if (isSuper) {
       api.listOrgs()
         .then((data) => setOrgs(data.orgs || []))
-        .catch(() => {});
+        .catch((err) => console.error("Failed to list orgs:", err));
     }
   };
 
@@ -96,25 +108,18 @@ export default function DeviceManagement() {
     }
   };
 
-  const handleWifiSave = async () => {
-    if (!editingDevice) return;
-    if (!wifiSsid.trim()) {
-      setWifiMsg("WiFi SSID 不可為空");
-      return;
-    }
-    setWifiSaving(true);
-    setWifiMsg(null);
-    try {
-      await api.setDeviceWifiConfig(editingDevice.id, wifiSsid.trim(), wifiPassword);
-      setWifiMsg("WiFi 設定已儲存");
-    } catch (err) {
-      setWifiMsg(err instanceof Error ? err.message : "儲存失敗");
-    } finally {
-      setWifiSaving(false);
-    }
-  };
-
   const onlineCount = devices.filter((d) => d.status === "online").length;
+
+  useEffect(() => {
+    if (!editingDevice) return;
+    const handler = (e: KeyboardEvent) => {
+      if (e.key === "Escape") {
+        setEditingDevice(null);
+      }
+    };
+    document.addEventListener("keydown", handler);
+    return () => document.removeEventListener("keydown", handler);
+  }, [editingDevice]);
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">
@@ -123,7 +128,18 @@ export default function DeviceManagement() {
           <h1 className="text-2xl font-bold text-gray-800">📡 裝置管理</h1>
           <p className="text-sm text-gray-500">ESP32 穿戴式裝置註冊與狀態</p>
         </div>
-        <button onClick={fetchData} className="text-xs text-blue-600 hover:underline">重新整理</button>
+        <div className="flex items-center gap-3">
+          {isSuper && (
+            <button
+              onClick={handleScan}
+              disabled={scanning}
+              className="text-xs px-3 py-1.5 rounded-lg bg-blue-600 text-white hover:bg-blue-700 disabled:opacity-50"
+            >
+              {scanning ? "掃描中…" : "掃描網路"}
+            </button>
+          )}
+          <button onClick={() => fetchData()} className="text-xs text-blue-600 hover:underline">重新整理</button>
+        </div>
       </div>
 
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
@@ -228,7 +244,6 @@ export default function DeviceManagement() {
         </div>
       )}
 
-      {/* Edit Modal */}
       {editingDevice && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
           <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-md mx-4 max-h-[85vh] overflow-y-auto">
@@ -244,7 +259,19 @@ export default function DeviceManagement() {
                 </div>
               )}
 
-              {/* Basic info */}
+              {editingDevice.status === "offline" && (
+                <div className="bg-blue-50 border border-blue-200 rounded-lg p-3 text-xs text-blue-700 space-y-1.5">
+                  <div className="font-semibold text-sm">💡 如何讓裝置重新連線</div>
+                  <ol className="list-decimal list-inside space-y-0.5 text-blue-600">
+                    <li>確認裝置已接上電源</li>
+                    <li>用手機搜尋 WiFi <span className="font-mono font-semibold">HMEAYC-Setup</span></li>
+                    <li>連線後會自動彈出設定頁面</li>
+                    <li>輸入目標 WiFi 名稱與密碼</li>
+                    <li>裝置儲存後會自動重啟並連線</li>
+                  </ol>
+                </div>
+              )}
+
               <div className="space-y-3">
                 <div>
                   <label className="text-xs text-gray-500 block mb-1">裝置名稱</label>
@@ -276,7 +303,7 @@ export default function DeviceManagement() {
                     <p className="text-sm">{editingDevice.status === "online" ? "連線中" : "離線"}</p>
                   </div>
                   <div>
-                    <label className="text-xs text-gray-500 block mb-1">目前連接 WiFi</label>
+                    <label className="text-xs text-gray-500 block mb-1">WiFi SSID</label>
                     <p className="text-sm">{editingDevice.wifi_ssid || "—"}</p>
                   </div>
                   <div>
@@ -293,50 +320,6 @@ export default function DeviceManagement() {
                   </div>
                 </div>
               </div>
-
-              {/* WiFi Config section */}
-              <div className="border-t pt-4">
-                <h4 className="text-xs font-semibold text-gray-600 mb-3">📶 WiFi 設定</h4>
-                <p className="text-[10px] text-gray-400 mb-3">設定此裝置的 WiFi 連線。儲存後裝置將在下次輪詢時套用新設定。</p>
-                <div className="space-y-3">
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">WiFi SSID</label>
-                    <input value={wifiSsid} onChange={(e) => setWifiSsid(e.target.value)}
-                      placeholder="請輸入 WiFi 名稱"
-                      className="w-full border rounded-lg px-3 py-2 text-sm" />
-                  </div>
-                  <div>
-                    <label className="text-xs text-gray-500 block mb-1">WiFi 密碼</label>
-                    <div className="relative">
-                      <input
-                        type={showPassword ? "text" : "password"}
-                        value={wifiPassword}
-                        onChange={(e) => setWifiPassword(e.target.value)}
-                        placeholder="請輸入 WiFi 密碼"
-                        className="w-full border rounded-lg px-3 py-2 text-sm pr-16"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => setShowPassword(!showPassword)}
-                        className="absolute right-2 top-1/2 -translate-y-1/2 text-[10px] text-gray-400 hover:text-gray-600"
-                      >
-                        {showPassword ? "隱藏" : "顯示"}
-                      </button>
-                    </div>
-                  </div>
-                  <div className="flex items-center gap-2">
-                    <button onClick={handleWifiSave} disabled={wifiSaving || !wifiSsid.trim()}
-                      className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 disabled:opacity-50">
-                      {wifiSaving ? "儲存中…" : "儲存 WiFi"}
-                    </button>
-                    {wifiMsg && (
-                      <span className={`text-xs ${wifiMsg.includes("失敗") || wifiMsg.includes("不可") ? "text-red-500" : "text-green-600"}`}>
-                        {wifiMsg}
-                      </span>
-                    )}
-                  </div>
-                </div>
-              </div>
             </div>
 
             <div className="flex gap-2 justify-end mt-6">
@@ -350,6 +333,52 @@ export default function DeviceManagement() {
           </div>
         </div>
       )}
+
+      {scanResults !== null && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/30">
+          <div className="bg-white rounded-xl shadow-lg p-6 w-full max-w-lg mx-4 max-h-[85vh] overflow-y-auto">
+            <div className="flex items-center justify-between mb-4">
+              <h3 className="text-sm font-semibold text-gray-800">📡 網路掃描結果</h3>
+              <button onClick={() => setScanResults(null)} className="text-gray-400 hover:text-gray-600 text-lg">&times;</button>
+            </div>
+
+            {scanError && (
+              <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-3 text-xs mb-3">
+                {scanError}
+              </div>
+            )}
+
+            {scanResults.length === 0 ? (
+              <p className="text-sm text-gray-400 text-center py-4">未發現未註冊的 ESP32 裝置</p>
+            ) : (
+              <div className="space-y-2">
+                {scanResults.map((d) => (
+                  <div key={d.mac} className="flex items-center justify-between bg-gray-50 rounded-lg p-3">
+                    <div className="min-w-0">
+                      <div className="text-sm font-mono text-gray-800">{d.mac}</div>
+                      <div className="text-xs text-gray-400">{d.ip}</div>
+                    </div>
+                    <button
+                      onClick={() => handleRegisterDevice(d.mac)}
+                      className="text-xs px-3 py-1.5 rounded-lg bg-green-600 text-white hover:bg-green-700 flex-shrink-0"
+                    >
+                      註冊
+                    </button>
+                  </div>
+                ))}
+              </div>
+            )}
+
+            <div className="flex justify-end mt-4">
+              <button onClick={() => setScanResults(null)}
+                className="text-xs px-3 py-1.5 rounded-lg text-gray-500 hover:bg-gray-100">
+                關閉
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
     </div>
   );
 }

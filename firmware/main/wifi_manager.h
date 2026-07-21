@@ -13,6 +13,7 @@ const char *wifi_get_ssid(void);
 const char *wifi_get_ip(void);
 int wifi_get_rssi(void);
 const char *wifi_get_mac(void);
+void wifi_periodic_retry(void);
 
 #ifdef __cplusplus
 }

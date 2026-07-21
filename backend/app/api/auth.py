@@ -33,6 +33,7 @@ class UserResponse(BaseModel):
     display_name: str | None
     role: str
     org_id: str | None
+    org_name: str | None = None
     is_active: bool
 
     model_config = {"from_attributes": True}
@@ -56,11 +57,11 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid email or password")
     if not user.is_active:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Account is disabled")
-    token = create_access_token({"sub": user.id, "org_id": user.org_id or "", "role": user.role})
+    token = create_access_token({"sub": user.id, "org_id": user.org_id, "role": user.role})
     return LoginResponse(
         access_token=token,
         user_id=user.id,
-        org_id=user.org_id or "",
+        org_id=user.org_id,
         role=user.role,
         display_name=user.display_name or "",
     )
@@ -68,19 +69,32 @@ def login(req: LoginRequest, db: Session = Depends(get_db)):
 
 @router.post("/api/auth/refresh", response_model=LoginResponse)
 def refresh_token(current_user: User = Depends(require_login)):
-    token = create_access_token({"sub": current_user.id, "org_id": current_user.org_id or "", "role": current_user.role})
+    token = create_access_token({"sub": current_user.id, "org_id": current_user.org_id, "role": current_user.role})
     return LoginResponse(
         access_token=token,
         user_id=current_user.id,
-        org_id=current_user.org_id or "",
+        org_id=current_user.org_id,
         role=current_user.role,
         display_name=current_user.display_name or "",
     )
 
 
 @router.get("/api/auth/me", response_model=UserResponse)
-def me(current_user: User = Depends(require_login)):
-    return current_user
+def me(current_user: User = Depends(require_login), db: Session = Depends(get_db)):
+    org_name = None
+    if current_user.org_id:
+        org = db.query(Organization).filter(Organization.id == current_user.org_id).first()
+        if org:
+            org_name = org.name
+    return UserResponse(
+        id=current_user.id,
+        email=current_user.email,
+        display_name=current_user.display_name,
+        role=current_user.role,
+        org_id=current_user.org_id,
+        org_name=org_name,
+        is_active=current_user.is_active,
+    )
 
 
 @router.post("/api/auth/register", response_model=UserResponse)
@@ -124,11 +138,11 @@ def complete_invite(req: CompleteInviteRequest, db: Session = Depends(get_db)):
     user.invite_token = None
     db.commit()
     db.refresh(user)
-    token = create_access_token({"sub": user.id, "org_id": user.org_id or "", "role": user.role})
+    token = create_access_token({"sub": user.id, "org_id": user.org_id, "role": user.role})
     return LoginResponse(
         access_token=token,
         user_id=user.id,
-        org_id=user.org_id or "",
+        org_id=user.org_id,
         role=user.role,
         display_name=user.display_name or "",
     )

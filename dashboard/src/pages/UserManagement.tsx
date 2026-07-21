@@ -13,6 +13,7 @@ interface ManagedUser {
   org_id: string;
   is_active: boolean;
   invite_token: string | null;
+  children?: string[];
 }
 
 const roleLabel: Record<string, string> = {
@@ -51,7 +52,7 @@ export default function UserManagement() {
       const targetOrg = orgId || effectiveOrgId;
       const data = await api.listOrgUsers(targetOrg);
       setUsers((data.users || []) as ManagedUser[]);
-    } catch { /* ignore */ }
+    } catch (err) { console.error("Failed to load users:", err); }
     setLoading(false);
   };
 
@@ -99,7 +100,16 @@ export default function UserManagement() {
     try {
       await api.updateUser(uid, { is_active: !current });
       fetchUsers(effectiveOrgId);
-    } catch { /* ignore */ }
+    } catch (err) { console.error("Failed to toggle user active state:", err); }
+  };
+
+  const handleResendInvite = async (uid: string, email: string) => {
+    try {
+      await api.resendInvite(uid);
+      alert(`邀請已重新發送至 ${email}`);
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "發送失敗");
+    }
   };
 
   const openEdit = (u: ManagedUser) => {
@@ -161,11 +171,26 @@ export default function UserManagement() {
                 ))}
               </select>
             )}
+            {!isSuper && (
+              <select value={editRole} onChange={(e) => setEditRole(e.target.value)}
+                className="w-full border rounded-lg px-3 py-2 text-sm">
+                <option value="teacher">教師</option>
+                <option value="org_admin">機構管理員</option>
+                <option value="parent">家長</option>
+              </select>
+            )}
             <div className="flex gap-2 pt-1">
-              <button onClick={() => toggleActive(editUser.id, editUser.is_active)}
-                className={`flex-1 text-sm py-2 rounded-lg ${editUser.is_active ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
-                {editUser.is_active ? "停用帳號" : "啟用帳號"}
-              </button>
+              {editUser.invite_token && !editUser.is_active ? (
+                <button onClick={() => handleResendInvite(editUser.id, editUser.email)}
+                  className="flex-1 text-sm py-2 rounded-lg bg-amber-50 text-amber-600">
+                  重送邀請
+                </button>
+              ) : (
+                <button onClick={() => toggleActive(editUser.id, editUser.is_active)}
+                  className={`flex-1 text-sm py-2 rounded-lg ${editUser.is_active ? "bg-red-50 text-red-600" : "bg-green-50 text-green-600"}`}>
+                  {editUser.is_active ? "停用帳號" : "啟用帳號"}
+                </button>
+              )}
               <button onClick={saveUser} disabled={editSaving}
                 className="flex-1 bg-blue-600 text-white py-2 rounded-lg text-sm disabled:opacity-50">
                 {editSaving ? "儲存中…" : "儲存"}
@@ -179,7 +204,7 @@ export default function UserManagement() {
       {loading ? <LoadingSpinner text="載入中…" /> : (
         <div className="space-y-2">
           {users.filter((u) => u.role !== "parent").map((u) => {
-            const pending = u.invite_token != null;
+            const pending = u.invite_token != null && !u.is_active;
             return (
               <div key={u.id} onClick={() => openEdit(u)}
                 className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
@@ -187,11 +212,11 @@ export default function UserManagement() {
                   <div className="font-semibold text-gray-800">{u.display_name || u.email}</div>
                   <div className="text-xs text-gray-400">
                     {u.email} · {roleLabel[u.role] || u.role}
-                    {pending && <span className="ml-2 text-amber-600 font-medium">待啟用</span>}
+                    {pending && <span className="ml-2 text-amber-600 font-medium">邀請中</span>}
                   </div>
                 </div>
-                <span className={`text-xs px-2 py-0.5 rounded-full ${u.is_active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
-                  {u.is_active ? "啟用" : "停用"}
+                <span className={`text-xs px-2 py-0.5 rounded-full ${pending ? "bg-amber-50 text-amber-600" : u.is_active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                  {pending ? "邀請中" : u.is_active ? "啟用" : "停用"}
                 </span>
               </div>
             );
@@ -200,6 +225,39 @@ export default function UserManagement() {
             <p className="text-center text-gray-400 text-sm py-8">尚無教師帳號</p>
           )}
         </div>
+      )}
+
+      {/* ── Parents ── */}
+      {users.filter((u) => u.role === "parent").length > 0 && (
+        <>
+          <h3 className="text-sm font-semibold text-gray-500 mt-4">家長帳號</h3>
+          {loading ? null : (
+            <div className="space-y-2">
+              {users.filter((u) => u.role === "parent").map((u) => {
+                const paired = u.children && u.children.length > 0;
+                const pending = u.invite_token != null && !u.is_active;
+                return (
+                  <div key={u.id} onClick={() => openEdit(u)}
+                    className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between cursor-pointer hover:shadow-md transition-shadow">
+                    <div>
+                      <div className="font-semibold text-gray-800">{u.display_name || u.email}</div>
+                      <div className="text-xs text-gray-400">
+                        {u.email}
+                        {paired
+                          ? <span className="ml-2 text-blue-600">已配對：{u.children!.join("、")}</span>
+                          : <span className="ml-2 text-gray-400">未配對</span>
+                        }
+                      </div>
+                    </div>
+                    <span className={`text-xs px-2 py-0.5 rounded-full ${pending ? "bg-amber-50 text-amber-600" : u.is_active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
+                      {pending ? "邀請中" : u.is_active ? "啟用" : "停用"}
+                    </span>
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
       )}
     </div>
   );

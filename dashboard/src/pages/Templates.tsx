@@ -1,5 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type SessionTemplateInfo } from "../api/client";
+import { useAuth } from "../auth/context";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 interface Activity {
@@ -38,15 +39,9 @@ const ageGroups = [
   "3-6 歲幼兒",
 ];
 
-const stageTypes = [
-  { value: "warmup", label: "暖身" },
-  { value: "drill", label: "訓練" },
-  { value: "game", label: "遊戲" },
-  { value: "cooldown", label: "緩和" },
-  { value: "other", label: "其他" },
-];
-
 export default function Templates() {
+  const { user } = useAuth();
+  const isSuper = user?.role === "super_admin";
   const [templates, setTemplates] = useState<SessionTemplateInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -162,7 +157,7 @@ export default function Templates() {
       }
       setShowModal(false);
       fetchTemplates();
-    } catch { /* ignore */ } finally {
+    } catch (err) { console.error("Failed to save template:", err); } finally {
       setSaving(false);
     }
   };
@@ -172,7 +167,7 @@ export default function Templates() {
     try {
       await api.deleteTemplate(id);
       fetchTemplates();
-    } catch { /* ignore */ }
+    } catch (err) { console.error("Failed to delete template:", err); }
   };
 
   const updateStage = (field: keyof Stage, value: any) => {
@@ -422,8 +417,10 @@ export default function Templates() {
                   </div>
                 </div>
                 <div className="flex gap-2 shrink-0">
-                  <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
-                    className="text-xs text-red-600 hover:underline">刪除</button>
+                  {isSuper && (
+                    <button onClick={(e) => { e.stopPropagation(); handleDelete(t.id); }}
+                      className="text-xs text-red-600 hover:underline">刪除</button>
+                  )}
                 </div>
               </div>
               {s?.objectives_main && s.objectives_main.length > 0 && (

@@ -100,7 +100,7 @@ export function useWebSocket(
           setCameraServerStatus((frame as any).status || "inactive");
         }
       } catch {
-        // ignore malformed frames
+        /* ignore malformed frames */
       }
     };
 

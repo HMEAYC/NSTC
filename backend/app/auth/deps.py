@@ -1,9 +1,12 @@
 from __future__ import annotations
 
-from fastapi import Depends, HTTPException, status
+from typing import Optional
+
+from fastapi import Depends, HTTPException, Header, status
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 from sqlalchemy.orm import Session
 
+from app.config import settings
 from app.db.base import get_db
 from app.models.user import User
 from app.auth.jwt import decode_token
@@ -33,6 +36,23 @@ async def require_login(current_user: User | None = Depends(get_current_user)) -
     if current_user is None:
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Authentication required")
     return current_user
+
+
+async def require_device_or_user(
+    current_user: User | None = Depends(get_current_user),
+    x_api_key: Optional[str] = Header(default=None, alias="X-API-Key"),
+    db: Session = Depends(get_db),
+) -> User:
+    if current_user is not None:
+        return current_user
+    if settings.hmeayc_api_key and x_api_key and x_api_key.strip() == settings.hmeayc_api_key:
+        user = db.query(User).filter(User.is_active == True, User.role != "super_admin").order_by(User.created_at).first()
+        if user is None:
+            user = db.query(User).filter(User.is_active == True).first()
+        if user is None:
+            raise HTTPException(status_code=500, detail="No active users in system")
+        return user
+    raise HTTPException(status_code=401, detail="Authentication required")
 
 
 def require_role(*roles: str):

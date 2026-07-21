@@ -117,7 +117,6 @@ static esp_err_t reg_read16_be_bulk(uint8_t reg, int16_t *out, int count) {
 // ---------------------------------------------------------------------------
 
 esp_err_t imu_init(const imu_config_t *config) {
-    esp_err_t ret;
     uint8_t val;
 
     // ---------- configure I2C ----------
@@ -163,8 +162,9 @@ esp_err_t imu_init(const imu_config_t *config) {
     // ---------- sample rate ----------
     // Gyro output rate = 1 kHz (with DLPF enabled)
     // Sample rate = 1 kHz / (1 + SMPLRT_DIV)
-    // For 50 Hz: SMPLRT_DIV = (1000 / 50) - 1 = 19
-    ESP_RETURN_ON_ERROR(reg_write8(REG_SMPLRT_DIV, 19),
+    // e.g., for 50 Hz: SMPLRT_DIV = (1000 / 50) - 1 = 19
+    uint8_t smplrt_div = (uint8_t)((1000 / CONFIG_HMEAYC_SAMPLE_RATE_HZ) - 1);
+    ESP_RETURN_ON_ERROR(reg_write8(REG_SMPLRT_DIV, smplrt_div),
                         TAG, "SMPLRT_DIV write failed");
 
     // ---------- DLPF ----------

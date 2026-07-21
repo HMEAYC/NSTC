@@ -19,8 +19,8 @@ const roleLabel: Record<string, string> = {
   parent: "家長",
 };
 
-function StatCard({ icon, label, value, color }: { icon: string; label: string; value: string | number; color: string }) {
-  return (
+function StatCard({ icon, label, value, color, to }: { icon: string; label: string; value: string | number; color: string; to?: string }) {
+  const inner = (
     <div className="bg-white rounded-xl shadow-sm p-5 flex items-center gap-4 hover:shadow-md transition-shadow">
       <div className={`w-12 h-12 rounded-xl ${color} flex items-center justify-center text-2xl shrink-0`}>
         {icon}
@@ -31,6 +31,7 @@ function StatCard({ icon, label, value, color }: { icon: string; label: string; 
       </div>
     </div>
   );
+  return to ? <Link to={to} className="block hover:opacity-80 transition-opacity">{inner}</Link> : inner;
 }
 
 function ActionCard({ icon, title, desc, to, color }: { icon: string; title: string; desc: string; to: string; color: string }) {
@@ -53,28 +54,67 @@ export default function Landing() {
   const { user } = useAuth();
   const [stats, setStats] = useState<Stats>({ sessions: 0, devices: 0, devicesOnline: 0, children: 0, activeSessions: 0 });
   const [loading, setLoading] = useState(true);
+  const [activeOrg, setActiveOrg] = useState(getActiveOrgId());
+
+  const isSuper = user?.role === "super_admin";
+  const myOrgId = user?.org_id || "";
+  const orgId = isSuper ? (activeOrg || myOrgId) : myOrgId;
 
   useEffect(() => {
-    const isSuper = user?.role === "super_admin";
-    const orgOverride = isSuper ? (getActiveOrgId() || undefined) : undefined;
-    const params = orgOverride ? { org_id: orgOverride } : undefined;
-    Promise.all([
-      api.listSessions(params).catch(() => ({ sessions: [] })),
-      api.listDevices().catch(() => ({ devices: [] })),
-      api.listChildren().catch(() => ({ children: [] })),
-    ]).then(([s, d, c]) => {
-      const sessions = (s as any).sessions || [];
-      const devices = (d as any).devices || [];
-      const children = (c as any).children || [];
-      setStats({
-        sessions: sessions.length,
-        devices: devices.length,
-        devicesOnline: devices.filter((dv: any) => dv.status === "online").length,
-        children: children.length,
-        activeSessions: sessions.filter((ss: any) => ss.status === "active").length,
-      });
-    }).finally(() => setLoading(false));
+    const handler = () => setActiveOrg(getActiveOrgId());
+    window.addEventListener("focus", handler);
+    window.addEventListener("storage", handler);
+    return () => {
+      window.removeEventListener("focus", handler);
+      window.removeEventListener("storage", handler);
+    };
   }, []);
+
+  useEffect(() => {
+    const isParent = user?.role === "parent";
+    if (isParent) {
+      api.listMyChildren().then((c) => {
+        const children = (c as any).children || [];
+        const childClassIds = [...new Set(children.map((ch: any) => ch.class_id).filter(Boolean))];
+        if (childClassIds.length === 0) {
+          setStats({ sessions: 0, devices: 0, devicesOnline: 0, children: children.length, activeSessions: 0 });
+        } else {
+          api.listSessions().then((s) => {
+            const allSessions = (s as any).sessions || [];
+            const mySessions = allSessions.filter((ss: any) => childClassIds.includes(ss.class_id));
+            setStats({
+              sessions: mySessions.length,
+              devices: 0,
+              devicesOnline: 0,
+              children: children.length,
+              activeSessions: mySessions.filter((ss: any) => ss.status === "completed").length,
+            });
+          }).catch(() => {
+            setStats({ sessions: 0, devices: 0, devicesOnline: 0, children: children.length, activeSessions: 0 });
+          });
+        }
+      }).catch(() => {
+        setStats({ sessions: 0, devices: 0, devicesOnline: 0, children: 0, activeSessions: 0 });
+      }).finally(() => setLoading(false));
+    } else {
+      Promise.all([
+        api.listSessions(orgId ? { org_id: orgId } : undefined).catch(() => ({ sessions: [] })),
+        api.listDevices(orgId || undefined).catch(() => ({ devices: [] })),
+        api.listChildren(orgId || undefined).catch(() => ({ children: [] })),
+      ]).then(([s, d, c]) => {
+        const sessions = (s as any).sessions || [];
+        const devices = (d as any).devices || [];
+        const children = (c as any).children || [];
+        setStats({
+          sessions: sessions.length,
+          devices: devices.length,
+          devicesOnline: devices.filter((dv: any) => dv.status === "online").length,
+          children: children.length,
+          activeSessions: sessions.filter((ss: any) => ss.status === "active").length,
+        });
+      }).finally(() => setLoading(false));
+    }
+  }, [orgId]);
 
   const isParent = user?.role === "parent";
   const isTeacher = user?.role === "teacher";
@@ -113,13 +153,6 @@ export default function Landing() {
       )}
 
       {/* Parent view */}
-      {isParent && (
-        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
-          <StatCard icon="👶" label="已綁定幼兒" value={stats.children || "—"} color="bg-amber-50" />
-          <StatCard icon="📋" label="課程紀錄" value={stats.sessions} color="bg-blue-50" />
-          <StatCard icon="📊" label="報告總數" value={stats.activeSessions} color="bg-green-50" />
-        </div>
-      )}
 
       {/* Teaching */}
       {!isParent && (isAdmin || isTeacher) && (

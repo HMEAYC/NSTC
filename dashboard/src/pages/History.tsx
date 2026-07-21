@@ -1,6 +1,6 @@
 import { useEffect, useState, useCallback } from "react";
 import { useNavigate } from "react-router-dom";
-import { api, SessionSummary } from "../api/client";
+import { api, type SessionInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const courseLabel: Record<string, string> = {
@@ -19,7 +19,7 @@ const statusLabel: Record<string, string> = {
 };
 
 export default function History() {
-  const [sessions, setSessions] = useState<SessionSummary[]>([]);
+  const [sessions, setSessions] = useState<SessionInfo[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const navigate = useNavigate();
@@ -29,7 +29,7 @@ export default function History() {
     setError(null);
     api.listSessions()
       .then((res) => {
-        setSessions(res.sessions.filter((s: SessionSummary) => s.imu_count > 0 || s.course_type));
+        setSessions(res.sessions.filter((s: SessionInfo) => s.imu_count > 0 || (s.duration_sec != null && s.duration_sec > 0)));
         setLoading(false);
       })
       .catch((err) => {
@@ -45,8 +45,8 @@ export default function History() {
     try {
       await api.endSession(id);
       fetchSessions();
-    } catch {
-      // ignore
+    } catch (err) {
+      console.error("Failed to end session:", err);
     }
   };
 
@@ -110,7 +110,7 @@ export default function History() {
           {sessions.map((s) => (
             <div
               key={s.id}
-              onClick={() => navigate(`/dashboard/sessions`)}
+              onClick={() => navigate(`/dashboard/sessions/${s.id}`)}
               className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md transition-shadow cursor-pointer"
             >
               <div className="flex items-center gap-4 min-w-0">

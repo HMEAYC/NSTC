@@ -21,6 +21,7 @@ from app.models.analysis_result import AnalysisResult
 from app.models.assessment_result import AssessmentResult
 from app.models.report import Report
 from app.models.device_assignment import DeviceAssignment
+from app.models.device import Device as DeviceModel
 from app.models.organization import Organization
 from app.models.user import User
 from app.models.child import Child
@@ -82,6 +83,8 @@ def _session_filter(session_model, user: User | None, org_override: str | None =
         org_id = _resolve_org_id(user, org_override)
         if org_id:
             filters.append(session_model.org_id == org_id)
+    elif user and user.role == "super_admin" and org_override:
+        filters.append(session_model.org_id == org_override)
     if user is not None and user.role == "teacher":
         filters.append(session_model.teacher_id == user.id)
     return filters
@@ -283,7 +286,7 @@ def delete_session(
     session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
-    if session.status not in ("draft", "cancelled"):
+    if current_user.role != "super_admin" and session.status not in ("draft", "cancelled"):
         raise HTTPException(400, "Only draft or cancelled sessions can be deleted")
 
     db.query(AssessmentResult).filter(
@@ -304,6 +307,9 @@ def delete_session(
     db.query(IMUData).filter(
         IMUData.session_id == session_id
     ).delete(synchronize_session=False)
+    db.query(DeviceModel).filter(
+        DeviceModel.active_session_id == session_id
+    ).update({"active_session_id": None}, synchronize_session=False)
     db.delete(session)
     db.commit()
     return {"status": "deleted", "session_id": session_id}

@@ -26,7 +26,7 @@ static int send_fail_count = 0;
 #define MAX_SEND_FAILURES 3
 
 // Dynamic session support
-static char ws_base_uri[128] = {0};
+static char ws_base_uri[256] = {0};
 static char current_session_id[64] = "default";
 
 static void parse_ws_uri(void) {
@@ -54,6 +54,24 @@ static void parse_ws_uri(void) {
 
 void websocket_parse_base_uri(void) {
     parse_ws_uri();
+}
+
+void websocket_set_base_uri(const char *api_url) {
+    if (!api_url || api_url[0] == '\0') return;
+    // Already have a base URI from WS_URI config
+    if (ws_base_uri[0] != '\0') return;
+    // Derive ws:// from http:// or https://
+    const char *p = api_url;
+    if (strncmp(p, "http://", 7) == 0) {
+        p += 7;
+        snprintf(ws_base_uri, sizeof(ws_base_uri), "ws://%s", p);
+    } else if (strncmp(p, "https://", 8) == 0) {
+        p += 8;
+        snprintf(ws_base_uri, sizeof(ws_base_uri), "wss://%s", p);
+    } else {
+        snprintf(ws_base_uri, sizeof(ws_base_uri), "ws://%s", api_url);
+    }
+    ESP_LOGI(TAG, "WS base URI derived from API URL: %s", ws_base_uri);
 }
 
 static void build_ws_uri(char *buf, size_t buf_size) {
@@ -155,6 +173,7 @@ esp_err_t websocket_reconnect(void) {
     ws_reconnect_pending = false;
     if (ws_client) {
         esp_websocket_client_stop(ws_client);
+        esp_websocket_client_destroy(ws_client);
         ws_client = NULL;
     }
     ws_connected = false;

@@ -24,7 +24,10 @@ export interface UserInfo {
   display_name: string;
   role: string;
   org_id: string;
+  org_name?: string;
   is_active: boolean;
+  invite_token?: string | null;
+  children?: string[];
 }
 
 export interface DeviceInfo {
@@ -34,6 +37,7 @@ export interface DeviceInfo {
   firmware_version: string | null;
   battery_level: number | null;
   wifi_ssid: string | null;
+  configured_wifi_ssid: string | null;
   wifi_rssi: number | null;
   ip_address: string | null;
   mac_address: string | null;
@@ -86,6 +90,11 @@ export interface SessionInfo {
   scheduled_at: string | null;
   started_at: string | null;
   ended_at: string | null;
+  course_type: string;
+  imu_count: number;
+  device_count: number;
+  duration_sec: number | null;
+  created_at: string | null;
 }
 
 export interface SessionDetailInfo extends SessionInfo {
@@ -183,7 +192,10 @@ async function fetchJSON<T>(url: string, init?: RequestInit): Promise<T> {
     ...init,
     headers: { "Content-Type": "application/json", ...authHeader(), ...init?.headers },
   });
-  if (!res.ok) throw new Error(`API error: ${res.status} ${res.statusText}`);
+  if (!res.ok) {
+    const body = await res.json().catch(() => null);
+    throw new Error(body?.detail || `API error: ${res.status} ${res.statusText}`);
+  }
   return res.json();
 }
 
@@ -197,8 +209,10 @@ export const api = {
   me: () => fetchJSON<UserInfo>("/api/auth/me"),
 
   // Devices
-  listDevices: () =>
-    fetchJSON<{ devices: DeviceInfo[] }>("/api/devices"),
+  listDevices: (orgId?: string) =>
+    fetchJSON<{ devices: DeviceInfo[] }>(
+      orgId ? `/api/devices?org_id=${encodeURIComponent(orgId)}` : "/api/devices"
+    ),
 
   registerDevice: (device_id: string, name?: string, firmware_version?: string) =>
     fetchJSON<{ device: DeviceInfo }>("/api/devices", {
@@ -212,8 +226,15 @@ export const api = {
       body: JSON.stringify(data),
     }),
 
-  listChildren: () =>
-    fetchJSON<{ children: ChildInfo[] }>("/api/children"),
+  scanDevices: () =>
+    fetchJSON<{ devices: { mac: string; ip: string }[] }>(
+      "/api/devices/scan", { method: "POST" }
+    ),
+
+  listChildren: (orgId?: string) =>
+    fetchJSON<{ children: ChildInfo[] }>(
+      orgId ? `/api/children?org_id=${encodeURIComponent(orgId)}` : "/api/children"
+    ),
 
   listChildAssignments: () =>
     fetchJSON<{ children: ChildAssignmentInfo[] }>("/api/children/assignments"),
@@ -298,7 +319,7 @@ export const api = {
     }>(`/api/children/${childId}/analysis/trends`),
 
   getClassChildren: (classId: string) =>
-    fetchJSON<{ children: { id: string; name: string; student_id: string | null; class_id: string | null }[] }>(`/api/classes/${classId}/children`),
+    fetchJSON<{ children: { id: string; name: string; student_id: string | null; class_id: string | null; notes: string | null; created_at: string | null }[] }>(`/api/classes/${classId}/children`),
 
   getSessionAssignments: (sessionId: string) =>
     fetchJSON<{ assignments: AssignmentInfo[] }>(`/api/sessions/${sessionId}/assignments`),
@@ -409,7 +430,7 @@ export const api = {
     fetchJSON<{ session: SessionInfo }>(`/api/sessions/${id}/end`, { method: "POST" }),
 
   getSessionSubSessions: (id: string) =>
-    fetchJSON<{ sessions: { id: string; title: string | null; course_type: string; status: string; start_time: string | null; end_time: string | null }[] }>(`/api/sessions/${id}/sessions`),
+    fetchJSON<{ sessions: { id: string; title: string | null; course_type: string; status: string; start_time: string | null; end_time: string | null }[] }>(`/api/sessions/${id}/assignments`),
 
   // Templates
   listTemplates: () =>
@@ -501,6 +522,11 @@ export const api = {
       method: "PUT", body: JSON.stringify(data),
     }),
 
+  resendInvite: (userId: string) =>
+    fetchJSON<{ status: string; email: string }>(`/api/users/${userId}/resend-invite`, {
+      method: "POST",
+    }),
+
   // Class children
   createClassChild: (classId: string, name: string, studentId?: string, notes?: string) => {
     const params = new URLSearchParams({ name });
@@ -553,7 +579,7 @@ export const api = {
 
   // Org classes
   listOrgClasses: (orgId: string) =>
-    fetchJSON<{ classes: { id: string; name: string; grade: string | null }[] }>(`/api/orgs/${orgId}/classes`),
+    fetchJSON<{ classes: { id: string; org_id: string; name: string; grade: string | null; created_at: string | null }[] }>(`/api/orgs/${orgId}/classes`),
 
   createOrgClass: (orgId: string, name: string, grade?: string) => {
     const params = new URLSearchParams({ name });
@@ -561,7 +587,7 @@ export const api = {
     return fetchJSON<{ class: { id: string; name: string } }>(`/api/orgs/${orgId}/classes?${params}`, { method: "POST" });
   },
 
-  // Org parents (for search)
+  // Org parents (alias for searchParents)
   searchOrgParents: (orgId: string, q: string = "") =>
     fetchJSON<{ parents: { id: string; email: string; display_name: string }[] }>(
       `/api/orgs/${orgId}/parents?q=${encodeURIComponent(q)}`

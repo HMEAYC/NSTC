@@ -14,45 +14,14 @@
 #include "esp_system.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/task.h"
+#include "mbedtls/sha256.h"
+#include "mbedtls/platform_util.h"
+#include "wifi_config_nvs.h"
+#include "ca_cert.h"
 
 static const char *TAG = "OTA";
 
-// GitHub Pages URL
-#define OTA_VERSION_URL  CONFIG_HMEAYC_OTA_BASE_URL "/version.json"
 #define OTA_BUFSIZE      1024
-
-// ISRG Root X1 CA certificate for GitHub Pages (Let's Encrypt)
-static const char isrg_root_x1_pem[] =
-    "-----BEGIN CERTIFICATE-----\n"
-    "MIIFazCCA1OgAwIBAgIRAIIQz7DSQONZRGPgu2OCiwAwDQYJKoZIhvcNAQELBQAw\n"
-    "TzELMAkGA1UEBhMCVVMxKTAnBgNVBAoTIEludGVybmV0IFNlY3VyaXR5IFJlc2Vh\n"
-    "cmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEwHhcNMTUwNjA0MTEwNDM4\n"
-    "WhcNMzUwNjA0MTEwNDM4WjBPMQswCQYDVQQGEwJVUzEpMCcGA1UEChMgSW50ZXJu\n"
-    "ZXQgU2VjdXJpdHkgUmVzZWFyY2ggR3JvdXAxFTATBgNVBAMTDElTUkcgUm9vdCBY\n"
-    "MTCCAiIwDQYJKoZIhvcNAQEBBQADggIPADCCAgoCggIBAK3oJHP0FDfzm54rVygc\n"
-    "h77ct984kIxuPOZXoHj3dcKi/vVqbvYATyjb3miGbESTtrFj/RQSa78f0uoxmyF+\n"
-    "0TM8ukj13Xnfs7j/EvEhmkvBioZxaUpmZmyPfjxwv60pIgbz5MDmgK7iS4+3mX6\n"
-    "UA5/TR5d8mUgjU+g4rk8Kb4Mu0UlXjIB0ttov0DiNewNwIRt18jA8+o+u3dpjq+s\n"
-    "WT8KOEUt+zwvo/7V3LvSye0rgTBIlDHCNAymg4VMk7BPZ7hm/ELNKjD+Jo2FR3q\n"
-    "HBHBpLvnKYkqWkdq4T9sZ3SEBL5T4fIek8O2TnTfMLoO1bdNhfczF2g+I2jGpMT\n"
-    "nXKY4XiRcoFplAV4bS8U8RnCSUhI2Jv1dRDM+NiHfWCdG3V/k6UCAwEAAaOCAX0w\n"
-    "ggF5MB0GA1UdDgQWBBR4o8s2MKO89VH4M1H1wDq4fCOKxjAfBgNVHSMEGDAWgBR5\n"
-    "otZFo+JuAy/i19XAh2PuQyc/x7UTB9BgNVHR8EdTByMCugKbaphiBtMQswCQYDVQQ\n"
-    "GEwJVUzEaMBgGA1UEBxMRV2FzaGluZ3RvbiwgRGMxKTAnBgNVBAoTIEludGVybmV0\n"
-    "IFNlY3VyaXR5IFJlc2VhcmNoIEdyb3VwMRUwEwYDVQQDEwxJU1JHIFJvb3QgWDEw\n"
-    "IwYDVR0RBBwwGoIYR0xPQkFMQ0FUQ0hTSEFMTC5sb2NhbGhvc3SHBH8AAAEwHQYD\n"
-    "VR0lBBYwFAYIKwYBBQUHAwEGCCsGAQUFBwMCMIGPBgNVHR8EgYcwgYQwQKA+oDyG\n"
-    "Omh0dHA6Ly9jcmwuaXNyZy5vcmcvL3NydGIvZXhwb3J0L2luZGV4LmNybC8wQKA+\n"
-    "oD6GPGh0dHA6Ly9jcmwudXMuc3JnLm9yZy9pc3JnL3Jvb3QveDEuY3JsMB8GA1Ud\n"
-    "IwQYMBaAFH/T0lfLmameRmMLDMsPrPlMsrJlMB0GA1UdDgQWBBR4o8s2MKO89VH4\n"
-    "M1H1wDq4fCOKxjAMBgNVHRMEBTADAQH/MA0GCSqGSIb3DQEBCwUAA4IBAQBLNvEd\n"
-    "6RvHuA+luJ0vYlLiUQ40Kb80GHMLY+EBH2Tz2dZWQMcLu3nHJkJgkRbHNwYH6XvH\n"
-    "0v4Z1c2RfQrG8HkKPGmCGJMaXbQ7aH3Z2LIB4R7bYbZ+1mR1CB3aJHvHKLST6Bb\n"
-    "TQGFBHMIgPMY67VpGqS6sUg2JGWqI0e1QwJ3bMHrFJjVwR4aM0IB2JH9fEwMKR4\n"
-    "HqLjk3V+NsI4o04t6eYHk0kEYVJ1cM4eP9LGwQ0W/0FC8gG0hHXS7aRfhj6dK0g\n"
-    "P0l9S4Q3kP3kI2UeM4d6L5d6H5e6H5u5L6L5v6L6w7g7g7g7g7g7g7g7g7g7g7g\n"
-    "7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g7g\n"
-    "-----END CERTIFICATE-----\n";
 
 // Compare two semver strings (e.g., "1.0.0" vs "1.1.0")
 // Returns: 1 if a > b, -1 if a < b, 0 if equal
@@ -107,6 +76,11 @@ static esp_err_t http_get_json(const char *url, char *buf, size_t buf_size) {
     }
 
     int read_len = esp_http_client_read_response(client, buf, buf_size - 1);
+    if (read_len < 0) {
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
     buf[read_len] = '\0';
 
     esp_http_client_close(client);
@@ -118,8 +92,23 @@ esp_err_t ota_check_update(ota_check_result_t *result) {
     if (!result) return ESP_ERR_INVALID_ARG;
     memset(result, 0, sizeof(*result));
 
+    // Get OTA base URL: NVS first, then Kconfig
+    char base_url[256] = {0};
+    esp_err_t nvs_err = wifi_ota_url_load(base_url, sizeof(base_url));
+    if (nvs_err != ESP_OK || strlen(base_url) == 0) {
+        // Fallback to Kconfig
+        strncpy(base_url, CONFIG_HMEAYC_OTA_BASE_URL, sizeof(base_url) - 1);
+        ESP_LOGI(TAG, "using Kconfig OTA URL: %s", base_url);
+    } else {
+        ESP_LOGI(TAG, "using NVS OTA URL: %s", base_url);
+    }
+
+    // Build version check URL
+    char version_url[512];
+    snprintf(version_url, sizeof(version_url), "%s/version.json", base_url);
+
     char resp[512];
-    esp_err_t err = http_get_json(OTA_VERSION_URL, resp, sizeof(resp));
+    esp_err_t err = http_get_json(version_url, resp, sizeof(resp));
     if (err != ESP_OK) {
         ESP_LOGW(TAG, "version check failed: %s", esp_err_to_name(err));
         return err;
@@ -148,6 +137,16 @@ esp_err_t ota_check_update(ota_check_result_t *result) {
         result->download_url[i] = '\0';
     }
 
+    // Parse optional sha256 field
+    const char *h = strstr(resp, "\"sha256\":\"");
+    if (h) {
+        h += 10;
+        i = 0;
+        while (*h && *h != '"' && i < (int)sizeof(result->sha256) - 1)
+            result->sha256[i++] = *h++;
+        result->sha256[i] = '\0';
+    }
+
     // Compare versions locally
     int cmp = version_compare(result->latest_version, FIRMWARE_VERSION);
     result->update_available = (cmp > 0);
@@ -161,7 +160,7 @@ esp_err_t ota_check_update(ota_check_result_t *result) {
     return ESP_OK;
 }
 
-esp_err_t ota_perform_update(const char *url) {
+esp_err_t ota_perform_update(const char *url, const char *expected_sha256) {
     ESP_LOGI(TAG, "starting OTA from %s", url);
 
     esp_http_client_config_t cfg = {
@@ -201,6 +200,14 @@ esp_err_t ota_perform_update(const char *url) {
         return err;
     }
 
+    // Compute SHA-256 during download if expected hash is provided
+    mbedtls_sha256_context sha256_ctx;
+    bool sha256_active = (expected_sha256 && expected_sha256[0] != '\0');
+    if (sha256_active) {
+        mbedtls_sha256_init(&sha256_ctx);
+        mbedtls_sha256_starts(&sha256_ctx, 0);
+    }
+
     char buf[OTA_BUFSIZE];
     int total = 0;
     while (1) {
@@ -208,6 +215,7 @@ esp_err_t ota_perform_update(const char *url) {
         if (read_len < 0) {
             ESP_LOGE(TAG, "HTTP read error");
             esp_ota_abort(ota_handle);
+            if (sha256_active) mbedtls_sha256_free(&sha256_ctx);
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
             return ESP_FAIL;
@@ -218,15 +226,40 @@ esp_err_t ota_perform_update(const char *url) {
         if (err != ESP_OK) {
             ESP_LOGE(TAG, "ota_write failed: %s", esp_err_to_name(err));
             esp_ota_abort(ota_handle);
+            if (sha256_active) mbedtls_sha256_free(&sha256_ctx);
             esp_http_client_close(client);
             esp_http_client_cleanup(client);
             return err;
+        }
+        if (sha256_active) {
+            mbedtls_sha256_update(&sha256_ctx, (const unsigned char *)buf, read_len);
         }
         total += read_len;
     }
 
     esp_http_client_close(client);
     esp_http_client_cleanup(client);
+
+    // Verify SHA-256 hash if expected was provided
+    if (sha256_active) {
+        unsigned char digest[32];
+        mbedtls_sha256_finish(&sha256_ctx, digest);
+        mbedtls_sha256_free(&sha256_ctx);
+
+        // Convert to hex string
+        char computed_hex[65];
+        for (int i = 0; i < 32; i++) {
+            snprintf(computed_hex + i * 2, 3, "%02x", digest[i]);
+        }
+        computed_hex[64] = '\0';
+
+        if (strcmp(computed_hex, expected_sha256) != 0) {
+            ESP_LOGE(TAG, "SHA-256 mismatch: expected %s, got %s", expected_sha256, computed_hex);
+            esp_ota_abort(ota_handle);
+            return ESP_ERR_INVALID_CRC;
+        }
+        ESP_LOGI(TAG, "SHA-256 verification passed");
+    }
 
     err = esp_ota_end(ota_handle);
     if (err != ESP_OK) {

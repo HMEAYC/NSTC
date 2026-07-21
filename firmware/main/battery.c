@@ -22,6 +22,10 @@ static adc_oneshot_unit_handle_t adc_handle = NULL;
 #define BATTERY_LOW_MV     3200   // Low battery warning threshold
 #define BATTERY_EMPTY_MV   2800   // 0% display floor (safety margin above ~2.50V hardware brownout)
 
+// When USB-powered without battery, ADC reads floating value → computed voltage < brownout.
+// Treat any reading below 2000mV as USB-powered (impossible with real battery + voltage divider).
+#define USB_POWER_THRESHOLD_MV 2000
+
 esp_err_t battery_init(void) {
     adc_oneshot_unit_init_cfg_t unit_cfg = {
         .unit_id = ADC_UNIT_1,
@@ -48,7 +52,12 @@ esp_err_t battery_read_mv(uint32_t *voltage_mv) {
                         TAG, "ADC read failed");
     uint32_t vadc_mv = (uint32_t)((uint64_t)raw * ADC_REF_MV / ADC_MAX);
     *voltage_mv = (uint32_t)((float)vadc_mv * DIVIDER_RATIO);
+
     return ESP_OK;
+}
+
+bool battery_is_usb_powered(uint32_t voltage_mv) {
+    return voltage_mv < USB_POWER_THRESHOLD_MV;
 }
 
 uint8_t battery_level_percent(uint32_t voltage_mv) {

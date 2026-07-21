@@ -88,7 +88,7 @@ export default function SessionDetail() {
       if (s.status === "completed") {
         api.getSessionReport(id).then((r) => {
           setReportData({ summary: r.summary, assessments: r.assessments });
-        }).catch(() => {});
+        }).catch((err) => console.error("Failed to load session report:", err));
       }
 
       if (s.class_id) {
@@ -111,7 +111,7 @@ export default function SessionDetail() {
       await api.assignSessionDevice(id, deviceId, childId);
       const { assignments } = await api.getSessionAssignments(id);
       setAssignments(assignments);
-    } catch { /* ignore */ } finally {
+    } catch (err) { console.error("Failed to assign device:", err); } finally {
       setAssigningDev(null);
     }
   };
@@ -123,7 +123,7 @@ export default function SessionDetail() {
     try {
       const res = await api.autoPairSession(id);
       setAutoPairResult(res);
-    } catch { /* ignore */ } finally {
+    } catch (err) { console.error("Failed to auto-pair session:", err); } finally {
       setAutoPairLoading(false);
     }
   };
@@ -134,7 +134,7 @@ export default function SessionDetail() {
     try {
       await api.startSession(id);
       await fetchData();
-    } catch { /* ignore */ } finally {
+    } catch (err) { console.error("Failed to start session:", err); } finally {
       setActionLoading(false);
     }
   };
@@ -145,7 +145,7 @@ export default function SessionDetail() {
     try {
       await api.deleteSession(id);
       navigate("/dashboard/sessions");
-    } catch { /* ignore */ } finally {
+    } catch (err) { console.error("Failed to delete session:", err); } finally {
       setActionLoading(false);
     }
   };
@@ -156,7 +156,7 @@ export default function SessionDetail() {
     try {
       await api.endSession(id);
       await fetchData();
-    } catch { /* ignore */ } finally {
+    } catch (err) { console.error("Failed to end session:", err); } finally {
       setActionLoading(false);
     }
   };
@@ -578,7 +578,7 @@ export default function SessionDetail() {
                             const { assignments: updated } = await api.getSessionAssignments(id);
                             setAssignments(updated);
                             setPairingChildId(null);
-                          } catch { /* ignore */ }
+                          } catch (err) { console.error("Failed to delete assignment:", err); }
                         }}
                         className="text-xs px-3 py-1.5 rounded-lg border border-red-200 text-red-600 hover:bg-red-50"
                       >

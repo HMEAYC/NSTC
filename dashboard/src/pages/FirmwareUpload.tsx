@@ -23,7 +23,7 @@ export default function FirmwareUpload() {
     setLoading(true);
     api.listFirmware()
       .then((res) => setVersions(res.versions))
-      .catch(() => {})
+      .catch((err) => console.error("Failed to list firmware versions:", err))
       .finally(() => setLoading(false));
   }, []);
 

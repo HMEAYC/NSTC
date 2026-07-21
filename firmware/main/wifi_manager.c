@@ -1,5 +1,6 @@
 #include "wifi_manager.h"
 #include "wifi_config_nvs.h"
+#include "softap_portal.h"
 
 #include <string.h>
 
@@ -7,10 +8,12 @@
 #include "esp_event.h"
 #include "esp_log.h"
 #include "esp_netif.h"
+#include "esp_timer.h"
 #include "esp_wifi.h"
 #include "esp_mac.h"
 #include "freertos/FreeRTOS.h"
 #include "freertos/event_groups.h"
+#include "freertos/task.h"
 #include "nvs_flash.h"
 
 static const char *TAG = "WiFi";
@@ -24,12 +27,15 @@ static const char *TAG = "WiFi";
 static EventGroupHandle_t s_wifi_event_group;
 static int s_retry_count = 0;
 #define MAX_RETRY 5
+#define RETRY_BACKOFF_MS  60000  // 60 seconds between retry cycles
 
 static char s_current_ssid[64] = "";
 static char s_ip[16] = "";
 static char s_mac[18] = "";
 static bool s_mac_read = false;
 static bool s_connected = false;
+static bool s_retry_pending = false;
+static int64_t s_last_retry_ms = 0;
 
 static esp_err_t try_connect(const char *ssid, const char *password) {
     wifi_config_t wifi_config = {
@@ -71,6 +77,8 @@ static void event_handler(void *arg, esp_event_base_t base,
             ESP_LOGW(TAG, "disconnected, retry %d/%d", s_retry_count, MAX_RETRY);
             esp_wifi_connect();
         } else {
+            ESP_LOGW(TAG, "WiFi: max retries exhausted, will retry in %d ms", RETRY_BACKOFF_MS);
+            s_retry_pending = true;
             xEventGroupSetBits(s_wifi_event_group, WIFI_FAIL_BIT);
         }
     } else if (base == IP_EVENT && id == IP_EVENT_STA_GOT_IP) {
@@ -119,7 +127,15 @@ esp_err_t wifi_connect(void) {
 
     // Fallback to Kconfig defaults
     ESP_LOGI(TAG, "using firmware default WiFi: SSID='%s'", WIFI_SSID);
-    return try_connect(WIFI_SSID, WIFI_PASS);
+    if (strlen(WIFI_SSID) > 0 && try_connect(WIFI_SSID, WIFI_PASS) == ESP_OK) {
+        return ESP_OK;
+    }
+
+    // All attempts failed, start SoftAP captive portal
+    ESP_LOGW(TAG, "all WiFi attempts failed, starting SoftAP portal...");
+    softap_portal_start();
+
+    return ESP_FAIL;
 }
 
 bool wifi_is_connected(void) {
@@ -155,4 +171,29 @@ const char *wifi_get_mac(void) {
         s_mac_read = true;
     }
     return s_mac;
+}
+
+void wifi_periodic_retry(void) {
+    if (!s_retry_pending || s_connected) return;
+
+    int64_t now = esp_timer_get_time() / 1000;
+    if (now - s_last_retry_ms < RETRY_BACKOFF_MS) return;
+
+    s_last_retry_ms = now;
+    s_retry_pending = false;
+    s_retry_count = 0;
+    ESP_LOGI(TAG, "WiFi: attempting periodic retry...");
+
+    // Try NVS credentials first
+    wifi_creds_t nvs_creds;
+    if (wifi_config_load(&nvs_creds) == ESP_OK && strlen(nvs_creds.ssid) > 0) {
+        if (try_connect(nvs_creds.ssid, nvs_creds.password) == ESP_OK) {
+            return;
+        }
+    }
+
+    // Fallback to Kconfig defaults
+    if (strlen(WIFI_SSID) > 0) {
+        try_connect(WIFI_SSID, WIFI_PASS);
+    }
 }

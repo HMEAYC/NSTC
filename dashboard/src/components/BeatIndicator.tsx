@@ -6,7 +6,7 @@ interface BeatIndicatorProps {
   rhythmSync?: number;
 }
 
-export default function BeatIndicator({ bpm, beatTimes, rhythmSync }: BeatIndicatorProps) {
+export default function BeatIndicator({ bpm, rhythmSync }: BeatIndicatorProps) {
   const [pulse, setPulse] = useState(false);
   const intervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
 

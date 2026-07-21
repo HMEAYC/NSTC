@@ -6,6 +6,7 @@
 #include "esp_log.h"
 #include "esp_http_client.h"
 #include "nvs_flash.h"
+#include "ca_cert.h"
 
 static const char *TAG = "SessionNVS";
 
@@ -61,7 +62,7 @@ esp_err_t session_config_fetch_remote(const char *base_url, const char *device_i
     if (!base_url) return ESP_ERR_INVALID_ARG;
 
     char url[512];
-    snprintf(url, sizeof(url), "%s/session?device_id=%s", base_url, device_id);
+    snprintf(url, sizeof(url), "%s/api/config/session?device_id=%s", base_url, device_id);
 
     ESP_LOGI(TAG, "fetching session config from %s", url);
 
@@ -69,6 +70,7 @@ esp_err_t session_config_fetch_remote(const char *base_url, const char *device_i
         .url = url,
         .timeout_ms = 5000,
         .keep_alive_enable = false,
+        .cert_pem = isrg_root_x1_pem,
     };
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) return ESP_FAIL;
@@ -79,6 +81,8 @@ esp_err_t session_config_fetch_remote(const char *base_url, const char *device_i
         return err;
     }
 
+    esp_http_client_set_header(client, "X-API-Key", CONFIG_HMEAYC_API_KEY);
+
     int content_len = esp_http_client_fetch_headers(client);
     if (content_len <= 0 || content_len > 512) {
         esp_http_client_close(client);
@@ -88,6 +92,11 @@ esp_err_t session_config_fetch_remote(const char *base_url, const char *device_i
 
     char buf[512];
     int read_len = esp_http_client_read_response(client, buf, sizeof(buf) - 1);
+    if (read_len < 0) {
+        esp_http_client_close(client);
+        esp_http_client_cleanup(client);
+        return ESP_FAIL;
+    }
     buf[read_len] = '\0';
     esp_http_client_close(client);
     esp_http_client_cleanup(client);

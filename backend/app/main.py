@@ -35,15 +35,23 @@ app = FastAPI(
 )
 
 cors_origins = settings.cors_origin_list()
-allow_all_origins = cors_origins == ["*"]
 
-app.add_middleware(
-    CORSMiddleware,
-    allow_origins=cors_origins if cors_origins and not allow_all_origins else ["*"],
-    allow_credentials=not allow_all_origins,
-    allow_methods=["*"],
-    allow_headers=["*"],
-)
+if not cors_origins or cors_origins == ["*"]:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=["*"],
+        allow_credentials=False,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
+else:
+    app.add_middleware(
+        CORSMiddleware,
+        allow_origins=cors_origins,
+        allow_credentials=True,
+        allow_methods=["*"],
+        allow_headers=["*"],
+    )
 
 app.include_router(video_analysis_router)
 app.include_router(sessions_router)

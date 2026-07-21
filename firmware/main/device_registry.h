@@ -20,6 +20,11 @@ esp_err_t device_registry_upsert(
     const device_registry_info_t *info
 );
 
+esp_err_t device_registry_heartbeat(
+    const char *base_url,
+    const char *device_id
+);
+
 #ifdef __cplusplus
 }
 #endif

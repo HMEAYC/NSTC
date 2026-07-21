@@ -3,7 +3,7 @@ from typing import Optional
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, Query
 from sqlalchemy.orm import Session
-from app.auth.deps import require_role
+from app.auth.deps import require_role, require_device_or_user
 from app.db.base import get_db
 from app.models.wifi_config import WifiConfig
 from app.models.user import User
@@ -23,7 +23,7 @@ def get_wifi_config(
     include_password: bool = False,
     device_id: Optional[str] = Query(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+    current_user: User = Depends(require_device_or_user),
 ):
     cfg = None
     if device_id:

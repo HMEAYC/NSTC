@@ -43,10 +43,11 @@ class ClassResponse(BaseModel):
 class UserResponse(BaseModel):
     id: str
     email: str
-    display_name: str
+    display_name: str | None = None
     role: str
-    org_id: str
+    org_id: str | None = None
     is_active: bool
+    invite_token: str | None = None
 
     model_config = {"from_attributes": True}
 
@@ -294,7 +295,33 @@ def list_org_users(
 ):
     same_org(org_id, current_user)
     users = db.query(User).filter(User.org_id == org_id).all()
-    return {"users": [UserResponse.model_validate(u) for u in users]}
+
+    parent_ids = [u.id for u in users if u.role == "parent"]
+    bindings = db.query(ParentChild).filter(ParentChild.parent_id.in_(parent_ids)).all() if parent_ids else []
+    child_ids = list({b.child_id for b in bindings})
+    children = db.query(Child).filter(Child.id.in_(child_ids)).all() if child_ids else []
+    child_map = {c.id: c for c in children}
+    class_ids = list({c.class_id for c in children if c.class_id})
+    classes = db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids)).all() if class_ids else []
+    class_map = {cls.id: cls.name for cls in classes}
+
+    parent_children_map: dict[str, list[str]] = {}
+    for b in bindings:
+        child = child_map.get(b.child_id)
+        if child:
+            class_name = class_map.get(child.class_id, "") if child.class_id else ""
+            label = f"{class_name}-{child.name}" if class_name else child.name
+        else:
+            label = "未知"
+        parent_children_map.setdefault(b.parent_id, []).append(label)
+
+    result = []
+    for u in users:
+        info = UserResponse.model_validate(u).model_dump()
+        if u.role == "parent":
+            info["children"] = parent_children_map.get(u.id, [])
+        result.append(info)
+    return {"users": result}
 
 
 class InviteUserRequest(BaseModel):
@@ -337,6 +364,9 @@ class UpdateUserRequest(BaseModel):
     role: str | None = None
 
 
+_VALID_ROLES = {"teacher", "org_admin", "parent"}
+
+
 @router.put("/api/users/{user_id}")
 def update_user(
     user_id: str,
@@ -350,15 +380,41 @@ def update_user(
     same_org(user.org_id, current_user)
     if body.is_active is not None:
         user.is_active = body.is_active
+        if body.is_active:
+            user.invite_token = None
     if body.display_name is not None:
         user.display_name = body.display_name
     if body.password is not None:
         user.password_hash = get_password_hash(body.password)
-    if body.role is not None and current_user.role == "super_admin":
+    if body.role is not None and current_user.role in ("super_admin", "org_admin"):
+        if body.role not in _VALID_ROLES:
+            raise HTTPException(400, f"Invalid role. Must be one of: {', '.join(sorted(_VALID_ROLES))}")
+        if body.role == "super_admin" and current_user.role != "super_admin":
+            raise HTTPException(403, "Only super_admin can assign super_admin role")
         user.role = body.role
     db.commit()
     db.refresh(user)
     return {"user": UserResponse.model_validate(user)}
+
+
+@router.post("/api/users/{user_id}/resend-invite")
+def resend_invite(
+    user_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
+):
+    user = db.query(User).filter(User.id == user_id).first()
+    if not user:
+        raise HTTPException(404, "User not found")
+    same_org(user.org_id, current_user)
+    if user.password_hash is not None:
+        raise HTTPException(400, "User already activated — cannot resend invite")
+    invite_token = str(uuid.uuid4())
+    user.invite_token = invite_token
+    db.commit()
+    org = db.query(Organization).filter(Organization.id == user.org_id).first()
+    send_invite_email(user.email, invite_token, current_user.display_name, org.name if org else "機構")
+    return {"status": "sent", "email": user.email}
 
 
 @router.get("/api/orgs/{org_id}/parents")
@@ -376,7 +432,7 @@ def search_parents(
             User.email.ilike(like) | User.display_name.ilike(like)
         )
     parents = query.order_by(User.display_name).all()
-    return {"parents": parents}
+    return {"parents": [{"id": p.id, "email": p.email, "display_name": p.display_name} for p in parents]}
 
 
 @router.get("/api/children/{child_id}/parents")
@@ -393,7 +449,7 @@ def list_child_parents(
     bindings = db.query(ParentChild).filter(ParentChild.child_id == child_id).all()
     parent_ids = [b.parent_id for b in bindings]
     parents = db.query(User).filter(User.id.in_(parent_ids)).all() if parent_ids else []
-    return {"parents": parents}
+    return {"parents": [{"id": p.id, "email": p.email, "display_name": p.display_name} for p in parents]}
 
 
 # ─── Parent-Child Binding ────────────────────────────────────────
@@ -434,7 +490,7 @@ def list_my_children(
     bindings = db.query(ParentChild).filter(ParentChild.parent_id == current_user.id).all()
     child_ids = [b.child_id for b in bindings]
     children = db.query(Child).filter(Child.id.in_(child_ids)).all()
-    return {"children": children}
+    return {"children": [{"id": c.id, "name": c.name, "student_id": c.student_id, "class_id": c.class_id, "notes": c.notes, "created_at": c.created_at.isoformat() if c.created_at else None} for c in children]}
 
 
 @router.delete("/api/parents/{parent_id}/children/{child_id}")

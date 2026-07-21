@@ -1,9 +1,12 @@
 from datetime import datetime, timezone
 from typing import Optional
+import re
+import subprocess
 from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
-from app.auth.deps import require_login
+from app.auth.deps import require_login, require_device_or_user
+from app.auth.deps import require_role
 from app.auth.org import effective_org_id
 from app.db.base import get_db
 from app.models.device import Device as DeviceModel
@@ -12,6 +15,7 @@ from app.models.device_assignment import DeviceAssignment
 from app.models.organization import Organization
 from app.models.session import Session as SessionModel
 from app.models.user import User
+from app.models.wifi_config import WifiConfig
 
 router = APIRouter(prefix="/api", tags=["devices"])
 
@@ -36,7 +40,74 @@ def list_devices(
         if resolved:
             query = query.filter(DeviceModel.org_id == resolved)
     devices = query.order_by(DeviceModel.created_at.desc()).all()
-    return {"devices": [_device_dict(d) for d in devices]}
+    dev_ids = [d.id for d in devices]
+    wifi_rows = (
+        db.query(WifiConfig.device_id, WifiConfig.ssid)
+        .filter(WifiConfig.device_id.in_(dev_ids))
+        .all()
+    ) if dev_ids else []
+    wifi_map = {row.device_id: row.ssid for row in wifi_rows}
+    return {"devices": [_device_dict(d, configured_wifi_ssid=wifi_map.get(d.id)) for d in devices]}
+
+
+_MULTICAST_PREFIXES = ("ff:", "33:", "01:", "00:5e:")
+
+# Espressif (ESP32/ESP8266) OUI prefixes
+_ESPRESSIF_OUIS = (
+    "10:00:3b", "24:6f:28", "30:ae:a4", "3c:71:bf",
+    "40:91:51", "58:cf:79", "60:01:94", "64:b7:08",
+    "7c:9e:bd", "84:cc:a8", "94:b5:55", "a0:b7:65",
+    "a4:cf:12", "c4:5e:7c", "c8:2b:96", "cc:50:e3",
+    "d8:1b:b1", "dc:4f:22", "e0:5a:1b", "e8:68:19",
+    "ec:fa:bc", "f0:05:bf", "f4:cf:f2",
+)
+
+
+def _parse_arp() -> list[dict]:
+    """Run ``arp -a`` on macOS and return a list of {ip, mac} dicts."""
+    try:
+        result = subprocess.run(
+            ["arp", "-a"],
+            capture_output=True,
+            text=True,
+            timeout=5,
+        )
+    except Exception:
+        return []
+    devices: list[dict] = []
+    for line in result.stdout.splitlines():
+        m = re.search(r"\((\d+\.\d+\.\d+\.\d+)\)\s+at\s+([0-9a-fA-F:]{17})", line)
+        if not m:
+            continue
+        ip, mac = m.group(1), m.group(2).lower()
+        if any(mac.startswith(p) for p in _MULTICAST_PREFIXES):
+            continue
+        devices.append({"ip": ip, "mac": mac})
+    return devices
+
+
+@router.post("/devices/scan")
+def scan_devices(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("super_admin")),
+):
+    arp_entries = _parse_arp()
+    known_macs = {
+        d.device_id.lower(): d
+        for d in db.query(DeviceModel).all()
+    }
+    results = []
+    for entry in arp_entries:
+        mac = entry["mac"].lower()
+        if not any(mac.startswith(oui) for oui in _ESPRESSIF_OUIS):
+            continue
+        if mac in known_macs:
+            continue
+        results.append({
+            "mac": mac.upper(),
+            "ip": entry["ip"],
+        })
+    return {"devices": results}
 
 
 @router.post("/devices")
@@ -50,7 +121,7 @@ def register_device(
     mac_address: Optional[str] = Body(None),
     org_id: Optional[str] = Body(None),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_login),
+    current_user: User = Depends(require_device_or_user),
 ):
     resolved_org = effective_org_id(current_user, org_id)
     device_id = device_id.upper()
@@ -100,10 +171,11 @@ def update_device(
 ):
     is_super = current_user.role == "super_admin"
 
-    device = db.query(DeviceModel).filter(DeviceModel.id == device_id)
+    device = db.query(DeviceModel).filter(DeviceModel.id == device_id).first()
     if not is_super:
-        device = device.filter(DeviceModel.org_id == effective_org_id(current_user))
-    device = device.first()
+        # Non-super users can only update devices in their own org
+        if device and device.org_id != effective_org_id(current_user):
+            device = None
     if not device:
         raise HTTPException(404, "Device not found")
 
@@ -120,6 +192,20 @@ def update_device(
     db.commit()
     db.refresh(device)
     return {"device": _device_dict(device)}
+
+
+@router.delete("/devices/{device_id}")
+def delete_device(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("super_admin")),
+):
+    device = db.query(DeviceModel).filter(DeviceModel.id == device_id).first()
+    if not device:
+        raise HTTPException(404, "Device not found")
+    db.delete(device)
+    db.commit()
+    return {"status": "deleted"}
 
 
 @router.get("/children")
@@ -202,7 +288,7 @@ def assign_child_device(
     device = device.first()
     if not device:
         raise HTTPException(404, "Device not found")
-    session = db.query(SessionModel).filter()
+    session = db.query(SessionModel)
     if org_id:
         session = session.filter(SessionModel.org_id == org_id)
     session = session.order_by(SessionModel.start_time.desc()).first()
@@ -415,7 +501,7 @@ def delete_assignment(
 def get_device_session_config(
     device_id: str = Query(...),
     db: Session = Depends(get_db),
-    current_user: User = Depends(require_login),
+    current_user: User = Depends(require_device_or_user),
 ):
     resolved_org = effective_org_id(current_user)
     dev = db.query(DeviceModel).filter(
@@ -427,7 +513,7 @@ def get_device_session_config(
     return {"session_id": dev.active_session_id}
 
 
-def _device_dict(d: DeviceModel) -> dict:
+def _device_dict(d: DeviceModel, *, configured_wifi_ssid: str | None = None) -> dict:
     # Compute online/offline status dynamically based on last_seen
     if d.last_seen and d.status == "online":
         last_seen = d.last_seen.replace(tzinfo=timezone.utc) if d.last_seen.tzinfo is None else d.last_seen
@@ -446,6 +532,7 @@ def _device_dict(d: DeviceModel) -> dict:
         "firmware_version": d.firmware_version,
         "battery_level": d.battery_level,
         "wifi_ssid": d.wifi_ssid,
+        "configured_wifi_ssid": configured_wifi_ssid,
         "wifi_rssi": d.wifi_rssi,
         "ip_address": d.ip_address,
         "mac_address": d.mac_address,

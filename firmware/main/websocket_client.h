@@ -10,6 +10,7 @@ extern "C" {
 
 esp_err_t websocket_client_init(void);
 void websocket_parse_base_uri(void);
+void websocket_set_base_uri(const char *api_url);
 esp_err_t websocket_reconnect(void);
 bool websocket_is_connected(void);
 int64_t websocket_connected_since_ms(void);

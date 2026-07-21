@@ -14,7 +14,7 @@ export default function Navbar() {
   return (
     <nav className="bg-white shadow-sm px-4 py-3 flex items-center justify-between flex-wrap gap-y-2">
       <div className="flex items-center gap-4 flex-wrap">
-        <Link to="/dashboard/" className="font-bold text-blue-700 text-sm mr-2">HMEAYC</Link>
+        <Link to="/dashboard/" className="font-bold text-blue-700 text-sm mr-2">{user?.org_name || "HMEAYC"}</Link>
 
         {user?.role === "parent" ? (
           <Link to="/dashboard/parent" className="text-blue-600 hover:underline text-sm">我的小孩</Link>

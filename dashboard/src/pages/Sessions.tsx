@@ -23,18 +23,19 @@ export default function Sessions() {
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ class_id: "", template_id: "", scheduled_at: "", description: "" });
-  const [orgFilter, setOrgFilter] = useState<string>("");
+  const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isSuperAdmin = user?.role === "super_admin";
+  const myOrgId = user?.org_id || "";
+  const effectiveOrgId = isSuperAdmin ? (getActiveOrgId() || myOrgId) : myOrgId;
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const orgOverride = user?.org_id ? undefined : getActiveOrgId() || undefined;
-      const effectiveOrgId = orgOverride || user?.org_id;
+      const orgId = effectiveOrgId;
       const [sessionsRes, templatesRes, classRes] = await Promise.all([
-        api.listSessions({ org_id: orgOverride }),
+        api.listSessions(orgId ? { org_id: orgId } : undefined),
         api.listTemplates(),
         effectiveOrgId
           ? api.listOrgClasses(effectiveOrgId).catch(() => ({ classes: [] }))
@@ -50,7 +51,7 @@ export default function Sessions() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [user?.org_id]);
+  useEffect(() => { fetchData(); }, [effectiveOrgId]);
 
   const handleCreate = async () => {
     if (!form.template_id) return;
@@ -58,7 +59,7 @@ export default function Sessions() {
     const className = classList.find((c) => c.id === form.class_id)?.name || "";
     const tplName = templates.find((t) => t.id === form.template_id)?.name || "";
     const name = [dateStr, className, tplName].filter(Boolean).join(" ");
-    const orgOverride = user?.org_id ? undefined : getActiveOrgId() || undefined;
+    const orgParam = effectiveOrgId;
     try {
       await api.createSession({
         name,
@@ -66,22 +67,25 @@ export default function Sessions() {
         template_id: form.template_id || undefined,
         scheduled_at: form.scheduled_at || undefined,
         description: form.description || undefined,
-        org_id: orgOverride,
+        org_id: orgParam || undefined,
       });
       setForm({ class_id: "", template_id: "", scheduled_at: "", description: "" });
       setShowCreate(false);
       fetchData();
-    } catch { /* ignore */ }
+    } catch (err) { console.error("Failed to create session:", err); }
   };
 
-  // Unique orgs from sessions for the filter dropdown
-  const orgOptions = isSuperAdmin
-    ? Array.from(new Map(sessions.filter((s) => s.org_id).map((s) => [s.org_id, s.org_name || s.org_id])).entries())
-    : [];
-
-  const filteredSessions = orgFilter
-    ? sessions.filter((s) => s.org_id === orgFilter)
-    : sessions;
+  const handleDelete = async (id: string) => {
+    if (!confirm("確定刪除此課程？此操作無法復原。")) return;
+    setDeletingId(id);
+    try {
+      await api.deleteSession(id);
+      setSessions((prev) => prev.filter((s) => s.id !== id));
+    } catch (err) {
+      alert(err instanceof Error ? err.message : "刪除失敗");
+    }
+    setDeletingId(null);
+  };
 
   if (loading) return <div className="p-6 max-w-4xl mx-auto"><LoadingSpinner text="載入課程…" /></div>;
 
@@ -96,25 +100,6 @@ export default function Sessions() {
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">{error}</div>}
-
-      {isSuperAdmin && orgOptions.length > 1 && (
-        <div className="flex items-center gap-2 text-sm">
-          <span className="text-gray-500">機構篩選：</span>
-          <select
-            value={orgFilter}
-            onChange={(e) => setOrgFilter(e.target.value)}
-            className="border rounded-lg px-3 py-1.5 text-sm bg-white"
-          >
-            <option value="">全部機構</option>
-            {orgOptions.map(([id, name]) => (
-              <option key={id} value={id}>{name}</option>
-            ))}
-          </select>
-          {orgFilter && (
-            <button onClick={() => setOrgFilter("")} className="text-xs text-blue-600 hover:underline">清除</button>
-          )}
-        </div>
-      )}
 
       {showCreate && (
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
@@ -150,11 +135,9 @@ export default function Sessions() {
       )}
 
       <div className="space-y-2">
-        {(() => {
-          const scheduled = filteredSessions.filter((s) => s.scheduled_at);
-          return scheduled.length === 0 ? (
-            <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">尚無已排程課程</div>
-          ) : scheduled.map((s) => {
+        {sessions.length === 0 ? (
+            <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">尚無課程</div>
+          ) : sessions.map((s) => {
           const cfg = statusConfig[s.status] || { label: s.status, color: "bg-gray-100 text-gray-600" };
           return (
             <div key={s.id} onClick={() => navigate(`/dashboard/sessions/${s.id}`)}
@@ -166,14 +149,26 @@ export default function Sessions() {
                     {isSuperAdmin && s.org_name && (
                       <span className="inline-block bg-blue-50 text-blue-600 rounded px-1.5 py-0.5 mr-2 text-[11px]">{s.org_name}</span>
                     )}
-                    {new Date(s.scheduled_at!).toLocaleString("zh-TW")}
+                    {s.scheduled_at
+                      ? new Date(s.scheduled_at).toLocaleString("zh-TW")
+                      : new Date(s.started_at || s.created_at || "").toLocaleString("zh-TW")}
                   </div>
                 </div>
               </div>
-              <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
+              <div className="flex items-center gap-2">
+                <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
+                <button
+                  onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
+                  disabled={deletingId === s.id}
+                  className="text-gray-300 hover:text-red-500 text-sm px-1 disabled:opacity-50"
+                  title="刪除課程"
+                >
+                  {deletingId === s.id ? "…" : "✕"}
+                </button>
+              </div>
             </div>
           );
-        })})()}
+        })}
       </div>
     </div>
   );

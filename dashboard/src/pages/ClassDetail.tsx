@@ -52,7 +52,7 @@ export default function ClassDetail() {
     if (!classId) return;
     api.getClassChildren(classId)
       .then((data) => { setChildren(data.children || []); })
-      .catch(() => {})
+      .catch((err) => console.error("Failed to load children:", err))
       .finally(() => setLoading(false));
   };
 
@@ -94,13 +94,13 @@ export default function ClassDetail() {
     if (!orgId) return;
     api.searchParents(orgId, parentQ)
       .then((data) => setParents(data.parents || []))
-      .catch(() => {});
+      .catch((err) => console.error("Failed to search parents:", err));
   };
 
   const fetchBoundParents = (childId: string) => {
     api.listChildParents(childId)
       .then((data) => setBoundParents(data.parents || []))
-      .catch(() => {});
+      .catch((err) => console.error("Failed to load bound parents:", err));
   };
 
   const handleSave = async () => {

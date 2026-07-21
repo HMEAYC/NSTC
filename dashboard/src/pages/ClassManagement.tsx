@@ -50,7 +50,7 @@ export default function ClassManagement() {
       setForm({ name: "", grade: "" });
       setShowCreate(false);
       fetchClasses(effectiveOrgId);
-    } catch { /* ignore */ }
+    } catch (err) { console.error("Failed to create class:", err); }
   };
 
   if (loading && classes.length === 0) {

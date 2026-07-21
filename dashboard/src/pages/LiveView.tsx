@@ -5,7 +5,7 @@ import {
 } from "recharts";
 import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
 import { useCamera, type PoseResult } from "../hooks/useCamera";
-import { api, type SessionDetailInfo } from "../api/client";
+import { api } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 import BeatIndicator from "../components/BeatIndicator";
 
@@ -155,20 +155,15 @@ export default function LiveView() {
   const [searchParams, setSearchParams] = useSearchParams();
   const sid = sessionId || "default";
 
-  const [sessionDetail, setSessionDetail] = useState<SessionDetailInfo | null>(null);
-
   useEffect(() => {
     if (sid === "default") return;
-    api.getSession(sid).then((d) => {
-      setSessionDetail(d.session);
-    }).catch(() => {});
     api.listDevices().then((d) => {
       const map: Record<string, string> = {};
       for (const dev of d.devices) {
         map[dev.id] = dev.device_id;
       }
       setDeviceIdMap(map);
-    }).catch(() => {});
+    }).catch((err) => console.error("Failed to list devices:", err));
   }, [sid]);
 
   const [channels, setChannels] = useState<Map<string, DeviceChannel>>(new Map());
@@ -210,7 +205,7 @@ export default function LiveView() {
     setChannels(new Map(channelsRef.current));
   }, []);
 
-  const { status, send, sendBinary, music, rhythm, freeze, poses, cvMetrics, cameraServerStatus, sendMusicStart } = useWebSocket(sid, onMessage);
+  const { status, send, sendBinary, music, rhythm, freeze, poses, cvMetrics, sendMusicStart } = useWebSocket(sid, onMessage);
 
   const { cameraStatus, startCamera, stopCamera, stream } = useCamera(send, sendBinary, status === "connected");
 
@@ -342,7 +337,7 @@ export default function LiveView() {
               ref={(el) => {
                 if (el && stream) {
                   el.srcObject = stream;
-                  el.play().catch(() => {});
+                   el.play().catch((err) => console.error("Failed to play video:", err));
                 }
               }}
               className="w-full h-full object-cover"

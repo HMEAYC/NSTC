@@ -8,7 +8,7 @@ interface ParentChild {
   id: string;
   name: string;
   student_id: string | null;
-  class_id: string | null;
+  class_id?: string | null;
   created_at: string | null;
 }
 
@@ -21,7 +21,7 @@ export default function ParentView() {
   useEffect(() => {
     api.listMyChildren()
       .then((data) => { setChildren(data.children || []); })
-      .catch(() => {})
+      .catch((err) => console.error("Failed to load children:", err))
       .finally(() => setLoading(false));
   }, []);
 

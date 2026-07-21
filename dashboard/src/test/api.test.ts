@@ -55,10 +55,10 @@ describe("api client", () => {
   it("endSession calls POST /api/sessions/{id}/end", async () => {
     mockFetch.mockResolvedValue({
       ok: true,
-      json: () => Promise.resolve({ status: "completed" }),
+      json: () => Promise.resolve({ session: { id: "sess-1", status: "completed" } }),
     });
     const res = await api.endSession("sess-1");
-    expect(res.status).toBe("completed");
+    expect(res.session.status).toBe("completed");
     expect(mockFetch).toHaveBeenCalledWith(
       "/api/sessions/sess-1/end",
       expect.objectContaining({ method: "POST" }),

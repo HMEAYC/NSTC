@@ -4,7 +4,6 @@ import { Area, AreaChart, ResponsiveContainer, Tooltip } from "recharts";
 import { useWebSocket, type IMUFrame } from "../hooks/useWebSocket";
 import { useLiveMetrics } from "../hooks/useLiveMetrics";
 import { api, type AssessmentResultInfo } from "../api/client";
-import type { CVMetrics } from "../hooks/useCamera";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 function Badge({ status }: { status: "ready" | "partial" | "missing" }) {
@@ -183,7 +182,7 @@ export default function AssessmentIndicators() {
       api.getSessionAssessments(sid).then((r) => {
         setSavedAssessments(r.assessments || []);
         setComputeDone((r.assessments || []).length > 0);
-      }).catch(() => {});
+      }).catch((err) => console.error("Failed to load session assessments:", err));
     }
   }, [sid]);
 
