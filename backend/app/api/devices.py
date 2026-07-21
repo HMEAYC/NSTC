@@ -131,8 +131,6 @@ def register_device(
         existing.last_seen = datetime.now(timezone.utc)
         if firmware_version is not None:
             existing.firmware_version = firmware_version
-        if name is not None:
-            existing.name = name
         if wifi_ssid is not None:
             existing.wifi_ssid = wifi_ssid
         if wifi_rssi is not None:

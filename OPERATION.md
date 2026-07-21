@@ -250,6 +250,7 @@ ESP32 會在連線後定期向 `/api/config/wifi?include_password=true&device_id
 CONFIG_HMEAYC_WIFI_SSID="chen"
 CONFIG_HMEAYC_WIFI_PASSWORD="12345678"
 CONFIG_HMEAYC_API_BASE_URL="http://192.168.1.195:8000"
+CONFIG_HMEAYC_API_KEY="hmeayc-esp32-2025"
 ```
 
 > 提示：裝置管理彈窗中會顯示密碼欄位（可顯示/隱藏）；韌體端則透過 `include_password=true` 取回完整設定以便更新 NVS。
@@ -259,11 +260,13 @@ CONFIG_HMEAYC_API_BASE_URL="http://192.168.1.195:8000"
 當 ESP32 偵測不到任何已知 WiFi 時（NVS + Kconfig 都失敗），會自動進入 SoftAP 模式，建立名為 `HMEAYC-Setup` 的熱點：
 
 1. 手機/電腦連線到 WiFi `HMEAYC-Setup`（無密碼）
-2. 自動跳出設定頁面（Captive Portal），或手動開啟 `http://192.168.4.1`
-3. 選擇目標 WiFi → 輸入密碼 → 點擊「儲存」
-4. ESP32 寫入 NVS 並自動重啟，連線到新 WiFi
+2. **DNS 伺服器自動運行**：所有域名（`captive.apple.com`、`connectivitycheck.gstatic.com` 等）解析到 `192.168.4.1`
+3. 自動跳出設定頁面（Captive Portal），或手動開啟 `http://192.168.4.1`
+4. 選擇目標 WiFi → 輸入密碼 → 點擊「儲存」
+5. ESP32 寫入 NVS 並自動重啟，連線到新 WiFi
 
 > 注意：SoftAP 只在開機時所有 WiFi 嘗試失敗後觸發，成功後會儲存到 NVS，下次開機直接使用。
+> DNS 伺服器運行在 UDP port 53，回應所有 A 記錄查詢，確保 iOS/Android 的 Captive Portal 偵測能正常觸發。
 
 ### 4.5 動態 Session 指派
 
@@ -440,14 +443,15 @@ ESP32 開機 → 自動註冊裝置（POST /api/devices）
 
 ### 6.2 裝置註冊
 
-**自動註冊：** ESP32 開機並連上 WiFi 後，韌體會主動送出 `POST /api/devices`，以 `device_id`、`firmware_version`、`wifi_ssid`、`wifi_rssi`、`ip_address` 更新裝置狀態。可在 Dashboard 裝置列表看到。
+**自動註冊：** ESP32 開機並連上 WiFi 後，韌體會主動送出 `POST /api/devices`，以 `device_id`（MAC 地址）、`name`、`firmware_version`、`wifi_ssid`、`wifi_rssi`、`ip_address`、`mac_address` 更新裝置狀態。可在 Dashboard 裝置列表看到。定期刷新（每 30 分鐘）不會覆蓋已設定的裝置名稱。
 
 **手動註冊（測試）：**
 
 ```bash
 curl -X POST http://localhost:8000/api/devices \
   -H "Content-Type: application/json" \
-  -d '{"device_id":"esp32-c3-001","name":"腰帶 A","firmware_version":"v0.1.0"}'
+  -H "X-API-Key: hmeayc-esp32-2025" \
+  -d '{"device_id":"AA:BB:CC:DD:EE:FF","name":"腰帶 A","firmware_version":"v0.1.0","mac_address":"AA:BB:CC:DD:EE:FF"}'
 ```
 
 ### 6.3 學員註冊
@@ -616,7 +620,7 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 | Method | Path | 說明 |
 |--------|------|------|
 | `GET` | `/api/devices` | 列出所有裝置 |
-| `POST` | `/api/devices` | 註冊/更新裝置（body: `device_id`, `name?`, `firmware_version?`），支援 API Key 認證 |
+| `POST` | `/api/devices` | 註冊/更新裝置（body: `device_id`, `name?`, `firmware_version?`, `mac_address?`），支援 API Key 認證 |
 | `PUT` | `/api/devices/{id}` | 更新裝置（body: `name?`, `org_id?`） |
 | `DELETE` | `/api/devices/{id}` | 刪除裝置（super_admin） |
 | `POST` | `/api/devices/scan` | 網路掃描發現 ESP32（super_admin，ARP + Espressif OUI 過濾） |
@@ -713,7 +717,7 @@ curl -s http://localhost:8000/api/sessions/{SESSION_ID}/assignments \
 
 | Protocol | Path | 說明 |
 |----------|------|------|
-| `WS` | `/ws/{session_id}?token=` | IMU + 攝影機即時串流（支援 binary JPEG + JSON text）；支援選填 JWT token 驗證 |
+| `WS` | `/ws/{session_id}?token=&device_id=` | IMU + 攝影機即時串流（支援 binary JPEG + JSON text）；支援 JWT token 或 API Key 認證 |
 
 ### 8.2 WebSocket 資料格式
 
@@ -897,6 +901,9 @@ grep -E "CONFIG_HMEAYC_WIFI_SSID|CONFIG_HMEAYC_WIFI_PASSWORD" firmware/sdkconfig
 
 # 確認路由器 2.4GHz 頻段已開啟
 # ESP32-C3 不支援 5GHz
+
+# 若 WiFi 嘗試失敗，會自動進入 SoftAP 模式
+# 連線到 HMEAYC-Setup → 設定新的 WiFi
 ```
 
 ### 10.4 ESP32 WS 連線失敗
@@ -936,7 +943,27 @@ I (100) MPU6xxx: MPU6500 not found (WHO_AM_I=0x00)
 # 若 AD0=3.3V，位址為 0x69
 ```
 
-### 10.10 裝置網路掃描
+### 10.10 SoftAP Captive Portal 不跳出
+
+連線到 `HMEAYC-Setup` 後，手機沒有自動跳出設定頁面：
+
+```bash
+# 1. 確認 DNS 伺服器運行中
+# Serial log 應顯示：SoftAP: DNS server started
+
+# 2. 手動開啟設定頁面
+# 手機瀏覽器開啟 http://192.168.4.1
+
+# 3. iOS 使用者
+# → 設定 → WiFi → 點擊 HMEAYC-Setup 的 (i) → 忽略此網路 → 重新連線
+# → 應自動跳出 Captive Portal
+
+# 4. Android 使用者
+# → 設定 → WiFi → 點擊 HMEAYC-Setup → 確認連線
+# → 應自動跳出 Captive Portal
+```
+
+### 10.11 裝置網路掃描
 
 若 ESP32 已連上區域網路但尚未出現在裝置列表，可使用網路掃描功能：
 
@@ -1034,6 +1061,10 @@ erDiagram
         string name
         string firmware_version
         float battery_level
+        string mac_address
+        string ip_address
+        string wifi_ssid
+        float wifi_rssi
         enum status
         datetime last_seen
         string active_session_id FK

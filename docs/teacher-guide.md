@@ -225,7 +225,7 @@
 2. 輸入新 WiFi SSID + 密碼
 3. 儲存 → ESP32 自動重連
 
-> 若 ESP32 偵測不到已知 WiFi，會自動建立 `HMEAYC-Setup` 熱點，手機/電腦連線後即可設定 WiFi。
+> 若 ESP32 偵測不到已知 WiFi，會自動建立 `HMEAYC-Setup` 熱點（含 DNS 伺服器），手機/電腦連線後 Captive Portal 自動跳出即可設定 WiFi。
 
 ---
 

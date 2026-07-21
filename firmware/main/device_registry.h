@@ -13,6 +13,7 @@ typedef struct {
     const char *wifi_ssid;
     int wifi_rssi;
     const char *ip_address;
+    const char *mac_address;
 } device_registry_info_t;
 
 esp_err_t device_registry_upsert(

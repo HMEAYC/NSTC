@@ -33,14 +33,16 @@ esp_err_t device_registry_upsert(
         "\"firmware_version\":\"%s\","
         "\"wifi_ssid\":\"%s\","
         "\"wifi_rssi\":%d,"
-        "\"ip_address\":\"%s\""
+        "\"ip_address\":\"%s\","
+        "\"mac_address\":\"%s\""
         "}",
         info->device_id,
         info->name ? info->name : info->device_id,
         info->firmware_version ? info->firmware_version : "",
         info->wifi_ssid ? info->wifi_ssid : "",
         info->wifi_rssi,
-        info->ip_address ? info->ip_address : ""
+        info->ip_address ? info->ip_address : "",
+        info->mac_address ? info->mac_address : ""
     );
     if (body_len < 0 || body_len >= (int)sizeof(body)) {
         return ESP_ERR_INVALID_SIZE;

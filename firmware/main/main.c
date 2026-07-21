@@ -86,6 +86,7 @@ void app_main(void) {
                 .wifi_ssid = wifi_get_ssid(),
                 .wifi_rssi = wifi_get_rssi(),
                 .ip_address = wifi_get_ip(),
+                .mac_address = wifi_get_mac(),
             };
             device_registry_upsert(api_base_url, &reg_info);
             // Derive WebSocket URI from API URL if WS_URI config is empty
@@ -175,11 +176,12 @@ void app_main(void) {
             ESP_LOGI(TAG, "refreshing device registration...");
             device_registry_info_t reg_info = {
                 .device_id = wifi_get_mac(),
-                .name = wifi_get_mac(),
+                .name = NULL,
                 .firmware_version = CONFIG_HMEAYC_FIRMWARE_VERSION,
                 .wifi_ssid = wifi_get_ssid(),
                 .wifi_rssi = wifi_get_rssi(),
                 .ip_address = wifi_get_ip(),
+                .mac_address = wifi_get_mac(),
             };
             device_registry_upsert(api_base_url, &reg_info);
         }

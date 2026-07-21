@@ -118,12 +118,13 @@
 
 **SoftAP Captive Portal 配網：**
 
-當 ESP32 偵測不到已知 WiFi 時，會自動建立 `HMEAYC-Setup` 熱點：
+當 ESP32 偵測不到已知 WiFi 時，會自動建立 `HMEAYC-Setup` 熱點（含 DNS 伺服器自動導向）：
 
 1. 手機/電腦連線到 WiFi `HMEAYC-Setup`（無密碼）
-2. 自動跳出設定頁面（或手動開啟 `http://192.168.4.1`）
-3. 選擇目標 WiFi → 輸入密碼 → 儲存
-4. ESP32 自動重啟並連線到新 WiFi
+2. DNS 自動解析所有域名到 `192.168.4.1`，Captive Portal 自動跳出
+3. 或手動開啟 `http://192.168.4.1`
+4. 選擇目標 WiFi → 輸入密碼 → 儲存
+5. ESP32 自動重啟並連線到新 WiFi
 
 ### 4.3 網路掃描（super_admin）
 
@@ -259,7 +260,7 @@ curl http://localhost:8000/api/admin/audit-logs
 | 問題 | 解決方案 |
 |------|----------|
 | 裝置離線 | 檢查 WiFi 連線、電量、重啟裝置 |
-| WiFi 設定失敗 | 使用 SmartConfig 或 USB 重新燒錄 |
+| WiFi 設定失敗 | 使用 SoftAP Captive Portal 或 USB 重新燒錄 |
 | 課程無法開始 | 確認已指派裝置、班級已建立 |
 | 報告無資料 | 確認課程已結束、裝置有資料上傳 |
 | 家長看不到幼兒 | 確認已綁定家長帳號 |
