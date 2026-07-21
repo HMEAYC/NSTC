@@ -165,7 +165,7 @@ def list_sessions(
 def create_session(
     body: CreateSessionRequest,
     db: DBSession = Depends(get_db),
-    current_user: User = Depends(require_role("org_admin", "super_admin")),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
     org_id = _resolve_org_id(current_user, body.org_id) or current_user.org_id
     if not org_id:

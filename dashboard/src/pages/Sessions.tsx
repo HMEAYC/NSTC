@@ -22,7 +22,7 @@ export default function Sessions() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [showCreate, setShowCreate] = useState(false);
-  const [form, setForm] = useState({ class_id: "", template_id: "", scheduled_at: "", description: "" });
+  const [form, setForm] = useState({ name: "", class_id: "", template_id: "", scheduled_at: "", description: "" });
   const [deletingId, setDeletingId] = useState<string | null>(null);
 
   const isSuperAdmin = user?.role === "super_admin";
@@ -54,11 +54,12 @@ export default function Sessions() {
   useEffect(() => { fetchData(); }, [effectiveOrgId]);
 
   const handleCreate = async () => {
-    if (!form.template_id) return;
+    if (!form.name && !form.template_id) return;
     const dateStr = new Date().toLocaleDateString("zh-TW");
     const className = classList.find((c) => c.id === form.class_id)?.name || "";
     const tplName = templates.find((t) => t.id === form.template_id)?.name || "";
-    const name = [dateStr, className, tplName].filter(Boolean).join(" ");
+    const autoName = [dateStr, className, tplName].filter(Boolean).join(" ");
+    const name = form.name.trim() || autoName;
     const orgParam = effectiveOrgId;
     try {
       await api.createSession({
@@ -69,7 +70,7 @@ export default function Sessions() {
         description: form.description || undefined,
         org_id: orgParam || undefined,
       });
-      setForm({ class_id: "", template_id: "", scheduled_at: "", description: "" });
+      setForm({ name: "", class_id: "", template_id: "", scheduled_at: "", description: "" });
       setShowCreate(false);
       fetchData();
     } catch (err) { console.error("Failed to create session:", err); }
@@ -103,14 +104,14 @@ export default function Sessions() {
 
       {showCreate && (
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
+          <input value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })}
+            placeholder="課程名稱（留空自動產生）" className="w-full border rounded-lg px-3 py-2 text-sm" />
           <div className="text-xs text-gray-500">
-            課程名稱將自動產生：<span className="font-mono text-gray-700">
-              {new Date().toLocaleDateString("zh-TW")} {classList.find((c) => c.id === form.class_id)?.name || ""} {templates.find((t) => t.id === form.template_id)?.name || ""}
-            </span>
+            {form.name ? "" : `自動名稱：${new Date().toLocaleDateString("zh-TW")} ${classList.find((c) => c.id === form.class_id)?.name || ""} ${templates.find((t) => t.id === form.template_id)?.name || ""}`}
           </div>
             <select value={form.template_id} onChange={(e) => setForm({ ...form, template_id: e.target.value })}
               className="w-full border rounded-lg px-3 py-2 text-sm bg-white">
-              <option value="">選擇教案模板 *</option>
+              <option value="">選擇教案模板（選填）</option>
               {templates.map((t) => {
                 const ag = t.stages?.[0]?.age_group;
                 return (
@@ -129,8 +130,8 @@ export default function Sessions() {
             placeholder="描述（選填）" className="w-full border rounded-lg px-3 py-2 text-sm" />
           <input type="datetime-local" value={form.scheduled_at} onChange={(e) => setForm({ ...form, scheduled_at: e.target.value })}
             className="w-full border rounded-lg px-3 py-2 text-sm" />
-          <button onClick={handleCreate} disabled={!form.template_id}
-            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm disabled:opacity-50">建立</button>
+          <button onClick={handleCreate}
+            className="bg-blue-600 text-white px-4 py-1.5 rounded-lg text-sm hover:bg-blue-700">建立</button>
         </div>
       )}
 
