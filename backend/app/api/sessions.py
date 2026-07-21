@@ -8,7 +8,6 @@ from pydantic import BaseModel
 from sqlalchemy.orm import Session as DBSession
 from sqlalchemy import desc, func
 
-from app.auth import require_api_key
 from app.auth.deps import require_login, require_role
 from app.auth.org import effective_org_id
 from app.db.base import get_db
@@ -279,7 +278,6 @@ def update_session(
 @router.delete("/{session_id}")
 def delete_session(
     session_id: str,
-    _: None = Depends(require_api_key),
     db: DBSession = Depends(get_db),
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
