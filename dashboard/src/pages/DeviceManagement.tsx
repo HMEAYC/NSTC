@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { api, type DeviceInfo } from "../api/client";
 import { useAuth } from "../auth/context";
-import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
 
 const statusColor: Record<string, string> = {
@@ -31,7 +30,7 @@ export default function DeviceManagement() {
   const [editError, setEditError] = useState<string | null>(null);
   const isSuper = user?.role === "super_admin";
   const myOrgId = user?.org_id || "";
-  const effectiveOrgId = isSuper ? (getActiveOrgId() || myOrgId) : myOrgId;
+  const [filterOrgId, setFilterOrgId] = useState<string>("");
 
   const [scanning, setScanning] = useState(false);
   const [scanResults, setScanResults] = useState<{ mac: string; ip: string }[] | null>(null);
@@ -40,7 +39,7 @@ export default function DeviceManagement() {
   const fetchData = () => {
     setLoading(true);
     setError(null);
-    api.listDevices(effectiveOrgId || undefined)
+    api.listDevices(isSuper ? undefined : myOrgId || undefined)
       .then((d) => {
         setDevices(d.devices);
         setLoading(false);
@@ -51,7 +50,13 @@ export default function DeviceManagement() {
       });
   };
 
-  useEffect(() => { fetchData(); }, [effectiveOrgId]);
+  useEffect(() => { fetchData(); }, []);
+
+  useEffect(() => {
+    if (isSuper) {
+      api.listOrgs().then((d) => setOrgs(d.orgs || [])).catch(() => {});
+    }
+  }, []);
 
   const handleScan = async () => {
     setScanning(true);
@@ -108,7 +113,11 @@ export default function DeviceManagement() {
     }
   };
 
-  const onlineCount = devices.filter((d) => d.status === "online").length;
+  const filteredDevices = isSuper && filterOrgId
+    ? devices.filter((d) => d.org_id === filterOrgId)
+    : devices;
+
+  const onlineCount = filteredDevices.filter((d) => d.status === "online").length;
 
   useEffect(() => {
     if (!editingDevice) return;
@@ -142,9 +151,22 @@ export default function DeviceManagement() {
         </div>
       </div>
 
+      {isSuper && orgs.length > 0 && (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">機構篩選：</span>
+          <select value={filterOrgId} onChange={(e) => setFilterOrgId(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="">全部機構</option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
+            ))}
+          </select>
+        </div>
+      )}
+
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         <div className="bg-white rounded-xl shadow-sm p-4">
-          <div className="text-2xl font-bold text-gray-800">{devices.length}</div>
+          <div className="text-2xl font-bold text-gray-800">{filteredDevices.length}</div>
           <div className="text-xs text-gray-400">已註冊裝置</div>
         </div>
         <div className="bg-white rounded-xl shadow-sm p-4">
@@ -155,7 +177,7 @@ export default function DeviceManagement() {
           <div className="text-xs text-gray-400">目前連線中</div>
         </div>
         <div className="bg-white rounded-xl shadow-sm p-4">
-          <div className="text-2xl font-bold text-gray-800">{devices.length > 0 ? `${Math.round(onlineCount / Math.max(devices.length, 1) * 100)}%` : "—"}</div>
+          <div className="text-2xl font-bold text-gray-800">{filteredDevices.length > 0 ? `${Math.round(onlineCount / Math.max(filteredDevices.length, 1) * 100)}%` : "—"}</div>
           <div className="text-xs text-gray-400">裝置上線率</div>
         </div>
       </div>
@@ -170,13 +192,13 @@ export default function DeviceManagement() {
 
       {!loading && !error && (
         <div className="space-y-3">
-          {devices.length === 0 ? (
+          {filteredDevices.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center">
               <p className="text-gray-400 text-sm">尚無註冊裝置</p>
               <p className="text-xs text-gray-300 mt-1">ESP32 連線後會自動註冊</p>
             </div>
           ) : (
-            devices.map((d) => {
+            filteredDevices.map((d) => {
               const batt = batteryLevel(d.battery_level);
               return (
                 <div

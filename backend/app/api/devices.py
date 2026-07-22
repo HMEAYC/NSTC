@@ -6,6 +6,7 @@ from pydantic import BaseModel
 from fastapi import APIRouter, Depends, HTTPException, Body, Query
 from sqlalchemy.orm import Session
 from app.auth.deps import require_login, require_device_or_user
+from app.auth.jwt import create_device_token, hash_token
 from app.auth.deps import require_role
 from app.auth.org import effective_org_id
 from app.db.base import get_db
@@ -16,8 +17,23 @@ from app.models.organization import Organization
 from app.models.session import Session as SessionModel
 from app.models.user import User
 from app.models.wifi_config import WifiConfig
+from app.models.school_class import SchoolClass
 
 router = APIRouter(prefix="/api", tags=["devices"])
+
+
+def _strip_student_id_prefix(code: str | None, student_id: str | None) -> str | None:
+    if not code or not student_id:
+        return student_id
+    prefix = f"{code}-"
+    return student_id[len(prefix):] if student_id.startswith(prefix) else student_id
+
+
+def _get_class_code(db: Session, class_id: str | None) -> str | None:
+    if not class_id:
+        return None
+    cls = db.query(SchoolClass).filter(SchoolClass.id == class_id).first()
+    return cls.code if cls else None
 
 
 class UpdateDeviceRequest(BaseModel):
@@ -141,7 +157,10 @@ def register_device(
             existing.mac_address = mac_address
         db.commit()
         db.refresh(existing)
-        return {"device": _device_dict(existing)}
+        device_token = create_device_token(existing.device_id, str(existing.org_id))
+        existing.device_token_hash = hash_token(device_token)
+        db.commit()
+        return {"device": _device_dict(existing), "device_token": device_token}
     device = DeviceModel(
         device_id=device_id,
         name=name or device_id,
@@ -157,7 +176,10 @@ def register_device(
     db.add(device)
     db.commit()
     db.refresh(device)
-    return {"device": _device_dict(device)}
+    device_token = create_device_token(device.device_id, str(device.org_id))
+    device.device_token_hash = hash_token(device_token)
+    db.commit()
+    return {"device": _device_dict(device), "device_token": device_token}
 
 
 @router.put("/devices/{device_id}")
@@ -206,6 +228,20 @@ def delete_device(
     return {"status": "deleted"}
 
 
+@router.post("/devices/{device_id}/revoke-token")
+def revoke_device_token(
+    device_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("super_admin", "org_admin")),
+):
+    device = db.query(DeviceModel).filter(DeviceModel.id == device_id).first()
+    if not device:
+        raise HTTPException(404, "Device not found")
+    device.device_token_hash = None
+    db.commit()
+    return {"status": "token_revoked", "device_id": device.device_id}
+
+
 @router.get("/children")
 def list_children(
     org_id: str | None = Query(None),
@@ -222,7 +258,7 @@ def list_children(
             {
                 "id": c.id,
                 "name": c.name,
-                "student_id": c.student_id,
+                "student_id": _strip_student_id_prefix(_get_class_code(db, c.class_id), c.student_id),
                 "notes": c.notes,
                 "class_id": c.class_id,
                 "created_at": c.created_at.isoformat() if c.created_at else None,
@@ -254,7 +290,7 @@ def list_child_assignments(
         result.append({
             "id": c.id,
             "name": c.name,
-            "student_id": c.student_id,
+            "student_id": _strip_student_id_prefix(_get_class_code(db, c.class_id), c.student_id),
             "class_id": c.class_id,
             "device_id": assignment.device_id if assignment else None,
             "device_name": device_name,
@@ -337,9 +373,13 @@ def register_child(
     current_user: User = Depends(require_login),
 ):
     org_id = effective_org_id(current_user)
+    class_code = _get_class_code(db, class_id)
+    prefixed_sid = student_id
+    if class_code and student_id:
+        prefixed_sid = f"{class_code}-{student_id}"
     child = ChildModel(
         name=name,
-        student_id=student_id,
+        student_id=prefixed_sid,
         notes=notes,
         org_id=org_id,
         class_id=class_id,
@@ -352,7 +392,7 @@ def register_child(
         "child": {
             "id": child.id,
             "name": child.name,
-            "student_id": child.student_id,
+            "student_id": _strip_student_id_prefix(class_code, child.student_id),
             "notes": child.notes,
             "class_id": child.class_id,
             "created_at": child.created_at.isoformat() if child.created_at else None,

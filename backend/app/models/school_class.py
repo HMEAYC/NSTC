@@ -10,5 +10,6 @@ class SchoolClass(Base):
     id = Column(String(36), primary_key=True, default=lambda: str(uuid.uuid4()))
     org_id = Column(String(36), ForeignKey("organizations.id"), nullable=False)
     name = Column(String(100), nullable=False)
+    code = Column(String(20), nullable=True)
     grade = Column(String(50), nullable=True)
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

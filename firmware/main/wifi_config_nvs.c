@@ -9,6 +9,7 @@
 #include "freertos/task.h"
 #include "nvs_flash.h"
 #include "ca_cert.h"
+#include "device_registry.h"
 
 static const char *TAG = "WiFiNVS";
 
@@ -95,13 +96,13 @@ esp_err_t wifi_config_fetch_remote(const char *base_url, const char *device_id) 
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) return ESP_FAIL;
 
+    device_auth_set_header(client);
+
     esp_err_t err = esp_http_client_open(client, 0);
     if (err != ESP_OK) {
         esp_http_client_cleanup(client);
         return err;
     }
-
-    esp_http_client_set_header(client, "X-API-Key", CONFIG_HMEAYC_API_KEY);
 
     int content_len = esp_http_client_fetch_headers(client);
     if (content_len <= 0 || content_len > 512) {
@@ -290,4 +291,28 @@ esp_err_t wifi_ws_uri_load(char *uri, size_t uri_size) {
 esp_err_t wifi_ws_uri_save(const char *uri) {
     ESP_LOGI(TAG, "saved WS URI to NVS: %s", uri);
     return nvs_str_save(NVS_KEY_WS_URI, uri);
+}
+
+#define NVS_KEY_DEVICE_JWT "device_jwt"
+
+esp_err_t device_token_load(char *token, size_t max_len) {
+    return nvs_str_load(NVS_KEY_DEVICE_JWT, token, max_len);
+}
+
+esp_err_t device_token_save(const char *token) {
+    if (!token || token[0] == '\0') return ESP_ERR_INVALID_ARG;
+    ESP_LOGI(TAG, "saved device JWT to NVS");
+    return nvs_str_save(NVS_KEY_DEVICE_JWT, token);
+}
+
+esp_err_t device_token_clear(void) {
+    nvs_handle_t handle;
+    esp_err_t err = nvs_open(NVS_NAMESPACE, NVS_READWRITE, &handle);
+    if (err != ESP_OK) return err;
+    err = nvs_erase_key(handle, NVS_KEY_DEVICE_JWT);
+    if (err == ESP_ERR_NVS_NOT_FOUND) err = ESP_OK;
+    if (err == ESP_OK) err = nvs_commit(handle);
+    nvs_close(handle);
+    ESP_LOGW(TAG, "device JWT cleared from NVS");
+    return err;
 }

@@ -7,6 +7,7 @@
 #include "esp_http_client.h"
 #include "nvs_flash.h"
 #include "ca_cert.h"
+#include "device_registry.h"
 
 static const char *TAG = "SessionNVS";
 
@@ -75,13 +76,13 @@ esp_err_t session_config_fetch_remote(const char *base_url, const char *device_i
     esp_http_client_handle_t client = esp_http_client_init(&cfg);
     if (!client) return ESP_FAIL;
 
+    device_auth_set_header(client);
+
     esp_err_t err = esp_http_client_open(client, 0);
     if (err != ESP_OK) {
         esp_http_client_cleanup(client);
         return err;
     }
-
-    esp_http_client_set_header(client, "X-API-Key", CONFIG_HMEAYC_API_KEY);
 
     int content_len = esp_http_client_fetch_headers(client);
     if (content_len <= 0 || content_len > 512) {

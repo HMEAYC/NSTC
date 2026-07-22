@@ -512,6 +512,9 @@ export const api = {
   listOrgUsers: (orgId: string) =>
     fetchJSON<{ users: UserInfo[] }>(`/api/orgs/${orgId}/users`),
 
+  listAllUsers: () =>
+    fetchJSON<{ users: UserInfo[] }>(`/api/users`),
+
   inviteUser: (orgId: string, data: { email: string; role?: string }) =>
     fetchJSON<{ user: { id: string; email: string; role: string; org_id: string } }>(`/api/orgs/${orgId}/invite`, {
       method: "POST", body: JSON.stringify(data),
@@ -580,6 +583,9 @@ export const api = {
   // Org classes
   listOrgClasses: (orgId: string) =>
     fetchJSON<{ classes: { id: string; org_id: string; name: string; grade: string | null; created_at: string | null }[] }>(`/api/orgs/${orgId}/classes`),
+
+  listAllClasses: () =>
+    fetchJSON<{ classes: { id: string; org_id: string; name: string; grade: string | null; created_at: string | null }[] }>(`/api/classes`),
 
   createOrgClass: (orgId: string, name: string, grade?: string) => {
     const params = new URLSearchParams({ name });

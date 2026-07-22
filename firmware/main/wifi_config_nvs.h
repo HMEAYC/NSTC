@@ -26,6 +26,10 @@ esp_err_t wifi_api_url_save(const char *url);
 esp_err_t wifi_ws_uri_load(char *uri, size_t uri_size);
 esp_err_t wifi_ws_uri_save(const char *uri);
 
+esp_err_t device_token_load(char *token, size_t max_len);
+esp_err_t device_token_save(const char *token);
+esp_err_t device_token_clear(void);
+
 #ifdef __cplusplus
 }
 #endif

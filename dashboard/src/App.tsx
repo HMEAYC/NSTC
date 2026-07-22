@@ -52,7 +52,7 @@ export default function App() {
                 <Route path="/dashboard/assessment/:sessionId" element={<ProtectedRoute><AssessmentIndicators /></ProtectedRoute>} />
                 <Route path="/dashboard/devices" element={<ProtectedRoute><DeviceManagement /></ProtectedRoute>} />
                 <Route path="/dashboard/firmware" element={<ProtectedRoute><FirmwareUpload /></ProtectedRoute>} />
-                <Route path="/dashboard/admin" element={<RoleRoute roles={["org_admin", "super_admin"]}><AdminOrgs /></RoleRoute>} />
+                <Route path="/dashboard/admin" element={<RoleRoute roles={["super_admin"]}><AdminOrgs /></RoleRoute>} />
                 <Route path="/dashboard/classes" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassManagement /></RoleRoute>} />
                 <Route path="/dashboard/classes/:classId" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassDetail /></RoleRoute>} />
                 <Route path="/dashboard/classes/:classId/assessments" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassAssessments /></RoleRoute>} />

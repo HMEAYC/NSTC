@@ -1,6 +1,7 @@
 #pragma once
 
 #include "esp_err.h"
+#include "esp_http_client.h"
 
 #ifdef __cplusplus
 extern "C" {
@@ -25,6 +26,8 @@ esp_err_t device_registry_heartbeat(
     const char *base_url,
     const char *device_id
 );
+
+void device_auth_set_header(esp_http_client_handle_t client);
 
 #ifdef __cplusplus
 }

@@ -103,10 +103,14 @@ async def imu_data_ws(
     _viewers[session_id].add(websocket)
 
     user_org_id = None
+    device_id_from_token = None
     if token:
         payload = decode_token(token)
         if payload:
-            user_org_id = payload.get("org_id")
+            if payload.get("sub") == "device":
+                device_id_from_token = payload.get("device_id")
+            else:
+                user_org_id = payload.get("org_id")
     resolved_org = user_org_id or None
 
     db = SessionLocal()
@@ -116,6 +120,16 @@ async def imu_data_ws(
         if not session:
             await websocket.close(code=4004, reason="Session not found")
             return
+
+        if device_id_from_token:
+            device = db.query(DeviceModel).filter(
+                DeviceModel.device_id == device_id_from_token
+            ).first()
+            if not device:
+                await websocket.close(code=4001, reason="Unknown device")
+                return
+            device.active_session_id = session_id
+            db.commit()
 
         await websocket.send_json({
             "type": "status",
@@ -203,9 +217,10 @@ async def imu_data_ws(
 
             if data["type"] == "imu":
                 ts = float(data.get("ts", datetime.now(timezone.utc).timestamp() * 1000))
+                verified_device_id = device_id_from_token or str(data.get("device_id", "esp32-c3"))
                 frame = IMUData(
                     session_id=session_id,
-                    device_id=str(data.get("device_id", "esp32-c3")),
+                    device_id=verified_device_id,
                     timestamp=datetime.fromtimestamp(ts / 1000.0, tz=timezone.utc),
                     accel_x=float(data.get("ax", 0.0)),
                     accel_y=float(data.get("ay", 0.0)),

@@ -1,6 +1,5 @@
 import { useEffect, useState } from "react";
 import { useAuth } from "../auth/context";
-import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
 import Modal from "../components/Modal";
 import { api } from "../api/client";
@@ -28,8 +27,9 @@ export default function UserManagement() {
   const [users, setUsers] = useState<ManagedUser[]>([]);
   const [loading, setLoading] = useState(true);
   const isSuper = user?.role === "super_admin";
-  const myOrgId = user?.org_id || "";
-  const effectiveOrgId = isSuper ? (getActiveOrgId() || myOrgId) : myOrgId;
+  const isTeacher = user?.role === "teacher";
+  const [orgs, setOrgs] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [filterOrgId, setFilterOrgId] = useState<string>("");
 
   // invite modal
   const [showInviteModal, setShowInviteModal] = useState(false);
@@ -46,28 +46,31 @@ export default function UserManagement() {
   const [editSaving, setEditSaving] = useState(false);
   const [editError, setEditError] = useState<string | null>(null);
 
-  const fetchUsers = async (orgId?: string) => {
+  const fetchUsers = async () => {
     setLoading(true);
     try {
-      const targetOrg = orgId || effectiveOrgId;
-      const data = await api.listOrgUsers(targetOrg);
+      const data = await api.listAllUsers();
       setUsers((data.users || []) as ManagedUser[]);
     } catch (err) { console.error("Failed to load users:", err); }
     setLoading(false);
   };
 
   useEffect(() => {
-    if (effectiveOrgId) fetchUsers(effectiveOrgId);
-  }, [effectiveOrgId]);
+    fetchUsers();
+    if (isSuper) {
+      api.listOrgs().then((d) => setOrgs(d.orgs || [])).catch(() => {});
+    }
+  }, []);
 
   // ── invite ──
   const handleInvite = async () => {
-    if (!invEmail.trim() || !effectiveOrgId) return;
+    const targetOrg = isSuper ? filterOrgId || user?.org_id : user?.org_id;
+    if (!invEmail.trim() || !targetOrg) return;
     setInvSending(true);
     setInvError(null);
     setInvOk(null);
     try {
-      await api.inviteUser(effectiveOrgId, { email: invEmail, role: invRole });
+      await api.inviteUser(targetOrg, { email: invEmail, role: invRole });
       setInvOk(`邀請已發送至 ${invEmail}`);
       setInvEmail("");
       fetchUsers();
@@ -99,7 +102,7 @@ export default function UserManagement() {
   const toggleActive = async (uid: string, current: boolean) => {
     try {
       await api.updateUser(uid, { is_active: !current });
-      fetchUsers(effectiveOrgId);
+      fetchUsers();
     } catch (err) { console.error("Failed to toggle user active state:", err); }
   };
 
@@ -119,24 +122,34 @@ export default function UserManagement() {
     setEditError(null);
   };
 
-  if (!effectiveOrgId) {
-    return (
-      <div className="p-6 max-w-4xl mx-auto">
-        <h1 className="text-2xl font-bold text-gray-800 mb-4">帳號管理</h1>
-        <p className="text-gray-400 text-sm">請先到機構管理選擇機構</p>
-      </div>
-    );
-  }
+  const filteredUsers = isSuper && filterOrgId
+    ? users.filter((u) => u.org_id === filterOrgId)
+    : users;
 
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">帳號管理</h1>
-        <button onClick={() => { setShowInviteModal(true); setInvError(null); setInvOk(null); }}
-          className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700">
-          + 教師邀請
-        </button>
+        {!isTeacher && (
+          <button onClick={() => { setShowInviteModal(true); setInvError(null); setInvOk(null); }}
+            className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700">
+            + 教師邀請
+          </button>
+        )}
       </div>
+
+      {isSuper && orgs.length > 0 && (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">機構篩選：</span>
+          <select value={filterOrgId} onChange={(e) => setFilterOrgId(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="">全部機構</option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {/* ── Invite modal ── */}
       <Modal open={showInviteModal} onClose={() => setShowInviteModal(false)} title="教師邀請">
@@ -203,7 +216,7 @@ export default function UserManagement() {
       {/* ── User list ── */}
       {loading ? <LoadingSpinner text="載入中…" /> : (
         <div className="space-y-2">
-          {users.filter((u) => u.role !== "parent").map((u) => {
+          {filteredUsers.filter((u) => u.role !== "parent").map((u) => {
             const pending = u.invite_token != null && !u.is_active;
             return (
               <div key={u.id} onClick={() => openEdit(u)}
@@ -212,7 +225,6 @@ export default function UserManagement() {
                   <div className="font-semibold text-gray-800">{u.display_name || u.email}</div>
                   <div className="text-xs text-gray-400">
                     {u.email} · {roleLabel[u.role] || u.role}
-                    {pending && <span className="ml-2 text-amber-600 font-medium">邀請中</span>}
                   </div>
                 </div>
                 <span className={`text-xs px-2 py-0.5 rounded-full ${pending ? "bg-amber-50 text-amber-600" : u.is_active ? "bg-green-50 text-green-600" : "bg-red-50 text-red-600"}`}>
@@ -221,19 +233,19 @@ export default function UserManagement() {
               </div>
             );
           })}
-          {users.filter((u) => u.role !== "parent").length === 0 && (
+          {filteredUsers.filter((u) => u.role !== "parent").length === 0 && (
             <p className="text-center text-gray-400 text-sm py-8">尚無教師帳號</p>
           )}
         </div>
       )}
 
       {/* ── Parents ── */}
-      {users.filter((u) => u.role === "parent").length > 0 && (
+      {filteredUsers.filter((u) => u.role === "parent").length > 0 && (
         <>
           <h3 className="text-sm font-semibold text-gray-500 mt-4">家長帳號</h3>
           {loading ? null : (
             <div className="space-y-2">
-              {users.filter((u) => u.role === "parent").map((u) => {
+              {filteredUsers.filter((u) => u.role === "parent").map((u) => {
                 const paired = u.children && u.children.length > 0;
                 const pending = u.invite_token != null && !u.is_active;
                 return (

@@ -10,6 +10,7 @@
 #include "freertos/event_groups.h"
 
 #include "wifi_manager.h"
+#include "wifi_config_nvs.h"
 
 static const char *TAG = "WSClient";
 
@@ -75,7 +76,12 @@ void websocket_set_base_uri(const char *api_url) {
 }
 
 static void build_ws_uri(char *buf, size_t buf_size) {
-    snprintf(buf, buf_size, "%s/ws/%s", ws_base_uri, current_session_id);
+    char token[512];
+    if (device_token_load(token, sizeof(token)) == ESP_OK && token[0] != '\0') {
+        snprintf(buf, buf_size, "%s/ws/%s?token=%s", ws_base_uri, current_session_id, token);
+    } else {
+        snprintf(buf, buf_size, "%s/ws/%s", ws_base_uri, current_session_id);
+    }
 }
 
 static void ws_event_handler(void *arg, esp_event_base_t base,

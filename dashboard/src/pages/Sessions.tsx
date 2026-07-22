@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/context";
-import { getActiveOrgId } from "../lib/activeOrg";
 import { api, type SessionInfo, type SessionTemplateInfo } from "../api/client";
 import LoadingSpinner from "../components/LoadingSpinner";
 
@@ -24,21 +23,21 @@ export default function Sessions() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: "", class_id: "", template_id: "", scheduled_at: "", description: "" });
   const [deletingId, setDeletingId] = useState<string | null>(null);
+  const [orgs, setOrgs] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [filterOrgId, setFilterOrgId] = useState<string>("");
 
   const isSuperAdmin = user?.role === "super_admin";
   const myOrgId = user?.org_id || "";
-  const effectiveOrgId = isSuperAdmin ? (getActiveOrgId() || myOrgId) : myOrgId;
 
   const fetchData = async () => {
     setLoading(true);
     setError(null);
     try {
-      const orgId = effectiveOrgId;
       const [sessionsRes, templatesRes, classRes] = await Promise.all([
-        api.listSessions(orgId ? { org_id: orgId } : undefined),
+        api.listSessions(isSuperAdmin ? undefined : myOrgId ? { org_id: myOrgId } : undefined),
         api.listTemplates(),
-        effectiveOrgId
-          ? api.listOrgClasses(effectiveOrgId).catch(() => ({ classes: [] }))
+        myOrgId
+          ? api.listOrgClasses(myOrgId).catch(() => ({ classes: [] }))
           : Promise.resolve({ classes: [] }),
       ]);
       setSessions(sessionsRes.sessions);
@@ -51,7 +50,12 @@ export default function Sessions() {
     }
   };
 
-  useEffect(() => { fetchData(); }, [effectiveOrgId]);
+  useEffect(() => { fetchData(); }, []);
+  useEffect(() => {
+    if (isSuperAdmin) {
+      api.listOrgs().then((d) => setOrgs(d.orgs || [])).catch(() => {});
+    }
+  }, []);
 
   const handleCreate = async () => {
     if (!form.name && !form.template_id) return;
@@ -60,7 +64,6 @@ export default function Sessions() {
     const tplName = templates.find((t) => t.id === form.template_id)?.name || "";
     const autoName = [dateStr, className, tplName].filter(Boolean).join(" ");
     const name = form.name.trim() || autoName;
-    const orgParam = effectiveOrgId;
     try {
       await api.createSession({
         name,
@@ -68,7 +71,7 @@ export default function Sessions() {
         template_id: form.template_id || undefined,
         scheduled_at: form.scheduled_at || undefined,
         description: form.description || undefined,
-        org_id: orgParam || undefined,
+        org_id: isSuperAdmin ? (filterOrgId || myOrgId || undefined) : myOrgId || undefined,
       });
       setForm({ name: "", class_id: "", template_id: "", scheduled_at: "", description: "" });
       setShowCreate(false);
@@ -90,6 +93,10 @@ export default function Sessions() {
 
   if (loading) return <div className="p-6 max-w-4xl mx-auto"><LoadingSpinner text="載入課程…" /></div>;
 
+  const filteredSessions = isSuperAdmin && filterOrgId
+    ? sessions.filter((s) => s.org_id === filterOrgId)
+    : sessions;
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
@@ -99,6 +106,19 @@ export default function Sessions() {
           {showCreate ? "取消" : "+ 新增課程"}
         </button>
       </div>
+
+      {isSuperAdmin && orgs.length > 0 && (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">機構篩選：</span>
+          <select value={filterOrgId} onChange={(e) => setFilterOrgId(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="">全部機構</option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">{error}</div>}
 
@@ -136,9 +156,9 @@ export default function Sessions() {
       )}
 
       <div className="space-y-2">
-        {sessions.length === 0 ? (
+        {filteredSessions.length === 0 ? (
             <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">尚無課程</div>
-          ) : sessions.map((s) => {
+          ) : filteredSessions.map((s) => {
           const cfg = statusConfig[s.status] || { label: s.status, color: "bg-gray-100 text-gray-600" };
           return (
             <div key={s.id} onClick={() => navigate(`/dashboard/sessions/${s.id}`)}

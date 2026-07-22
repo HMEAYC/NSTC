@@ -19,6 +19,24 @@ from app.models.parent_child import ParentChild
 router = APIRouter(tags=["admin"])
 
 
+def _class_code_from_name(name: str) -> str:
+    base = name.rstrip("班") if name.endswith("班") else name
+    return base[:10] if base else "C"
+
+
+def _prefix_student_id(code: str | None, student_id: str) -> str:
+    if not code or not student_id:
+        return student_id
+    return f"{code}-{student_id}"
+
+
+def _strip_student_id_prefix(code: str | None, student_id: str | None) -> str | None:
+    if not code or not student_id:
+        return student_id
+    prefix = f"{code}-"
+    return student_id[len(prefix):] if student_id.startswith(prefix) else student_id
+
+
 class OrgResponse(BaseModel):
     id: str
     name: str
@@ -34,6 +52,7 @@ class ClassResponse(BaseModel):
     id: str
     org_id: str
     name: str
+    code: str | None = None
     grade: str | None
     created_at: datetime | None
 
@@ -57,6 +76,7 @@ class ChildResponse(BaseModel):
     name: str
     student_id: str | None
     class_id: str | None
+    notes: str | None = None
     created_at: datetime | None
 
     model_config = {"from_attributes": True}
@@ -157,6 +177,29 @@ def list_classes(
     return {"classes": [ClassResponse.model_validate(c) for c in classes]}
 
 
+@router.get("/api/classes")
+def list_all_classes(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "teacher", "super_admin")),
+):
+    if current_user.role == "super_admin":
+        classes = db.query(SchoolClass).all()
+    elif current_user.role == "teacher":
+        from app.models.session import Session as SessionModel
+        class_ids = list({
+            s.class_id for s in db.query(SessionModel.class_id).filter(
+                SessionModel.teacher_id == current_user.id,
+                SessionModel.class_id.isnot(None),
+            ).distinct().all()
+        })
+        if not class_ids:
+            return {"classes": []}
+        classes = db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids)).all()
+    else:
+        classes = db.query(SchoolClass).filter(SchoolClass.org_id == current_user.org_id).all()
+    return {"classes": [ClassResponse.model_validate(c) for c in classes]}
+
+
 @router.post("/api/orgs/{org_id}/classes")
 def create_class(
     org_id: str, name: str, grade: str | None = None,
@@ -164,7 +207,7 @@ def create_class(
     current_user: User = Depends(require_role("org_admin", "super_admin")),
 ):
     same_org(org_id, current_user)
-    cls = SchoolClass(org_id=org_id, name=name, grade=grade)
+    cls = SchoolClass(org_id=org_id, name=name, code=_class_code_from_name(name), grade=grade)
     db.add(cls)
     db.commit()
     db.refresh(cls)
@@ -183,6 +226,7 @@ def update_class(
     same_org(cls.org_id, current_user)
     if name is not None:
         cls.name = name
+        cls.code = _class_code_from_name(name)
     if grade is not None:
         cls.grade = grade
     db.commit()
@@ -216,7 +260,12 @@ def list_class_children(
         raise HTTPException(404, "Class not found")
     same_org(cls.org_id, current_user)
     children = db.query(Child).filter(Child.class_id == class_id).all()
-    return {"children": [ChildResponse.model_validate(c) for c in children]}
+    result = []
+    for c in children:
+        info = ChildResponse.model_validate(c).model_dump()
+        info["student_id"] = _strip_student_id_prefix(cls.code, info.get("student_id"))
+        result.append(info)
+    return {"children": result}
 
 
 @router.post("/api/classes/{class_id}/children")
@@ -232,18 +281,25 @@ def create_class_child(
     if not cls:
         raise HTTPException(404, "Class not found")
     same_org(cls.org_id, current_user)
+    prefixed_sid = _prefix_student_id(cls.code, student_id) if student_id else None
+    if prefixed_sid:
+        existing = db.query(Child).filter(Child.student_id == prefixed_sid).first()
+        if existing:
+            raise HTTPException(400, "學號已被其他幼兒使用")
     child = Child(
         org_id=cls.org_id,
         class_id=class_id,
         added_by=current_user.id,
         name=name,
-        student_id=student_id,
+        student_id=prefixed_sid,
         notes=notes,
     )
     db.add(child)
     db.commit()
     db.refresh(child)
-    return {"child": ChildResponse.model_validate(child)}
+    info = ChildResponse.model_validate(child).model_dump()
+    info["student_id"] = _strip_student_id_prefix(cls.code, info.get("student_id"))
+    return {"child": info}
 
 
 @router.put("/api/children/{child_id}")
@@ -259,15 +315,29 @@ def update_child(
     if not child:
         raise HTTPException(404, "Child not found")
     same_org(child.org_id, current_user)
+    class_code = None
+    if child.class_id:
+        cls = db.query(SchoolClass).filter(SchoolClass.id == child.class_id).first()
+        class_code = cls.code if cls else None
     if name is not None:
         child.name = name
     if student_id is not None:
-        child.student_id = student_id
+        prefixed = _prefix_student_id(class_code, student_id)
+        existing = db.query(Child).filter(Child.student_id == prefixed, Child.id != child_id).first()
+        if existing:
+            raise HTTPException(400, "學號已被其他幼兒使用")
+        child.student_id = prefixed
     if notes is not None:
         child.notes = notes
-    db.commit()
+    try:
+        db.commit()
+    except Exception:
+        db.rollback()
+        raise HTTPException(400, "儲存失敗，學號可能重複")
     db.refresh(child)
-    return {"child": ChildResponse.model_validate(child)}
+    info = ChildResponse.model_validate(child).model_dump()
+    info["student_id"] = _strip_student_id_prefix(class_code, info.get("student_id"))
+    return {"child": info}
 
 
 @router.delete("/api/children/{child_id}")
@@ -286,6 +356,61 @@ def delete_child(
 
 
 # ─── Users (org users management) ────────────────────────────────
+
+@router.get("/api/users")
+def list_users(
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+):
+    if current_user.role == "super_admin":
+        users = db.query(User).all()
+    elif current_user.role == "teacher":
+        from app.models.session import Session as SessionModel
+        class_ids = list({
+            s.class_id for s in db.query(SessionModel.class_id).filter(
+                SessionModel.teacher_id == current_user.id,
+                SessionModel.class_id.isnot(None),
+            ).distinct().all()
+        })
+        if not class_ids:
+            return {"users": []}
+        child_ids = [c.id for c in db.query(Child).filter(Child.class_id.in_(class_ids)).all()]
+        if not child_ids:
+            return {"users": []}
+        parent_ids = list({pc.parent_id for pc in db.query(ParentChild).filter(ParentChild.child_id.in_(child_ids)).all()})
+        if not parent_ids:
+            return {"users": []}
+        users = db.query(User).filter(User.id.in_(parent_ids)).all()
+    else:
+        users = db.query(User).filter(User.org_id == current_user.org_id).all()
+
+    parent_ids = [u.id for u in users if u.role == "parent"]
+    bindings = db.query(ParentChild).filter(ParentChild.parent_id.in_(parent_ids)).all() if parent_ids else []
+    child_ids = list({b.child_id for b in bindings})
+    children = db.query(Child).filter(Child.id.in_(child_ids)).all() if child_ids else []
+    child_map = {c.id: c for c in children}
+    class_ids = list({c.class_id for c in children if c.class_id})
+    classes = db.query(SchoolClass).filter(SchoolClass.id.in_(class_ids)).all() if class_ids else []
+    class_map = {cls.id: cls.name for cls in classes}
+
+    parent_children_map: dict[str, list[str]] = {}
+    for b in bindings:
+        child = child_map.get(b.child_id)
+        if child:
+            class_name = class_map.get(child.class_id, "") if child.class_id else ""
+            label = f"{class_name}-{child.name}" if class_name else child.name
+        else:
+            label = "未知"
+        parent_children_map.setdefault(b.parent_id, []).append(label)
+
+    result = []
+    for u in users:
+        info = UserResponse.model_validate(u).model_dump()
+        if u.role == "parent":
+            info["children"] = parent_children_map.get(u.id, [])
+        result.append(info)
+    return {"users": result}
+
 
 @router.get("/api/orgs/{org_id}/users")
 def list_org_users(
@@ -490,7 +615,21 @@ def list_my_children(
     bindings = db.query(ParentChild).filter(ParentChild.parent_id == current_user.id).all()
     child_ids = [b.child_id for b in bindings]
     children = db.query(Child).filter(Child.id.in_(child_ids)).all()
-    return {"children": [{"id": c.id, "name": c.name, "student_id": c.student_id, "class_id": c.class_id, "notes": c.notes, "created_at": c.created_at.isoformat() if c.created_at else None} for c in children]}
+    result = []
+    for c in children:
+        code = None
+        if c.class_id:
+            cls = db.query(SchoolClass).filter(SchoolClass.id == c.class_id).first()
+            code = cls.code if cls else None
+        result.append({
+            "id": c.id,
+            "name": c.name,
+            "student_id": _strip_student_id_prefix(code, c.student_id),
+            "class_id": c.class_id,
+            "notes": c.notes,
+            "created_at": c.created_at.isoformat() if c.created_at else None,
+        })
+    return {"children": result}
 
 
 @router.delete("/api/parents/{parent_id}/children/{child_id}")

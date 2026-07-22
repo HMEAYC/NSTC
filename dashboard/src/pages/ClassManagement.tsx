@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { useAuth } from "../auth/context";
-import { getActiveOrgId } from "../lib/activeOrg";
 import LoadingSpinner from "../components/LoadingSpinner";
 import { api } from "../api/client";
 
@@ -22,15 +21,16 @@ export default function ClassManagement() {
   const [showCreate, setShowCreate] = useState(false);
   const [form, setForm] = useState({ name: "", grade: "" });
   const isSuper = user?.role === "super_admin";
+  const isTeacher = user?.role === "teacher";
   const myOrgId = user?.org_id || "";
-  const effectiveOrgId = isSuper ? (getActiveOrgId() || myOrgId) : myOrgId;
+  const [orgs, setOrgs] = useState<{ id: string; name: string; code: string }[]>([]);
+  const [filterOrgId, setFilterOrgId] = useState<string>("");
 
-  const fetchClasses = async (orgId: string) => {
-    if (!orgId) return;
+  const fetchClasses = async () => {
     setLoading(true);
     setError(null);
     try {
-      const data = await api.listOrgClasses(orgId);
+      const data = await api.listAllClasses();
       setClasses(data.classes || []);
     } catch (e) {
       setError(e instanceof Error ? e.message : "載入失敗");
@@ -40,16 +40,19 @@ export default function ClassManagement() {
   };
 
   useEffect(() => {
-    if (effectiveOrgId) fetchClasses(effectiveOrgId);
-  }, [effectiveOrgId]);
+    fetchClasses();
+    if (isSuper) {
+      api.listOrgs().then((d) => setOrgs(d.orgs || [])).catch(() => {});
+    }
+  }, []);
 
   const handleCreate = async () => {
-    if (!form.name.trim() || !effectiveOrgId) return;
+    if (!form.name.trim() || !myOrgId) return;
     try {
-      await api.createOrgClass(effectiveOrgId, form.name, form.grade || undefined);
+      await api.createOrgClass(myOrgId, form.name, form.grade || undefined);
       setForm({ name: "", grade: "" });
       setShowCreate(false);
-      fetchClasses(effectiveOrgId);
+      fetchClasses();
     } catch (err) { console.error("Failed to create class:", err); }
   };
 
@@ -57,11 +60,15 @@ export default function ClassManagement() {
     return <div className="p-6 max-w-4xl mx-auto"><LoadingSpinner text="載入班級…" /></div>;
   }
 
+  const filteredClasses = isSuper && filterOrgId
+    ? classes.filter((c) => c.org_id === filterOrgId)
+    : classes;
+
   return (
     <div className="p-6 max-w-4xl mx-auto space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold text-gray-800">班級管理</h1>
-        {effectiveOrgId && (
+        {!isTeacher && myOrgId && (
           <button onClick={() => setShowCreate(!showCreate)}
             className="text-sm bg-blue-600 text-white px-4 py-1.5 rounded-lg hover:bg-blue-700">
             {showCreate ? "取消" : "+ 新增班級"}
@@ -70,6 +77,19 @@ export default function ClassManagement() {
       </div>
 
       {error && <div className="bg-red-50 border border-red-200 text-red-700 rounded-lg p-4 text-sm">{error}</div>}
+
+      {isSuper && orgs.length > 0 && (
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">機構篩選：</span>
+          <select value={filterOrgId} onChange={(e) => setFilterOrgId(e.target.value)}
+            className="border rounded-lg px-3 py-1.5 text-sm bg-white">
+            <option value="">全部機構</option>
+            {orgs.map((o) => (
+              <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
+            ))}
+          </select>
+        </div>
+      )}
 
       {showCreate && (
         <div className="bg-white rounded-xl shadow-sm p-4 space-y-3">
@@ -82,11 +102,11 @@ export default function ClassManagement() {
       )}
 
       <div className="space-y-2">
-        {classes.length === 0 ? (
+        {filteredClasses.length === 0 ? (
           <div className="bg-white rounded-xl shadow-sm p-8 text-center text-gray-400 text-sm">
-            {effectiveOrgId ? "尚無班級" : "請先到機構管理選擇機構"}
+            {myOrgId ? "尚無班級" : "請先到機構管理選擇機構"}
           </div>
-        ) : classes.map((c) => (
+        ) : filteredClasses.map((c) => (
           <div key={c.id} onClick={() => navigate(`/dashboard/classes/${c.id}`)}
             className="bg-white rounded-xl shadow-sm p-4 flex items-center justify-between hover:shadow-md cursor-pointer">
             <div>

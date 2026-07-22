@@ -20,4 +20,5 @@ class Device(Base):
     status = Column(Enum("online", "offline", name="device_status"), default="offline")
     last_seen = Column(DateTime, nullable=True)
     active_session_id = Column(String(36), ForeignKey("sessions.id"), nullable=True)
+    device_token_hash = Column(String(200), nullable=True)  # SHA-256 of issued device JWT
     created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc))

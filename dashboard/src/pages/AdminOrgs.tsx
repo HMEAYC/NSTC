@@ -18,7 +18,6 @@ export default function AdminOrgs() {
   const [orgs, setOrgs] = useState<Org[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
-  const [activeOrgId, setActiveOrgId_] = useState(getActiveOrgId());
 
   // Modal state
   const [showModal, setShowModal] = useState(false);
@@ -37,7 +36,6 @@ export default function AdminOrgs() {
         const list = data.orgs || [];
         setOrgs(list as Org[]);
         if (!getActiveOrgId() && list.length > 0) {
-          setActiveOrgId_(list[0].id);
           setActiveOrgId(list[0].id);
         }
       })
@@ -113,18 +111,6 @@ export default function AdminOrgs() {
           + 新增組織
         </button>
       </div>
-
-      {user?.role === "super_admin" && orgs.length > 0 && (
-        <div className="flex items-center gap-3 bg-blue-50 border border-blue-200 rounded-xl px-4 py-3">
-          <span className="text-xs text-blue-700 font-medium">目前操作機構：</span>
-          <select value={activeOrgId || ""} onChange={(e) => { setActiveOrgId_(e.target.value); setActiveOrgId(e.target.value); }}
-            className="border rounded-lg px-3 py-1.5 text-sm bg-white">
-            {orgs.map((o) => (
-              <option key={o.id} value={o.id}>{o.name} ({o.code})</option>
-            ))}
-          </select>
-        </div>
-      )}
 
       {loading && <LoadingSpinner text="載入中…" />}
 
