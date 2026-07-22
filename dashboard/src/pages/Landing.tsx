@@ -58,7 +58,7 @@ export default function Landing() {
 
   const isSuper = user?.role === "super_admin";
   const myOrgId = user?.org_id || "";
-  const orgId = isSuper ? (activeOrg || myOrgId) : myOrgId;
+  const orgId = isSuper ? "" : myOrgId;
 
   useEffect(() => {
     const handler = () => setActiveOrg(getActiveOrgId());
