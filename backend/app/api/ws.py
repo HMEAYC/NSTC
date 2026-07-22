@@ -114,14 +114,8 @@ async def imu_data_ws(
     try:
         session = db.query(SessionModel).filter(SessionModel.id == session_id).first()
         if not session:
-            session = SessionModel(
-                id=session_id,
-                course_type="march",
-                status="active",
-                org_id=resolved_org or "00000000-0000-0000-0000-000000000001",
-            )
-            db.add(session)
-            db.commit()
+            await websocket.close(code=4004, reason="Session not found")
+            return
 
         await websocket.send_json({
             "type": "status",

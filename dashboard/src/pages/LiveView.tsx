@@ -153,10 +153,10 @@ function drawPoses(ctx: CanvasRenderingContext2D, poses: PoseResult[], w: number
 export default function LiveView() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const [searchParams, setSearchParams] = useSearchParams();
-  const sid = sessionId || "default";
+  const sid = sessionId || "";
 
   useEffect(() => {
-    if (sid === "default") return;
+    if (!sid) return;
     api.listDevices().then((d) => {
       const map: Record<string, string> = {};
       for (const dev of d.devices) {
@@ -252,6 +252,19 @@ export default function LiveView() {
     { key: "gy" as const, color: "#a855f7", name: "GY" },
     { key: "gz" as const, color: "#06b6d4", name: "GZ" },
   ];
+
+  if (!sid) {
+    return (
+      <div className="p-6 max-w-4xl mx-auto space-y-4">
+        <h1 className="text-2xl font-bold text-gray-800">即時監控</h1>
+        <div className="bg-white rounded-xl shadow-sm p-12 text-center">
+          <div className="text-4xl mb-4">📊</div>
+          <h2 className="text-lg font-semibold text-gray-700 mb-2">請先選擇課程</h2>
+          <p className="text-sm text-gray-400">前往<a href="/dashboard/sessions" className="text-blue-600 hover:underline"> 課程列表 </a>選擇或建立一個課程後，再開始即時監控。</p>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="p-6 max-w-6xl mx-auto space-y-6">

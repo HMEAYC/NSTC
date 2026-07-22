@@ -27,8 +27,7 @@
 ├── .gitignore
 ├── Makefile                   # 常用指令快捷
 ├── docker-compose.yml         # 整合開發環境 (db + backend + dashboard)
-├── start.sh / stop.sh         # 背景啟動/停止全部服務
-└── OPERATION.md               # 完整操作手冊
+└── start.sh / stop.sh         # 背景啟動/停止全部服務
 ```
 
 ## 快速開始
@@ -343,6 +342,63 @@ ESP32 透過 AB 分割區支援 OTA，不須 USB 即可更新韌體。
 | GET | `/api/firmware/list` | 列出所有版本 |
 
 > **註**：OTA 版本檢查已改用 GitHub Pages（`https://HMEAYC.github.io/NSTC/ota/version.json`）。
+
+---
+
+## 📊 評估指標
+
+### 即時 IMU 指標（前端計算）
+
+| 指標 | 公式 | 意義 |
+|------|------|------|
+| 動作活躍度 | `RMS(mag(ax, ay, az))` | 低 < 0.3g / 中 0.3~0.8g / 高 > 0.8g |
+| 動作平穩度 | `CV = std(mag) / mean(mag)` | 平穩 < 0.3 / 普通 0.3~0.6 / 僵硬 > 0.6 |
+| 身體穩定指數 | `1 − CV` | 穩定 ≥ 0.7 / 尚可 ≥ 0.4 / 不穩 < 0.4 |
+
+### 後端分析指標（需音樂參考）
+
+| 指標 | 演算法 |
+|------|--------|
+| 節奏同步率 | 動作波峰 vs 音樂拍點時間差（`analysis/rhythm.py`） |
+| 凍結反應時間 | RMS 能量下降 → 動作停止時間（`analysis/freeze_dance.py`） |
+| 凍結穩定指數 | 停止後動作變異係數（`analysis/freeze_dance.py`） |
+
+### 燈號系統
+
+| 分數 | 燈號 | 意義 |
+|------|------|------|
+| ≥ 0.85 | 🟢 極佳 | 表現優異 |
+| ≥ 0.70 | 🟡 良好 | 正常發展 |
+| < 0.70 | 🔴 需關注 | 建議教師介入 |
+
+---
+
+## 🔌 WebSocket 資料格式
+
+**ESP32 → Server（IMU JSON）：**
+```json
+{ "type": "imu", "ts": 1719812345678, "device_id": "88:56:A6:7C:D6:78",
+  "ax": 0.12, "ay": -0.05, "az": 1.02, "gx": 0.5, "gy": -1.2, "gz": 0.3 }
+```
+
+**Dashboard → Server（攝影機 binary）：** 二進制 JPEG 幀 + 控制訊息（`camera_start` / `camera_stop`）
+
+**Server → Dashboard（姿勢結果）：** `pose_update`（含 `keypoints`, `cv_metrics`）
+
+---
+
+## 🔧 疑難排解
+
+| 問題 | 解決方法 |
+|------|----------|
+| 後端 port 8000 被佔用 | `lsof -ti:8000 \| xargs kill` |
+| PostgreSQL 連線失敗 | `docker compose restart db` |
+| ESP32 WiFi 連線失敗 | 檢查 2.4GHz 頻段；或連線 `HMEAYC-Setup` 熱點重新配網 |
+| ESP32 WS 連線失敗 | 確認後端運行中 `curl localhost:8000/health`；確認裝置已指派 session |
+| MPU6500 偵測不到 | 檢查 I2C 接線（SDA=GPIO6, SCL=GPIO7），確認 AD0=GND（位址 0x68） |
+| SoftAP Portal 不跳出 | 手動開啟 `http://192.168.4.1`；iOS 需「忽略此網路」後重連 |
+| 裝置不出現在 Dashboard | 用「掃描網路」（super_admin）手動發現；或確認 ESP32 有發送心跳 |
+| 韌體燒錄失敗 | 按住 BOOT → 按 RESET → 放開 BOOT → 再執行 `idf.py flash` |
 
 ---
 

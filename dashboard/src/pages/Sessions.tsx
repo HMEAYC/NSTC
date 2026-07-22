@@ -158,14 +158,16 @@ export default function Sessions() {
               </div>
               <div className="flex items-center gap-2">
                 <span className={`text-xs px-2 py-0.5 rounded-full ${cfg.color}`}>{cfg.label}</span>
-                <button
-                  onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
-                  disabled={deletingId === s.id}
-                  className="text-gray-300 hover:text-red-500 text-sm px-1 disabled:opacity-50"
-                  title="刪除課程"
-                >
-                  {deletingId === s.id ? "…" : "✕"}
-                </button>
+                {(isSuperAdmin || s.status === "draft" || s.status === "cancelled") && (
+                  <button
+                    onClick={(e) => { e.stopPropagation(); handleDelete(s.id); }}
+                    disabled={deletingId === s.id}
+                    className="text-gray-400 hover:text-red-500 text-sm px-2 py-1 rounded hover:bg-red-50 disabled:opacity-50"
+                    title="刪除課程"
+                  >
+                    {deletingId === s.id ? "…" : "✕"}
+                  </button>
+                )}
               </div>
             </div>
           );

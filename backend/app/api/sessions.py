@@ -279,11 +279,13 @@ def update_session(
 def delete_session(
     session_id: str,
     db: DBSession = Depends(get_db),
-    current_user: User = Depends(require_role("org_admin", "super_admin")),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
 ):
     session = _session_query(db, session_id, current_user)
     if not session:
         raise HTTPException(404, "Session not found")
+    if current_user.role == "teacher" and session.teacher_id != current_user.id:
+        raise HTTPException(403, "Teachers can only delete their own sessions")
     if current_user.role != "super_admin" and session.status not in ("draft", "cancelled"):
         raise HTTPException(400, "Only draft or cancelled sessions can be deleted")
 

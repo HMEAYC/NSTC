@@ -27,19 +27,19 @@ static int send_fail_count = 0;
 
 // Dynamic session support
 static char ws_base_uri[256] = {0};
-static char current_session_id[64] = "default";
+static char current_session_id[64] = {0};
 
 static void parse_ws_uri(void) {
-    // Parse CONFIG_HMEAYC_WS_URI (e.g. "ws://host:port/ws/default")
-    // into ws_base_uri ("ws://host:port") and current_session_id ("default")
+    // Parse CONFIG_HMEAYC_WS_URI (e.g. "ws://host:port/ws/some-session")
+    // into ws_base_uri ("ws://host:port") and current_session_id
     if (ws_base_uri[0] != '\0') {
         return;  // already parsed
     }
     const char *p = strstr(WS_URI, "/ws/");
     if (!p) {
-        // No /ws/ found, use full URI as base and session "default"
+        // No /ws/ found, use full URI as base
         strncpy(ws_base_uri, WS_URI, sizeof(ws_base_uri) - 1);
-        strncpy(current_session_id, "default", sizeof(current_session_id) - 1);
+        current_session_id[0] = '\0';
         return;
     }
     size_t base_len = p - WS_URI;
@@ -124,7 +124,16 @@ bool websocket_should_reconnect(void) {
 
 void websocket_set_session_id(const char *session_id) {
     if (!session_id || session_id[0] == '\0') {
-        session_id = "default";
+        // No session assigned — disconnect if connected
+        ESP_LOGI(TAG, "no session assigned, disconnecting WebSocket");
+        current_session_id[0] = '\0';
+        if (ws_client) {
+            esp_websocket_client_stop(ws_client);
+            esp_websocket_client_destroy(ws_client);
+            ws_client = NULL;
+            ws_connected = false;
+        }
+        return;
     }
     if (strcmp(current_session_id, session_id) == 0) {
         return;  // unchanged
@@ -132,13 +141,17 @@ void websocket_set_session_id(const char *session_id) {
     ESP_LOGI(TAG, "session changed: '%s' -> '%s'", current_session_id, session_id);
     strncpy(current_session_id, session_id, sizeof(current_session_id) - 1);
     current_session_id[sizeof(current_session_id) - 1] = '\0';
-    if (ws_client) {
-        websocket_request_reconnect();
-    }
+    // Always trigger reconnect — handles both existing ws_client and first-time connect (ws_client == NULL)
+    ws_reconnect_pending = true;
 }
 
 esp_err_t websocket_client_init(void) {
     parse_ws_uri();
+
+    if (current_session_id[0] == '\0') {
+        ESP_LOGI(TAG, "no session assigned yet, skipping WebSocket connect");
+        return ESP_OK;
+    }
 
     char uri[256];
     build_ws_uri(uri, sizeof(uri));
@@ -171,6 +184,12 @@ esp_err_t websocket_client_init(void) {
 esp_err_t websocket_reconnect(void) {
     last_reconnect_ms = esp_timer_get_time() / 1000;
     ws_reconnect_pending = false;
+
+    if (current_session_id[0] == '\0') {
+        ESP_LOGI(TAG, "no session assigned, skipping reconnect");
+        return ESP_OK;
+    }
+
     if (ws_client) {
         esp_websocket_client_stop(ws_client);
         esp_websocket_client_destroy(ws_client);
