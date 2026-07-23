@@ -163,6 +163,7 @@ export default function LiveView() {
         map[dev.id] = dev.device_id;
       }
       setDeviceIdMap(map);
+      setDeviceIdMapLoaded(true);
     }).catch((err) => console.error("Failed to list devices:", err));
   }, [sid]);
 
@@ -171,6 +172,7 @@ export default function LiveView() {
   const [lastDeviceDataMs, setLastDeviceDataMs] = useState(0);
   const [, refreshTick] = useState(0);
   const [deviceIdMap, setDeviceIdMap] = useState<Record<string, string>>({});
+  const [deviceIdMapLoaded, setDeviceIdMapLoaded] = useState(false);
 
   // Re-render every second to update stale-data detection
   useEffect(() => {
@@ -231,11 +233,11 @@ export default function LiveView() {
 
   const deviceIds = useMemo(() => Array.from(channels.keys()), [channels]);
 
-  const resolvedDevice = selectedDevice
-    ? (channels.has(selectedDevice) ? selectedDevice : deviceIdMap[selectedDevice] || "")
+  const resolvedDevice = selectedDevice && deviceIdMapLoaded
+    ? (deviceIdMap[selectedDevice] || "")
     : "";
-  const activeDevice = resolvedDevice && channels.has(resolvedDevice)
-    ? resolvedDevice
+  const activeDevice = resolvedDevice
+    ? (channels.has(resolvedDevice) ? resolvedDevice : resolvedDevice)
     : deviceIds[0] || "";
 
   const currentChannel = activeDevice ? channels.get(activeDevice) : null;
