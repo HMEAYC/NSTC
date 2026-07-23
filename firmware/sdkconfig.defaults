@@ -44,3 +44,7 @@ CONFIG_HMEAYC_OTA_BASE_URL="https://HMEAYC.github.io/NSTC/ota"
 
 # Main task stack size (needs ~8KB for HTTP client + JSON buffers)
 CONFIG_ESP_MAIN_TASK_STACK_SIZE=8192
+
+# I2C GPIO pins (swapped: SDA=7, SCL=6)
+CONFIG_HMEAYC_I2C_SDA_PIN=7
+CONFIG_HMEAYC_I2C_SCL_PIN=6
