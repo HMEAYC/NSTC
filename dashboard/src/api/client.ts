@@ -321,6 +321,15 @@ export const api = {
   getClassChildren: (classId: string) =>
     fetchJSON<{ children: { id: string; name: string; student_id: string | null; class_id: string | null; notes: string | null; created_at: string | null }[] }>(`/api/classes/${classId}/children`),
 
+  listClassTeachers: (classId: string) =>
+    fetchJSON<{ teachers: { id: string; email: string; display_name: string; role: string }[] }>(`/api/classes/${classId}/teachers`),
+
+  bindClassTeacher: (classId: string, teacherId: string) =>
+    fetchJSON<{ status: string }>(`/api/classes/${classId}/teachers/${teacherId}`, { method: "POST" }),
+
+  unbindClassTeacher: (classId: string, teacherId: string) =>
+    fetchJSON<{ status: string }>(`/api/classes/${classId}/teachers/${teacherId}`, { method: "DELETE" }),
+
   getSessionAssignments: (sessionId: string) =>
     fetchJSON<{ assignments: AssignmentInfo[] }>(`/api/sessions/${sessionId}/assignments`),
 

@@ -39,6 +39,10 @@ export default function ClassDetail() {
   const [parentQ, setParentQ] = useState("");
   const [editTab, setEditTab] = useState<"edit" | "parent">("edit");
 
+  const [boundTeachers, setBoundTeachers] = useState<{ id: string; email: string; display_name: string; role: string }[]>([]);
+  const [allTeachers, setAllTeachers] = useState<{ id: string; email: string; display_name: string; role: string }[]>([]);
+  const [showTeacherBind, setShowTeacherBind] = useState(false);
+
   const orgId = user?.org_id;
 
   useEffect(() => {
@@ -57,6 +61,41 @@ export default function ClassDetail() {
   };
 
   useEffect(() => { fetchChildren(); }, [classId]);
+
+  const fetchBoundTeachers = () => {
+    if (!classId) return;
+    api.listClassTeachers(classId)
+      .then((data) => setBoundTeachers(data.teachers || []))
+      .catch((err) => console.error("Failed to load bound teachers:", err));
+  };
+
+  const fetchAllTeachers = () => {
+    api.listAllUsers()
+      .then((data) => setAllTeachers((data.users || []).filter((u: any) => u.role === "teacher")))
+      .catch((err) => console.error("Failed to load teachers:", err));
+  };
+
+  const bindTeacher = async (teacherId: string) => {
+    if (!classId) return;
+    try {
+      await api.bindClassTeacher(classId, teacherId);
+      fetchBoundTeachers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "綁定失敗");
+    }
+  };
+
+  const unbindTeacher = async (teacherId: string) => {
+    if (!classId) return;
+    try {
+      await api.unbindClassTeacher(classId, teacherId);
+      fetchBoundTeachers();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "解除綁定失敗");
+    }
+  };
+
+  useEffect(() => { fetchBoundTeachers(); }, [classId]);
 
   const isAdmin = user?.role === "org_admin" || user?.role === "super_admin";
 
@@ -187,6 +226,63 @@ export default function ClassDetail() {
             {saving ? "儲存中…" : "建立"}
           </button>
         </form>
+      )}
+
+      {/* Teacher Binding Section */}
+      {isAdmin && (
+        <div className="bg-white rounded-xl shadow-sm p-4">
+          <div className="flex items-center justify-between mb-3">
+            <div className="flex items-center gap-2">
+              <h2 className="text-sm font-semibold text-gray-700">👨‍🏫 綁定教師</h2>
+              {boundTeachers.length > 0 && (
+                <span className="text-xs bg-blue-100 text-blue-700 px-2 py-0.5 rounded-full">{boundTeachers.length}</span>
+              )}
+            </div>
+            <button
+              onClick={() => { setShowTeacherBind(!showTeacherBind); if (!showTeacherBind) fetchAllTeachers(); }}
+              className="text-xs text-blue-600 hover:underline"
+            >
+              {showTeacherBind ? "收起" : "管理"}
+            </button>
+          </div>
+          {boundTeachers.length > 0 && (
+            <div className="flex flex-wrap gap-2 mb-2">
+              {boundTeachers.map((t) => (
+                <div key={t.id} className="flex items-center gap-1 bg-blue-50 text-blue-700 text-xs px-2 py-1 rounded-full">
+                  <span>{t.display_name || t.email}</span>
+                  <button onClick={() => unbindTeacher(t.id)} className="text-blue-400 hover:text-red-500 ml-1">×</button>
+                </div>
+              ))}
+            </div>
+          )}
+          {boundTeachers.length === 0 && !showTeacherBind && (
+            <div className="text-xs text-gray-400">尚未綁定任何教師</div>
+          )}
+          {showTeacherBind && (
+            <div className="mt-3 border-t border-gray-100 pt-3">
+              <div className="text-xs text-gray-500 mb-2">點擊綁定教師到此班級：</div>
+              <div className="max-h-48 overflow-y-auto space-y-1">
+                {allTeachers
+                  .filter((t) => !boundTeachers.some((bt) => bt.id === t.id))
+                  .map((t) => (
+                    <div key={t.id} className="flex items-center justify-between py-2 px-2 rounded-lg hover:bg-gray-50">
+                      <div>
+                        <div className="text-sm text-gray-800">{t.display_name || t.email}</div>
+                        <div className="text-xs text-gray-400">{t.email}</div>
+                      </div>
+                      <button onClick={() => bindTeacher(t.id)}
+                        className="text-xs bg-blue-50 text-blue-600 px-3 py-1 rounded-lg hover:bg-blue-100">
+                        綁定
+                      </button>
+                    </div>
+                  ))}
+                {allTeachers.filter((t) => !boundTeachers.some((bt) => bt.id === t.id)).length === 0 && (
+                  <div className="text-sm text-gray-400 text-center py-4">無可綁定的教師</div>
+                )}
+              </div>
+            </div>
+          )}
+        </div>
       )}
 
       {loading ? <LoadingSpinner text="載入中…" /> : (

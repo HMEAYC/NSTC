@@ -15,6 +15,7 @@ from app.models.school_class import SchoolClass
 from app.models.user import User
 from app.models.child import Child
 from app.models.parent_child import ParentChild
+from app.models.teacher_class import TeacherClass
 
 router = APIRouter(tags=["admin"])
 
@@ -353,6 +354,75 @@ def delete_child(
     db.delete(child)
     db.commit()
     return {"status": "deleted"}
+
+
+# ─── Class Teachers ───────────────────────────────────────────────
+
+@router.get("/api/classes/{class_id}/teachers")
+def list_class_teachers(
+    class_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin", "teacher")),
+):
+    cls = db.query(SchoolClass).filter(SchoolClass.id == class_id).first()
+    if not cls:
+        raise HTTPException(404, "Class not found")
+    same_org(cls.org_id, current_user)
+    bindings = db.query(TeacherClass).filter(TeacherClass.class_id == class_id).all()
+    teacher_ids = [b.teacher_id for b in bindings]
+    teachers = db.query(User).filter(User.id.in_(teacher_ids)).all() if teacher_ids else []
+    return {
+        "teachers": [
+            {"id": t.id, "email": t.email, "display_name": t.display_name, "role": t.role}
+            for t in teachers
+        ]
+    }
+
+
+@router.post("/api/classes/{class_id}/teachers/{teacher_id}")
+def bind_class_teacher(
+    class_id: str,
+    teacher_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
+):
+    cls = db.query(SchoolClass).filter(SchoolClass.id == class_id).first()
+    if not cls:
+        raise HTTPException(404, "Class not found")
+    same_org(cls.org_id, current_user)
+    teacher = db.query(User).filter(User.id == teacher_id).first()
+    if not teacher:
+        raise HTTPException(404, "Teacher not found")
+    existing = db.query(TeacherClass).filter(
+        TeacherClass.teacher_id == teacher_id, TeacherClass.class_id == class_id
+    ).first()
+    if existing:
+        return {"status": "already_bound"}
+    binding = TeacherClass(teacher_id=teacher_id, class_id=class_id)
+    db.add(binding)
+    db.commit()
+    return {"status": "bound"}
+
+
+@router.delete("/api/classes/{class_id}/teachers/{teacher_id}")
+def unbind_class_teacher(
+    class_id: str,
+    teacher_id: str,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(require_role("org_admin", "super_admin")),
+):
+    cls = db.query(SchoolClass).filter(SchoolClass.id == class_id).first()
+    if not cls:
+        raise HTTPException(404, "Class not found")
+    same_org(cls.org_id, current_user)
+    binding = db.query(TeacherClass).filter(
+        TeacherClass.teacher_id == teacher_id, TeacherClass.class_id == class_id
+    ).first()
+    if not binding:
+        raise HTTPException(404, "Binding not found")
+    db.delete(binding)
+    db.commit()
+    return {"status": "unbound"}
 
 
 # ─── Users (org users management) ────────────────────────────────
