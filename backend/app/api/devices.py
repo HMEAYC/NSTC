@@ -548,7 +548,30 @@ def get_device_session_config(
     ).first()
     if not dev:
         raise HTTPException(404, "Device not found")
-    return {"session_id": dev.active_session_id}
+
+    if dev.active_session_id:
+        return {"session_id": dev.active_session_id}
+
+    from app.models.device_assignment import DeviceAssignment
+    from app.models.session import Session as SessionModel
+    from sqlalchemy import and_
+
+    assignment = (
+        db.query(DeviceAssignment)
+        .join(SessionModel, SessionModel.id == DeviceAssignment.session_id)
+        .filter(
+            DeviceAssignment.device_id == dev.id,
+            SessionModel.status.in_(["active", "draft"]),
+        )
+        .order_by(DeviceAssignment.assigned_at.desc())
+        .first()
+    )
+    if assignment:
+        dev.active_session_id = assignment.session_id
+        db.commit()
+        return {"session_id": assignment.session_id}
+
+    return {"session_id": None}
 
 
 def _device_dict(d: DeviceModel, *, configured_wifi_ssid: str | None = None) -> dict:
