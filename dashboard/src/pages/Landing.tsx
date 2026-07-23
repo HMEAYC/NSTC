@@ -171,7 +171,9 @@ export default function Landing() {
           <h2 className="text-sm font-semibold text-gray-400 uppercase tracking-wider mb-3">⚙️ 系統管理</h2>
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <ActionCard icon="🏫" title="班級管理" desc="管理班級、教師與幼兒資料" to="/dashboard/classes" color="bg-cyan-500" />
-            <ActionCard icon="📡" title="裝置管理" desc="檢視連線裝置與狀態" to="/dashboard/devices" color="bg-purple-500" />
+            {isAdmin && (
+              <ActionCard icon="📡" title="裝置管理" desc="檢視連線裝置與狀態" to="/dashboard/devices" color="bg-purple-500" />
+            )}
             {isAdmin && (
               <ActionCard icon="👤" title="帳號管理" desc="建立與管理教師、家長帳號" to="/dashboard/admin/users" color="bg-amber-500" />
             )}

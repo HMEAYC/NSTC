@@ -31,6 +31,10 @@ export default function Navbar() {
               <>
                 <span className="text-[11px] text-gray-400 uppercase tracking-wider ml-1">管理</span>
                 <Link to="/dashboard/classes" className="text-blue-600 hover:underline text-sm">班級管理</Link>
+              </>
+            )}
+            {(user?.role === "org_admin" || user?.role === "super_admin") && (
+              <>
                 <Link to="/dashboard/devices" className="text-blue-600 hover:underline text-sm">裝置管理</Link>
               </>
             )}

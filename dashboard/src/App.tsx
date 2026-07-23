@@ -50,7 +50,7 @@ export default function App() {
                 <Route path="/dashboard/live/:sessionId" element={<ProtectedRoute><LiveView /></ProtectedRoute>} />
                 <Route path="/dashboard/history" element={<ProtectedRoute><History /></ProtectedRoute>} />
                 <Route path="/dashboard/assessment/:sessionId" element={<ProtectedRoute><AssessmentIndicators /></ProtectedRoute>} />
-                <Route path="/dashboard/devices" element={<ProtectedRoute><DeviceManagement /></ProtectedRoute>} />
+                <Route path="/dashboard/devices" element={<RoleRoute roles={["org_admin", "super_admin"]}><DeviceManagement /></RoleRoute>} />
                 <Route path="/dashboard/firmware" element={<ProtectedRoute><FirmwareUpload /></ProtectedRoute>} />
                 <Route path="/dashboard/admin" element={<RoleRoute roles={["super_admin"]}><AdminOrgs /></RoleRoute>} />
                 <Route path="/dashboard/classes" element={<RoleRoute roles={["org_admin", "super_admin", "teacher"]}><ClassManagement /></RoleRoute>} />
