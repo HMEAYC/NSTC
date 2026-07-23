@@ -99,7 +99,12 @@ def _session_query(db: DBSession, session_id: str, user: User | None, org_overri
     return db.query(SessionModel).filter(*filters).first()
 
 
-def _serialize(s: SessionModel, org_name: str | None = None) -> dict:
+def _serialize(s: SessionModel, org_name: str | None = None, *, imu_count: int = 0, device_count: int = 0) -> dict:
+    duration_sec = None
+    if s.start_time:
+        end = s.end_time or datetime.now(timezone.utc)
+        st = s.start_time if s.start_time.tzinfo else s.start_time.replace(tzinfo=timezone.utc)
+        duration_sec = int((end - st).total_seconds())
     return {
         "id": s.id,
         "org_id": s.org_id,
@@ -112,6 +117,9 @@ def _serialize(s: SessionModel, org_name: str | None = None) -> dict:
         "scheduled_at": s.scheduled_at.isoformat() if s.scheduled_at else None,
         "started_at": s.start_time.isoformat() if s.start_time else None,
         "ended_at": s.end_time.isoformat() if s.end_time else None,
+        "duration_sec": duration_sec,
+        "imu_count": imu_count,
+        "device_count": device_count,
         "music_bpm": s.music_bpm,
         "music_beat_times": s.music_beat_times,
         "music_stop_times": s.music_stop_times,
@@ -158,7 +166,18 @@ def list_sessions(
     if org_ids:
         orgs = db.query(Organization).filter(Organization.id.in_(org_ids)).all()
         org_names = {o.id: o.name for o in orgs}
-    return {"sessions": [_serialize(s, org_names.get(s.org_id)) for s in sessions]}
+
+    session_ids = [s.id for s in sessions]
+    imu_counts = {}
+    device_counts = {}
+    if session_ids:
+        from sqlalchemy import func
+        for row in db.query(IMUData.session_id, func.count()).filter(IMUData.session_id.in_(session_ids)).group_by(IMUData.session_id).all():
+            imu_counts[row[0]] = row[1]
+        for row in db.query(DeviceAssignment.session_id, func.count()).filter(DeviceAssignment.session_id.in_(session_ids)).group_by(DeviceAssignment.session_id).all():
+            device_counts[row[0]] = row[1]
+
+    return {"sessions": [_serialize(s, org_names.get(s.org_id), imu_count=imu_counts.get(s.id, 0), device_count=device_counts.get(s.id, 0)) for s in sessions]}
 
 
 @router.post("")
@@ -203,7 +222,10 @@ def get_session(
     if not session:
         raise HTTPException(404, "Session not found")
 
-    result = _serialize(session)
+    from sqlalchemy import func
+    imu_count = db.query(func.count()).filter(IMUData.session_id == session.id).scalar() or 0
+    device_count = db.query(func.count()).filter(DeviceAssignment.session_id == session.id).scalar() or 0
+    result = _serialize(session, imu_count=imu_count, device_count=device_count)
 
     if session.class_id:
         cls = db.query(SchoolClass).filter(SchoolClass.id == session.class_id).first()
